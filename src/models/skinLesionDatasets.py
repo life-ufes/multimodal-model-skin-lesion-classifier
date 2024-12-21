@@ -1,6 +1,7 @@
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import OneHotEncoder
+from transformers import BertTokenizer, BertModel
 import pandas as pd
 from PIL import Image
 from torchvision import transforms
@@ -19,7 +20,7 @@ class SkinLesionDataset(Dataset):
 
         # Configuração de One-Hot Encoding para os metadados
         self.encoder = OneHotEncoder(sparse=False)
-        self.features = self.encoder.fit_transform(self.metadata.drop(columns=['diagnostic', 'img_id']))
+        self.features = self.encoder.fit_transform(self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'diagnostic']))
 
         # Codificar os rótulos
         self.labels = self.metadata['diagnostic'].astype('category').cat.codes
