@@ -6,11 +6,15 @@ from torchvision import transforms
 import torch
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, transform=None):
-        # Carregar metadados e inicializar transformações
-        self.metadata = pd.read_csv(metadata_file)
+    def __init__(self, metadata_file, img_dir, drop_nan=False, transform=None):
+        # Inicializar argumentos
+        self.metadata_file = metadata_file
+        self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
         self.transform = self.load_transforms()
+
+        # Carregar e processar metadados
+        self.metadata = self.load_metadata()
 
         # Configuração de One-Hot Encoding para os metadados
         self.encoder = OneHotEncoder(sparse=False)
@@ -42,3 +46,13 @@ class SkinLesionDataset(Dataset):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         return transform
+
+    def load_metadata(self):
+        # Carregar o CSV
+        metadata = pd.read_csv(self.metadata_file)
+
+        # Verificar se deve descartar linhas com NaN
+        if self.is_to_drop_nan:
+            metadata = metadata.dropna().reset_index(drop=True)
+
+        return metadata

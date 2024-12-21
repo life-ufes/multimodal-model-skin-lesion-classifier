@@ -48,7 +48,8 @@ def pipeline(batch_size, num_epochs):
     dataset = skinLesionDatasets.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
-        transform=transforms.load_transforms()
+        transform=transforms.load_transforms(),
+        drop_nan=True
     )
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
