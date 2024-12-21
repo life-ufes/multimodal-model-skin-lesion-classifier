@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
-from utils import transforms
+from utils import transforms, model_metrics
 from models import multimodalModels, skinLesionDatasets
 from collections import Counter
 
@@ -41,14 +41,14 @@ def classweights_values(diagnostic_column):
 
 
 
-def train_process(num_epochs, dataloader, model, device, weightes_per_categorie):
+def train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_categorie):
     criterion = nn.CrossEntropyLoss(weight=weightes_per_categorie)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     model.to(device)
     for epoch_index in range(num_epochs):
         running_loss = 0.0
-        for batch_index, (image, metadata, label) in enumerate(dataloader):
+        for batch_index, (image, metadata, label) in enumerate(train_loader):
             image, metadata, label = image.to(device), metadata.to(device), label.to(device)
 
             optimizer.zero_grad()
@@ -67,6 +67,26 @@ def train_process(num_epochs, dataloader, model, device, weightes_per_categorie)
                 running_loss = 0.0
         
         print(f"Epoch {epoch_index}, Loss: {running_loss/100:.4f}")
+
+        # Avaliar modelo após cada época
+        metrics = model_metrics.evaluate_model(model, val_loader, device)
+
+        # Formatar saída das métricas
+        accuracy = metrics['accuracy']
+        balanced_accuracy = metrics['balanced_accuracy']
+        precision = metrics['precision']
+        recall = metrics['recall']
+        auc = metrics['auc']
+
+        # Exibir métricas com tratamento para valores None
+        print(
+            f"Metrics - Accuracy: {accuracy:.4f}, "
+            f"Balanced Accuracy: {balanced_accuracy:.4f}, "
+            f"Precision: {precision:.4f}, "
+            f"Recall: {recall:.4f}, "
+            f"AUC: {auc:.4f}" if auc is not None else "AUC: Not Calculated"
+        )
+
     return model
 
 def pipeline(batch_size, num_epochs):
@@ -77,9 +97,9 @@ def pipeline(batch_size, num_epochs):
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
         transform=transforms.load_transforms(),
-        drop_nan=True
+        drop_nan=False
     )
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8)
+    # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
     num_metadata_features = dataset.features.shape[1]
     num_classes = len(dataset.metadata['diagnostic'].unique())
@@ -87,10 +107,12 @@ def pipeline(batch_size, num_epochs):
 
     weightes_per_category = classweights_values(dataset.metadata['diagnostic'])
 
-    trained_model = train_process(num_epochs, dataloader, model, device, weightes_per_category.to(device))
+    # Obter os dados separados
+    train_loader, val_loader = dataset.split_dataset(dataset, batch_size, test_size=0.3)
+    trained_model = train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_category.to(device))
     print("Training complete!")
 
 if __name__ == "__main__":
     num_epochs = 10
-    batch_size = 32
+    batch_size = 64
     pipeline(batch_size, num_epochs)

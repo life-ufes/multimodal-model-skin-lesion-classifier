@@ -1,5 +1,6 @@
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import OneHotEncoder
-from torch.utils.data import Dataset
 import pandas as pd
 from PIL import Image
 from torchvision import transforms
@@ -56,3 +57,18 @@ class SkinLesionDataset(Dataset):
             metadata = metadata.dropna().reset_index(drop=True)
 
         return metadata
+    
+    def split_dataset(self, dataset, batch_size, test_size):
+       # Dividir os índices do dataset
+        indices = list(range(len(dataset)))
+        train_indices, val_test_indices = train_test_split(indices, test_size=test_size, random_state=42, shuffle=True)
+
+        # Criar Subconjuntos
+        train_dataset = torch.utils.data.Subset(dataset, train_indices)
+        val_dataset = torch.utils.data.Subset(dataset, val_test_indices)
+
+        # Criar DataLoaders
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        return train_loader, val_loader
