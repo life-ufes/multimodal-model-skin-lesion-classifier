@@ -110,9 +110,13 @@ def pipeline(batch_size, num_epochs):
     # Obter os dados separados
     train_loader, val_loader = dataset.split_dataset(dataset, batch_size, test_size=0.3)
     trained_model = train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_category.to(device))
-    print("Training complete!")
+    
+    # Salvar o modelo
+    torch.save(trained_model, "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/multimodal_resnet50_onehot.pth")
+    print("Modelo salvo!")
+
 
 if __name__ == "__main__":
-    num_epochs = 10
+    num_epochs = 1
     batch_size = 64
     pipeline(batch_size, num_epochs)
