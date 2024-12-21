@@ -2,6 +2,7 @@ from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
 from utils import transforms, model_metrics
+from utils.early_stopping import EarlyStopping
 from models import multimodalModels, skinLesionDatasets
 from collections import Counter
 
@@ -39,15 +40,20 @@ def classweights_values(diagnostic_column):
     
     return weights
 
-
-
 def train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_categorie):
     criterion = nn.CrossEntropyLoss(weight=weightes_per_categorie)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     model.to(device)
+
+    # EarlyStopping
+    early_stopping = EarlyStopping(patience=5, delta=0.01)
+
     for epoch_index in range(num_epochs):
+        model.train()  # Ensure the model is in training mode
         running_loss = 0.0
+        
+        # Training loop
         for batch_index, (image, metadata, label) in enumerate(train_loader):
             image, metadata, label = image.to(device), metadata.to(device), label.to(device)
 
@@ -66,19 +72,34 @@ def train_process(num_epochs, train_loader, val_loader, model, device, weightes_
                 print(f"[Epoch {epoch_index + 1}, Batch {batch_index + 1}] Loss: {last_loss:.4f}")
                 running_loss = 0.0
         
-        print(f"Epoch {epoch_index}, Loss: {running_loss/100:.4f}")
+        # Average training loss for the epoch
+        print(f"Training: Epoch {epoch_index + 1}, Loss: {running_loss/len(train_loader):.4f}\n")
+        
+        # Validation loop
+        model.eval()  # Set model to evaluation mode
+        val_loss = 0.0
+        with torch.no_grad():  # No need to compute gradients during validation
+            for image, metadata, label in val_loader:
+                image, metadata, label = image.to(device), metadata.to(device), label.to(device)
+                
+                outputs = model(image, metadata)
+                loss = criterion(outputs, label)
+                val_loss += loss.item()
 
-        # Avaliar modelo após cada época
+        # Calculate the average validation loss
+        val_loss = val_loss / len(val_loader)
+        print(f"Validation Loss: {val_loss:.4f}")
+        
+        # Evaluate metrics
         metrics = model_metrics.evaluate_model(model, val_loader, device)
 
-        # Formatar saída das métricas
+        # Extract metrics and display
         accuracy = metrics['accuracy']
         balanced_accuracy = metrics['balanced_accuracy']
         precision = metrics['precision']
         recall = metrics['recall']
         auc = metrics['auc']
 
-        # Exibir métricas com tratamento para valores None
         print(
             f"Metrics - Accuracy: {accuracy:.4f}, "
             f"Balanced Accuracy: {balanced_accuracy:.4f}, "
@@ -86,8 +107,16 @@ def train_process(num_epochs, train_loader, val_loader, model, device, weightes_
             f"Recall: {recall:.4f}, "
             f"AUC: {auc:.4f}" if auc is not None else "AUC: Not Calculated"
         )
+        
+        # Check early stopping condition
+        early_stopping(val_loss, model)
+        if early_stopping.early_stop:
+            print("Early stopping triggered. Training stopped.")
+            model.load_state_dict(early_stopping.get_best_model())  # Restore the best model weights
+            break
 
     return model
+
 
 def pipeline(batch_size, num_epochs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -117,6 +146,6 @@ def pipeline(batch_size, num_epochs):
 
 
 if __name__ == "__main__":
-    num_epochs = 1
+    num_epochs = 100
     batch_size = 64
     pipeline(batch_size, num_epochs)
