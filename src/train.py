@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from utils import transforms, model_metrics
 from utils.early_stopping import EarlyStopping
-from models import multimodalModels, skinLesionDatasets
+from models import multimodalModels, skinLesionDatasets, multimodalEmbbeding
 from collections import Counter
 
 def classweights_values(diagnostic_column):
@@ -72,8 +72,9 @@ def train_process(num_epochs, train_loader, val_loader, model, device, weightes_
                 print(f"[Epoch {epoch_index + 1}, Batch {batch_index + 1}] Loss: {last_loss:.4f}")
                 running_loss = 0.0
         
+        print(f"==="*30)
         # Average training loss for the epoch
-        print(f"Training: Epoch {epoch_index + 1}, Loss: {running_loss/len(train_loader):.4f}\n")
+        print(f"\nTraining: Epoch {epoch_index + 1}, Loss: {running_loss/len(train_loader):.4f}")
         
         # Validation loop
         model.eval()  # Set model to evaluation mode
@@ -126,13 +127,13 @@ def pipeline(batch_size, num_epochs):
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
         transform=transforms.load_transforms(),
-        drop_nan=False
+        drop_nan=True
     )
     # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
     num_metadata_features = dataset.features.shape[1]
     num_classes = len(dataset.metadata['diagnostic'].unique())
-    model = multimodalModels.MultimodalModel(num_metadata_features, num_classes)
+    model = multimodalEmbbeding.MultimodalModelWithEmbedding(num_metadata_features, num_classes)
 
     weightes_per_category = classweights_values(dataset.metadata['diagnostic'])
 
@@ -141,11 +142,11 @@ def pipeline(batch_size, num_epochs):
     trained_model = train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_category.to(device))
     
     # Salvar o modelo
-    torch.save(trained_model, "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/multimodal_resnet50_onehot.pth")
+    torch.save(trained_model, "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/multimodal_resnet50_embbeding.pth")
     print("Modelo salvo!")
 
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 64
+    batch_size = 128
     pipeline(batch_size, num_epochs)
