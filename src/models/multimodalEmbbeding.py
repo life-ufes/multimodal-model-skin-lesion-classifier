@@ -1,67 +1,77 @@
 import torch
 import torch.nn as nn
-from torchvision import models
-from transformers import BertModel, BertTokenizer
+import torchvision.models as models
+from transformers import BertModel
 
-# Classe para Embedding de Texto utilizando BERT
-class TextEmbedding(nn.Module):
-    def __init__(self, pretrained_model_name='bert-base-uncased'):
-        super(TextEmbedding, self).__init__()
-        # Inicialize o tokenizer e o modelo BERT pré-treinado
-        self.tokenizer = BertTokenizer.from_pretrained(pretrained_model_name)
-        self.bert = BertModel.from_pretrained(pretrained_model_name)
-
-    def forward(self, text):
-        # Certifique-se de que text seja uma lista de strings
-        if isinstance(text, str):
-            text = [text]  # Se for um único texto, coloque-o em uma lista
-        # Tokenizar a entrada de texto e retornar tensores para o modelo BERT
-        inputs = self.tokenizer(text, return_tensors='pt', padding=True, truncation=True, max_length=512)
-
-        # Passar pelos embeddings do BERT
-        outputs = self.bert(**inputs)
-
-        # Pegue a média das representações das palavras da sequência
-        return outputs.last_hidden_state.mean(dim=1)  # Média das representações de todas as palavras
-
-# Modelo Multimodal com BERT para codificar os dados textuais
-class MultimodalModelWithEmbedding(nn.Module):
-    def __init__(self, num_classes, embedding_dim=64, pretrained_model_name='bert-base-uncased'):
-        super(MultimodalModelWithEmbedding, self).__init__()
-
-        # CNN para imagens (ResNet50 exemplo)
-        self.cnn = models.resnet50(pretrained=True)
-
-        # Congelar os pesos da ResNet50
-        for param in self.cnn.parameters():
-            param.requires_grad = False
+class MultimodalModel(nn.Module):
+    def __init__(self, num_classes):
+        super(MultimodalModel, self).__init__()
+        self.cnn_dim_output = 2048
+        self.text_encoder_dim_output = 1024
+        self.attention_heads = 8
         
-        # Substituir a camada final por uma identidade
-        self.cnn.fc = nn.Identity()
+        # **CNN para Imagens**
+        self.cnn = models.resnet50(pretrained=True)
+        for param in self.cnn.parameters():
+            param.requires_grad = False  # Congelar pesos da ResNet50
+        self.cnn.fc = nn.Identity()  # Remover camada final (2048 saídas)
 
-        # Embedding de texto utilizando BERT
-        self.text_embedding = TextEmbedding(pretrained_model_name)
+        # **BERT para Metadados Textuais**
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        for param in self.bert.parameters():
+            param.requires_grad = False  # Congelar pesos do BERT
 
-        # Camada totalmente conectada para a combinação de features
-        self.fc = nn.Sequential(
-            nn.Linear(2048 + embedding_dim, 1024),  # Features da imagem + Embedding de texto
+        # Reduzir dimensionalidade dos embeddings do BERT
+        self.bert_fc = nn.Sequential(
+            nn.Linear(768, self.text_encoder_dim_output),
             nn.ReLU(),
-            nn.Linear(1024, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, num_classes),
-            nn.Softmax(dim=1)  # Softmax na saída para classificação
+            nn.Dropout(0.3)
         )
 
-    def forward(self, image_features, text_data):
-        # Passar os dados textuais para obter os embeddings
-        text_embeddings = self.text_embedding(text_data)
+        # **Camada Final Combinada**
+        self.fc = nn.Sequential(
+            nn.Linear(self.cnn_dim_output + self.text_encoder_dim_output, 2048),
+            nn.BatchNorm1d(2048),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(2048, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(512, num_classes),
+            nn.Softmax(dim=1)
+        )
 
-        # Concatenar as features das imagens e os embeddings do texto
-        combined_features = torch.cat((image_features, text_embeddings), dim=1)
+        # Camada de Atenção
+        self.attention = nn.MultiheadAttention(embed_dim=int(self.cnn_dim_output + self.text_encoder_dim_output), num_heads=self.attention_heads, dropout=0.3)
 
-        # Passar pela camada totalmente conectada para a saída
-        output = self.fc(combined_features)
 
-        return output
+    def forward(self, image, tokenized_text):
+        # Extrair recursos da imagem
+        image_features = self.cnn(image)
+
+        # Processar texto com BERT
+        bert_output = self.bert(
+            input_ids=tokenized_text['input_ids'].squeeze(1),  # Remove batch dimension extra
+            attention_mask=tokenized_text['attention_mask'].squeeze(1)
+        )
+        text_features = bert_output.pooler_output  # Vetor de saída (768 dimensões)
+        text_features = self.bert_fc(text_features)
+
+        # Combinar tudo
+        combined_features = torch.cat((image_features, text_features), dim=1)
+         # Ajuste de dimensões para a camada de atenção
+        combined_features = combined_features.unsqueeze(0)  # (1, batch_size, 2112)
+        
+        # Aplicar atenção (Nota: para a MultiheadAttention, a entrada precisa ser (seq_len, batch_size, embed_dim))
+        attn_output, _ = self.attention(combined_features, combined_features, combined_features)  # (1, batch_size, 2112)
+        
+        # Remover a dimensão adicional
+        attn_output = attn_output.squeeze(0)  # (batch_size, 2112)
+
+        # Passar pelas camadas finais
+        return self.fc(attn_output)

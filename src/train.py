@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 from utils import transforms, model_metrics
 from utils.early_stopping import EarlyStopping
-from models import multimodalModels, skinLesionDatasets, multimodalEmbbeding
+from models import multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding
+import time
 from collections import Counter
 
 def classweights_values(diagnostic_column):
@@ -66,15 +67,10 @@ def train_process(num_epochs, train_loader, val_loader, model, device, weightes_
             optimizer.step()
 
             running_loss += loss.item()
-            
-            if batch_index % 100 == 99:
-                last_loss = running_loss / 100
-                print(f"[Epoch {epoch_index + 1}, Batch {batch_index + 1}] Loss: {last_loss:.4f}")
-                running_loss = 0.0
         
         print(f"==="*30)
         # Average training loss for the epoch
-        print(f"\nTraining: Epoch {epoch_index + 1}, Loss: {running_loss/len(train_loader):.4f}")
+        print(f"\nTraining: Epoch {epoch_index}, Loss: {running_loss/len(train_loader):.4f}")
         
         # Validation loop
         model.eval()  # Set model to evaluation mode
@@ -119,21 +115,20 @@ def train_process(num_epochs, train_loader, val_loader, model, device, weightes_
     return model
 
 
-def pipeline(batch_size, num_epochs):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+def pipeline(model_name, batch_size, num_epochs, device):
     # Load dataset
-    dataset = skinLesionDatasets.SkinLesionDataset(
+    dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
         transform=transforms.load_transforms(),
-        drop_nan=True
+        drop_nan=False
     )
     # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
-    num_metadata_features = dataset.features.shape[1]
+    num_metadata_features = dataset.metadata.shape[1]
+    print(f"Número de features do metadados: {num_metadata_features}\n")
     num_classes = len(dataset.metadata['diagnostic'].unique())
-    model = multimodalEmbbeding.MultimodalModelWithEmbedding(num_metadata_features, num_classes)
+    model = multimodalEmbbeding.MultimodalModel(num_classes)
 
     weightes_per_category = classweights_values(dataset.metadata['diagnostic'])
 
@@ -142,11 +137,13 @@ def pipeline(batch_size, num_epochs):
     trained_model = train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_category.to(device))
     
     # Salvar o modelo
-    torch.save(trained_model, "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/multimodal_resnet50_embbeding.pth")
+    torch.save(trained_model, f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/multimodal_{model_name}_bert_multhead_{time.time()}.pth")
     print("Modelo salvo!")
 
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 128
-    pipeline(batch_size, num_epochs)
+    batch_size = 64
+    model_name="resnet-50"
+    device = torch.device("cuda") # if torch.cuda.is_available() else "cpu")
+    pipeline(model_name, batch_size, num_epochs, device)
