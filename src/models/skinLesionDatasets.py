@@ -1,7 +1,6 @@
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import OneHotEncoder
-from transformers import BertTokenizer, BertModel
 import pandas as pd
 from PIL import Image
 from torchvision import transforms
