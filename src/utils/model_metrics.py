@@ -1,7 +1,7 @@
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, roc_auc_score
 import torch
 
-def evaluate_model(model, dataloader, device):
+def evaluate_model(model, dataloader, device, fold_num):
     model.eval()  # Coloca o modelo em modo de avaliação
     all_labels = []
     all_predictions = []
@@ -32,6 +32,7 @@ def evaluate_model(model, dataloader, device):
         auc = None
 
     return {
+        "fold": fold_num, 
         "accuracy": accuracy,
         "balanced_accuracy": balanced_accuracy,
         "precision": precision,

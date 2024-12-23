@@ -39,7 +39,7 @@ class SkinLesionDataset(Dataset):
             padding='max_length',
             truncation=True,
             return_tensors="pt",
-            max_length=50
+            max_length=200
         )
 
         # Rótulo
@@ -51,6 +51,8 @@ class SkinLesionDataset(Dataset):
         # Transforma imagens para o formato necessário para treinamento
         transform = transforms.Compose([
             transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(10),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])

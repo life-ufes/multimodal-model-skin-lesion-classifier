@@ -4,8 +4,13 @@ import torch.nn as nn
 from utils import transforms, model_metrics
 from utils.early_stopping import EarlyStopping
 from models import multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding
+from utils.save_model_and_metrics import save_model_and_metrics
 import time
 from collections import Counter
+from sklearn.model_selection import KFold
+import numpy as np
+import pandas as pd
+import os
 
 def classweights_values(diagnostic_column):
     # Verificar se há valores NaN e remover (se necessário)
@@ -41,8 +46,8 @@ def classweights_values(diagnostic_column):
     
     return weights
 
-def train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_categorie):
-    criterion = nn.CrossEntropyLoss(weight=weightes_per_categorie)
+def train_process(num_epochs, fold_num, train_loader, val_loader, model, device, weightes_per_category, results_folder_path):
+    criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     model.to(device)
@@ -88,62 +93,73 @@ def train_process(num_epochs, train_loader, val_loader, model, device, weightes_
         print(f"Validation Loss: {val_loss:.4f}")
         
         # Evaluate metrics
-        metrics = model_metrics.evaluate_model(model, val_loader, device)
+        metrics = model_metrics.evaluate_model(model, val_loader, device, fold_num)
+        print(f"Metrics: {metrics}")
 
-        # Extract metrics and display
-        accuracy = metrics['accuracy']
-        balanced_accuracy = metrics['balanced_accuracy']
-        precision = metrics['precision']
-        recall = metrics['recall']
-        auc = metrics['auc']
-
-        print(
-            f"Metrics - Accuracy: {accuracy:.4f}, "
-            f"Balanced Accuracy: {balanced_accuracy:.4f}, "
-            f"Precision: {precision:.4f}, "
-            f"Recall: {recall:.4f}, "
-            f"AUC: {auc:.4f}" if auc is not None else "AUC: Not Calculated"
-        )
-        
-        # Check early stopping condition
+        # Check early stopping
         early_stopping(val_loss, model)
         if early_stopping.early_stop:
-            print("Early stopping triggered. Training stopped.")
-            model.load_state_dict(early_stopping.get_best_model())  # Restore the best model weights
+            print("Early stopping")
             break
+    # Salvar o modelo treinado
+    model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_bert_base_uncased_512")
+    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num)
+    print(f"Model saved at {model_save_path}")
 
     return model
 
 
-def pipeline(model_name, batch_size, num_epochs, device):
-    # Load dataset
+def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, model_name, results_folder_path):
+    kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+    
+    all_metrics = []
+
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(dataset)):
+        print(f"Fold {fold+1}/{k_folds}")
+        
+        # Dividir os dados
+        train_subset = torch.utils.data.Subset(dataset, train_idx)
+        val_subset = torch.utils.data.Subset(dataset, val_idx)
+        
+        # Criar os DataLoaders
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
+        
+        # Recriar o modelo e otimizador para cada fold
+        model = multimodalEmbbeding.MultimodalModel(num_classes, cnn_model_name=model_name)
+        
+        # Calcular pesos das classes para o treinamento
+        class_weights = classweights_values(dataset.metadata['diagnostic']).to(device)
+        
+        # Treinar o modelo
+        model  = train_process(num_epochs, fold+1, train_loader, val_loader, model, device, class_weights, results_folder_path)
+        
+        # Avaliação final no fold atual
+        metrics = model_metrics.evaluate_model(model, val_loader, device, fold+1)
+        all_metrics.append(metrics)
+        print(f"Metrics for fold {fold+1}: {metrics}")
+
+    # Médias e desvios das métricas
+    avg_metrics = {key: np.mean([m[key] for m in all_metrics]) for key in all_metrics[0]}
+    std_metrics = {key: np.std([m[key] for m in all_metrics]) for key in all_metrics[0]}
+
+    print(f"Average Metrics: {avg_metrics}")
+    print(f"Standard Deviation: {std_metrics}")
+
+if __name__ == "__main__":
+    num_epochs = 1
+    batch_size = 128
+    k_folds=5 
+    model_name="resnet-18"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
         transform=transforms.load_transforms(),
         drop_nan=False
     )
-    # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8)
-
     num_metadata_features = dataset.metadata.shape[1]
     print(f"Número de features do metadados: {num_metadata_features}\n")
     num_classes = len(dataset.metadata['diagnostic'].unique())
-    model = multimodalEmbbeding.MultimodalModel(num_classes)
 
-    weightes_per_category = classweights_values(dataset.metadata['diagnostic'])
-
-    # Obter os dados separados
-    train_loader, val_loader = dataset.split_dataset(dataset, batch_size, test_size=0.3)
-    trained_model = train_process(num_epochs, train_loader, val_loader, model, device, weightes_per_category.to(device))
-    
-    # Salvar o modelo
-    torch.save(trained_model, f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/multimodal_{model_name}_bert_multhead_{time.time()}.pth")
-    print("Modelo salvo!")
-
-
-if __name__ == "__main__":
-    num_epochs = 100
-    batch_size = 64
-    model_name="resnet-50"
-    device = torch.device("cuda") # if torch.cuda.is_available() else "cpu")
-    pipeline(model_name, batch_size, num_epochs, device)
+    pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, model_name, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights")
