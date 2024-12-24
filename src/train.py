@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from utils import transforms, model_metrics
 from utils.early_stopping import EarlyStopping
-from models import multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
+from models import multimodalIntraModal, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
 from utils.save_model_and_metrics import save_model_and_metrics
 import time
 from collections import Counter
@@ -148,17 +148,17 @@ def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, mode
 
 if __name__ == "__main__":
     num_epochs = 10
-    batch_size = 64
+    batch_size = 128
     k_folds=5 
-    model_name="resnet-18"
-    text_model_encoder='google-bert/bert-base-cased'
+    model_name="custom-cnn"
+    text_model_encoder='one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
+    dataset = skinLesionDatasets.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
-        bert_model_name=text_model_encoder,
+        # bert_model_name=text_model_encoder,
         image_transformations=transforms.load_transforms(),
-        drop_nan=False
+        drop_nan=True
     )
     num_metadata_features = dataset.metadata.shape[1]
     print(f"Número de features do metadados: {num_metadata_features}\n")

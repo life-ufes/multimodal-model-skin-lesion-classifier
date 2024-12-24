@@ -1,13 +1,14 @@
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler
 import pandas as pd
+import numpy as np
 from PIL import Image
 from torchvision import transforms
 import torch
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, transform=None):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, image_transformations=None):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
@@ -18,11 +19,7 @@ class SkinLesionDataset(Dataset):
         self.metadata = self.load_metadata()
 
         # Configuração de One-Hot Encoding para os metadados
-        self.encoder = OneHotEncoder(sparse=False)
-        self.features = self.encoder.fit_transform(self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'diagnostic']))
-
-        # Codificar os rótulos
-        self.labels = self.metadata['diagnostic'].astype('category').cat.codes
+        self.features, self.labels = self.one_hot_encoding()
 
     def __len__(self):
         return len(self.metadata)
@@ -43,6 +40,8 @@ class SkinLesionDataset(Dataset):
         # Transforma imagens para o formato necessário para treinamento
         transform = transforms.Compose([
             transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(10),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
@@ -72,3 +71,29 @@ class SkinLesionDataset(Dataset):
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         return train_loader, val_loader
+    
+    def one_hot_encoding(self):
+        # Seleção das features
+        dataset_features = self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'diagnostic'])  # Features
+
+        # Identificar variáveis categóricas e numéricas
+        categorical_cols = dataset_features.select_dtypes(include=['object']).columns
+        numerical_cols = dataset_features.select_dtypes(include=['float64', 'int64']).columns
+
+        # Criar o OneHotEncoder para categóricas
+        ohe = OneHotEncoder(sparse_output=False)
+        categorical_data = ohe.fit_transform(dataset_features[categorical_cols])
+
+        # Escalar variáveis numéricas
+        scaler = StandardScaler()
+        numerical_data = scaler.fit_transform(dataset_features[numerical_cols])
+
+        # Concatenar dados categóricos e numéricos
+        processed_data = np.hstack((categorical_data, numerical_data))
+
+        # Labels
+        labels = self.metadata['diagnostic'].values
+        label_encoder = LabelEncoder()
+        encoded_labels = label_encoder.fit_transform(labels)
+
+        return processed_data, encoded_labels
