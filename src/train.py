@@ -147,10 +147,10 @@ def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, mode
     print(f"Standard Deviation: {std_metrics}")
 
 if __name__ == "__main__":
-    num_epochs = 10
-    batch_size = 128
+    num_epochs = 25
+    batch_size = 32
     k_folds=5 
-    model_name="custom-cnn"
+    model_name="resnet-50"
     text_model_encoder='one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = skinLesionDatasets.SkinLesionDataset(

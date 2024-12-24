@@ -3,11 +3,20 @@ import torch.nn as nn
 import torchvision.models as models
 
 class MultimodalModel(nn.Module):
-    def __init__(self, num_metadata_features, num_classes, attention_heads=16):
+    def __init__(self, cnn_model_name, num_classes, attention_heads=16, vocab_size=76):
         super(MultimodalModel, self).__init__()
-        
-        # CNN para imagens (ResNet50)
-        self.cnn = models.resnet50(pretrained=True)
+        self.cnn_model_name = cnn_model_name
+        self.cnn_output_dim = 2048
+        self.text_encoder_output_dim = 64
+        self.attention_heads = 8
+
+        if self.cnn_model_name == "resnet-50":        
+            self.cnn = models.resnet50(pretrained=True)
+            self.cnn_dim_output = 2048
+
+        elif self.cnn_model_name == "resnet-18":
+            self.cnn = models.resnet18(pretrained=True)
+            self.cnn_dim_output = 512
         
         # Congelar os pesos da ResNet50
         for param in self.cnn.parameters():
@@ -18,17 +27,17 @@ class MultimodalModel(nn.Module):
 
         # Rede para os metadados
         self.metadata_fc = nn.Sequential(
-            nn.Linear(num_metadata_features, 64),
+            nn.Linear(vocab_size, 64),
             nn.ReLU(),
             nn.Dropout(0.3)
         )
 
         # Camada de Atenção
-        self.attention = nn.MultiheadAttention(embed_dim=2112, num_heads=attention_heads, dropout=0.3)
+        self.attention = nn.MultiheadAttention(embed_dim=(self.cnn_output_dim+ self.text_encoder_output_dim), num_heads=self.attention_heads, dropout=0.3)
 
         # Camada combinada
         self.fc = nn.Sequential(
-            nn.Linear(2048 + 64, 512),
+            nn.Linear(self.cnn_output_dim+self.text_encoder_output_dim, 512),
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU(),
@@ -51,7 +60,7 @@ class MultimodalModel(nn.Module):
         attn_output, _ = self.attention(combined_features, combined_features, combined_features)  # (1, batch_size, 2112)
         
         # Remover a dimensão adicional
-        attn_output = attn_output.squeeze(0)  # (batch_size, 2112)
+        attn_output = attn_output.squeeze(0)
 
         # Passar pelas camadas finais
         return self.fc(attn_output)
