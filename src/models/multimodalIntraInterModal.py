@@ -37,19 +37,21 @@ class MultimodalModel(nn.Module):
             # Substituir a camada final por uma identidade
             self.image_encoder.fc = nn.Identity()
 
-        elif cnn_model_name == "vgg-16":
+        elif cnn_model_name == "vgg16":
             self.image_encoder = models.vgg16(pretrained=True)
             self.cnn_dim_output = 4096
-             # Congelar os pesos da ResNet-18
             for param in self.image_encoder.parameters():
                 param.requires_grad = False
-            # Substituir a camada final por uma identidade
-            self.image_encoder.fc = nn.Identity()
+            # Ajustar a saída para manter a dimensão esperada (4096)
+            self.image_encoder.classifier = nn.Sequential(
+                *list(self.image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
+                nn.Linear(4096, 4096)  # Garantir que a saída permanece 4096
+            )
 
         elif cnn_model_name == "mobilenet-v2":
-            self.image_encoder = models.mobilenetv2(pretrained=True)
-            self.cnn_dim_output = 4096
-             # Congelar os pesos da ResNet-18
+            self.image_encoder = models.mobilenet_v2(pretrained=True)
+            self.cnn_dim_output = 1280
+             # Congelar os pesos
             for param in self.image_encoder.parameters():
                 param.requires_grad = False
             self.image_encoder.fc = nn.Identity()

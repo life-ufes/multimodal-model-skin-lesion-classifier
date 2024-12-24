@@ -150,7 +150,7 @@ if __name__ == "__main__":
     num_epochs = 25
     batch_size = 32
     k_folds=5 
-    model_name="resnet-50"
+    model_name="vgg16"
     text_model_encoder='one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = skinLesionDatasets.SkinLesionDataset(
