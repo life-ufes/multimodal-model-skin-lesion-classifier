@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
-from torchvision import models
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from loadImageModelClassifier import loadModels
+from transformers import ViTFeatureExtractor, ViTModel
 
 class MultimodalModel(nn.Module):
     def __init__(self, num_classes, device, cnn_model_name, text_model_name, vocab_size=76):
@@ -10,54 +14,18 @@ class MultimodalModel(nn.Module):
         self.common_dim = 512
         self.text_encoder_dim_output = 512
         self.cnn_dim_output = 512
+        self.device = device
+        self.feature_extractor = None
+        self.cnn_model_name = cnn_model_name
 
-        # Modelo para imagens
-        if cnn_model_name == "custom-cnn":
-            self.image_encoder = nn.Sequential(
-                nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=2),
-                nn.Flatten(),
-                nn.Linear(16 * 56 * 56, self.common_dim)
-            )
-        elif cnn_model_name == "resnet-50":
-            self.image_encoder = models.resnet50(pretrained=True)
-            self.cnn_dim_output = 2048
-            # Congelar os pesos da ResNet-50
-            for param in self.image_encoder.parameters():
-                param.requires_grad = False
-            # Substituir a camada final por uma identidade
-            self.image_encoder.fc = nn.Identity()
-        elif cnn_model_name == "resnet-18":
-            self.image_encoder = models.resnet18(pretrained=True)
-            self.cnn_dim_output = 512
-            # Congelar os pesos da ResNet-18
-            for param in self.image_encoder.parameters():
-                param.requires_grad = False
-            # Substituir a camada final por uma identidade
-            self.image_encoder.fc = nn.Identity()
 
-        elif cnn_model_name == "vgg16":
-            self.image_encoder = models.vgg16(pretrained=True)
-            self.cnn_dim_output = 4096
-            for param in self.image_encoder.parameters():
-                param.requires_grad = False
-            # Ajustar a saída para manter a dimensão esperada (4096)
-            self.image_encoder.classifier = nn.Sequential(
-                *list(self.image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
-                nn.Linear(4096, 4096)  # Garantir que a saída permanece 4096
-            )
+        self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(self.cnn_model_name, self.common_dim)
 
-        elif cnn_model_name == "mobilenet-v2":
-            self.image_encoder = models.mobilenet_v2(pretrained=True)
-            self.cnn_dim_output = 1280
-             # Congelar os pesos
-            for param in self.image_encoder.parameters():
-                param.requires_grad = False
-            self.image_encoder.fc = nn.Identity()
-        else:
-            raise ValueError("CNN não implementada.")
-        
+        # Carregar o extrator de características e o modelo ViT
+        if self.cnn_model_name=="vit-base-patch16-224":
+            self.feature_extractor = ViTFeatureExtractor.from_pretrained(f"google/{self.cnn_model_name}")
+      
+
         # Projeção para os metadados (pré-processados)
         self.text_fc = nn.Sequential(
             nn.Linear(vocab_size, 256),
@@ -94,9 +62,17 @@ class MultimodalModel(nn.Module):
         )
     
     def forward(self, image, text_metadata):
-        # Codificação de imagem
-        image_features = self.image_encoder(image)
-        image_features = self.image_projector(image_features)  # Projeção para dimensão comum
+        # Pré-processando as imagens
+        inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
+        
+        # Passando as imagens pelo modelo ViT
+        outputs = self.image_encoder(**inputs)
+        
+        # Pegando a saída da última camada (features do token [CLS])
+        image_features = outputs.last_hidden_state[:, 0, :]  # [batch_size, hidden_size]
+        
+        # Projeção para o espaço comum
+        image_features = self.image_projector(image_features)
         image_features = image_features.unsqueeze(1)  # Shape: (batch_size, seq_length=1, common_dim)
         image_features = image_features.permute(1, 0, 2)  # Shape: (seq_length=1, batch_size, common_dim)
 
@@ -111,8 +87,8 @@ class MultimodalModel(nn.Module):
         text_features_att, _ = self.text_self_attention(text_features, text_features, text_features)
         
         # Cross-Attention inter-modalidade
-        image_cross_att, _ = self.image_cross_attention(image_features_att, text_features_att, text_features_att)
-        text_cross_att, _ = self.text_cross_attention(text_features_att, image_features_att, image_features_att)
+        image_cross_att, _ = self.image_cross_attention(text_features_att, text_features_att, text_features_att)
+        text_cross_att, _ = self.text_cross_attention(image_features_att, image_features_att, image_features_att)
         
         # Combinação das características
         combined_features = torch.cat([image_cross_att.squeeze(0), text_cross_att.squeeze(0)], dim=1)

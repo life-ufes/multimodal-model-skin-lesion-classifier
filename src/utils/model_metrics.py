@@ -18,14 +18,13 @@ def evaluate_model(model, dataloader, device, fold_num):
             all_labels.extend(labels.cpu().numpy())
             all_predictions.extend(predictions.cpu().numpy())
             all_probabilities.extend(probabilities.cpu().numpy())
-
+    
     # Calcular métricas
     accuracy = accuracy_score(all_labels, all_predictions)
     balanced_accuracy = balanced_accuracy_score(all_labels, all_predictions)
     precision = precision_score(all_labels, all_predictions, average='macro', zero_division=0)
     recall = recall_score(all_labels, all_predictions, average='macro', zero_division=0)
 
-    # AUC - Somente para problemas binários ou multi-class com probabilidades
     try:
         auc = roc_auc_score(all_labels, all_probabilities, multi_class='ovr', average='macro')
     except ValueError:  # Caso AUC não possa ser calculado
@@ -38,4 +37,4 @@ def evaluate_model(model, dataloader, device, fold_num):
         "precision": precision,
         "recall": recall,
         "auc": auc
-    }
+    }, all_labels, all_probabilities

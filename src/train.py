@@ -5,11 +5,10 @@ from utils import transforms, model_metrics
 from utils.early_stopping import EarlyStopping
 from models import multimodalIntraModal, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
 from utils.save_model_and_metrics import save_model_and_metrics
-import time
 from collections import Counter
 from sklearn.model_selection import KFold
 import numpy as np
-import pandas as pd
+import time
 import os
 
 def classweights_values(diagnostic_column):
@@ -54,7 +53,8 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
 
     # EarlyStopping
     early_stopping = EarlyStopping(patience=5, delta=0.01)
-
+    # Registro do tempo de treinamento
+    initial_time = time.time()
     for epoch_index in range(num_epochs):
         model.train()  # Ensure the model is in training mode
         running_loss = 0.0
@@ -93,7 +93,7 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
         print(f"Validation Loss: {val_loss:.4f}")
         
         # Evaluate metrics
-        metrics = model_metrics.evaluate_model(model, val_loader, device, fold_num)
+        metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold_num)
         print(f"Metrics: {metrics}")
 
         # Check early stopping
@@ -101,9 +101,13 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
         if early_stopping.early_stop:
             print("Early stopping")
             break
+    # Fim do treinamento
+    train_process_time = time.time() - initial_time
+    # Adição do tempo de treino nos registros
+    metrics["train process time"]=str(train_process_time)
     # Salvar o modelo treinado
     model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_512")
-    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num)
+    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, dataset.targets)
     print(f"Model saved at {model_save_path}")
 
     return model
@@ -148,16 +152,16 @@ def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, mode
 
 if __name__ == "__main__":
     num_epochs = 25
-    batch_size = 32
+    batch_size = 4
     k_folds=5 
-    model_name="vgg16"
+    model_name="vit-base-patch16-224"
     text_model_encoder='one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = skinLesionDatasets.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
         # bert_model_name=text_model_encoder,
-        image_transformations=transforms.load_transforms(),
+        image_encoder=model_name,
         drop_nan=True
     )
     num_metadata_features = dataset.metadata.shape[1]

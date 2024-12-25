@@ -8,18 +8,19 @@ from torchvision import transforms
 import torch
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, image_transformations=None):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, image_encoder="resnet-18"):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
+        self.image_encoder = image_encoder
         self.transform = self.load_transforms()
 
         # Carregar e processar metadados
         self.metadata = self.load_metadata()
 
         # Configuração de One-Hot Encoding para os metadados
-        self.features, self.labels = self.one_hot_encoding()
+        self.features, self.labels, self.targets = self.one_hot_encoding()
 
     def __len__(self):
         return len(self.metadata)
@@ -37,15 +38,27 @@ class SkinLesionDataset(Dataset):
         return image, metadata, label
 
     def load_transforms(self):
-        # Transforma imagens para o formato necessário para treinamento
-        transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(360),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
+        if self.image_encoder=="vit-base-patch16-224":
+            # Transforma imagens para o formato necessário para treinamento
+            transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(360),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                # Garantir que os valores estejam no intervalo [0, 1]
+                transforms.Lambda(lambda x: torch.clamp(x, 0.0, 1.0))
+            ])
+        else:
+            transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(360),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
         return transform
+
 
     def load_metadata(self):
         # Carregar o CSV
@@ -96,4 +109,4 @@ class SkinLesionDataset(Dataset):
         label_encoder = LabelEncoder()
         encoded_labels = label_encoder.fit_transform(labels)
 
-        return processed_data, encoded_labels
+        return processed_data, encoded_labels, self.metadata['diagnostic'].unique()

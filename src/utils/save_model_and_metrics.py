@@ -1,9 +1,13 @@
 import os
 import csv
 from datetime import datetime
+import numpy as np
 import torch
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
-def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num):
+
+def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_labels, all_predictions, targets):
     """
     Salva o modelo e as métricas em uma pasta específica.
 
@@ -39,5 +43,16 @@ def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num):
             writer.writeheader()
 
         writer.writerow(metrics)
+ 
+    # Calcular matriz de confusão
+    cm = confusion_matrix(all_labels, np.argmax(all_predictions, axis=1), normalize='true')
+
+    # Salvar a matriz de confusão como gráfico
+    cm_display = ConfusionMatrixDisplay(cm, display_labels=targets)
+    cm_display.plot(cmap=plt.cm.Blues)
+    cm_path = os.path.join(folder_path, f"Confusion_matrix.png")
+    plt.savefig(cm_path)
+    plt.close()  # Fecha a figura para liberar memória
+    print(f"Matriz de confusão salva em: {cm_path}")
 
     return folder_path
