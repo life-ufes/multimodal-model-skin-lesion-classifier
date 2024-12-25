@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-from transformers import ViTFeatureExtractor
-from transformers import ViTModel, ViTConfig
+from transformers import ViTModel
+from transformers import AutoTokenizer, AutoModel
 
 class loadModels():
     def loadModelImageEncoder(cnn_model_name, common_dim):
@@ -66,3 +66,12 @@ class loadModels():
         
         except Exception as e:
             print(f"Erro ao tentar carregar o modelo!. Erro: {e}\n")
+
+    def loadTextModelEncoder(text_model_encoder):
+        bert_model = AutoModel.from_pretrained(text_model_encoder)
+        # Congelar os pesos
+        for param in bert_model.parameters():
+            param.requires_grad = False
+        # Dimensão da saída do 
+        text_encoder_dim_output = 1024
+        return bert_model, text_encoder_dim_output

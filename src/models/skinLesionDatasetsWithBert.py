@@ -7,14 +7,15 @@ from torchvision import transforms
 import torch
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', image_transformations=None):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', image_encoder="resnet-18"):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
+        self.image_encoder = image_encoder
+        self.targets = None
         self.transform = self.load_transforms()
         self.tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
-
         # Carregar e processar metadados
         self.metadata = self.load_metadata()
 
@@ -37,8 +38,8 @@ class SkinLesionDataset(Dataset):
 
         # Processar texto dos metadados
         textual_data = self.metadata.iloc[idx].drop(
-            ['patient_id', 'lesion_id', 'img_id', 'diagnostic'], errors='ignore'
-        ).fillna('')
+            ['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'], errors='ignore'
+        )
         text = ' '.join(map(str, textual_data.values))
         tokenized_text = self.tokenizer(
             text,
@@ -54,24 +55,40 @@ class SkinLesionDataset(Dataset):
         return image, tokenized_text, label
 
     def load_transforms(self):
-        # Transforma imagens para o formato necessário para treinamento
-        transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
+        if self.image_encoder=="vit-base-patch16-224":
+            # Transforma imagens para o formato necessário para treinamento
+            transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(360),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                # Garantir que os valores estejam no intervalo [0, 1]
+                transforms.Lambda(lambda x: torch.clamp(x, 0.0, 1.0))
+            ])
+        else:
+            transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(360),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
         return transform
 
     def load_metadata(self):
         # Carregar o CSV
-        metadata = pd.read_csv(self.metadata_file)
-
+        metadata = pd.read_csv(self.metadata_file).fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").\
+           replace("NÃO  ENCONTRADO", "EMPTY"). replace("BRASIL", "BRAZIL")
+        
+        # Obter as classes
+        self.targets = metadata['diagnostic'].unique()
         # Verificar se deve descartar linhas com NaN
-        if self.is_to_drop_nan:
+        if self.is_to_drop_nan is True:
             metadata = metadata.dropna().reset_index(drop=True)
+        
 
+       
         return metadata
 
     def split_dataset(self, batch_size, test_size=0.2, random_state=42):

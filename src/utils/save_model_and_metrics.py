@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
-def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_labels, all_predictions, targets):
+def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_labels, all_predictions, targets, data_val="val"):
     """
     Salva o modelo e as métricas em uma pasta específica.
 
@@ -37,19 +37,21 @@ def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_l
     file_exists = os.path.isfile(f"{base_dir}/model_metrics.csv")
     with open(f"{base_dir}/model_metrics.csv", mode='a', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=metrics.keys())
-
-        # Escrever cabeçalho apenas se o arquivo for criado agora
         if not file_exists:
             writer.writeheader()
-
         writer.writerow(metrics)
- 
+
+    
     # Calcular matriz de confusão
     cm = confusion_matrix(all_labels, np.argmax(all_predictions, axis=1), normalize='true')
 
     # Salvar a matriz de confusão como gráfico
     cm_display = ConfusionMatrixDisplay(cm, display_labels=targets)
     cm_display.plot(cmap=plt.cm.Blues)
+    if data_val == "test":
+        folder_path = os.path.join(base_dir, "test_results")
+        os.makedirs(folder_path, exist_ok=True)
+
     cm_path = os.path.join(folder_path, f"Confusion_matrix.png")
     plt.savefig(cm_path)
     plt.close()  # Fecha a figura para liberar memória

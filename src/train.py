@@ -1,4 +1,3 @@
-from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
 from utils import transforms, model_metrics
@@ -10,6 +9,7 @@ from sklearn.model_selection import KFold
 import numpy as np
 import time
 import os
+from torch.utils.data import DataLoader, Subset
 
 def classweights_values(diagnostic_column):
     # Verificar se há valores NaN e remover (se necessário)
@@ -52,7 +52,7 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
     model.to(device)
 
     # EarlyStopping
-    early_stopping = EarlyStopping(patience=5, delta=0.01)
+    early_stopping = EarlyStopping(patience=3, delta=0.01)
     # Registro do tempo de treinamento
     initial_time = time.time()
     for epoch_index in range(num_epochs):
@@ -105,64 +105,86 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
     train_process_time = time.time() - initial_time
     # Adição do tempo de treino nos registros
     metrics["train process time"]=str(train_process_time)
+    metrics["train_loss"]=float(running_loss/len(train_loader))
+    metrics["val_loss"]=float(val_loss)
+    metrics["epochs"]=int(epoch_index)
+    metrics["data_val"]=str("val")
     # Salvar o modelo treinado
     model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_512")
-    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, dataset.targets)
+    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, dataset.targets, data_val="val")
     print(f"Model saved at {model_save_path}")
 
-    return model
+    return model, model_save_path
 
-
-def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, results_folder_path):
+def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, results_folder_path):        
+    # Criar o modelo e otimizador fora do loop do K-fold para manter os pesos
+    model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder)
+    
+    # Calcular pesos das classes para o treinamento
+    class_weights = classweights_values(dataset.metadata['diagnostic']).to(device)
+    
+    # Configuração do K-fold
     kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
     
     all_metrics = []
 
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(dataset)):
+    # Separar dados em treino, validação e teste
+    test_size = int(0.2 * len(dataset))  # Usando 20% dos dados para teste
+    train_val_dataset = torch.utils.data.Subset(dataset, range(test_size, len(dataset)))  # Dados para treino e validação
+    test_dataset = torch.utils.data.Subset(dataset, range(test_size))  # Dados para teste final
+    
+    # Configuração do K-fold para os dados de treino e validação
+    kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+    
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(train_val_dataset)):
         print(f"Fold {fold+1}/{k_folds}")
         
         # Dividir os dados
-        train_subset = torch.utils.data.Subset(dataset, train_idx)
-        val_subset = torch.utils.data.Subset(dataset, val_idx)
+        train_subset = Subset(train_val_dataset, train_idx)
+        val_subset = Subset(train_val_dataset, val_idx)
         
-        # Criar os DataLoaders
+        # Criar os DataLoaders para treino e validação
         train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
-        
-        # Recriar o modelo e otimizador para cada fold
-        model = multimodalIntraInterModal.MultimodalModel( num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder)
-        
-        # Calcular pesos das classes para o treinamento
-        class_weights = classweights_values(dataset.metadata['diagnostic']).to(device)
-        
+
         # Treinar o modelo
-        model  = train_process(num_epochs, fold+1, train_loader, val_loader, model, device, class_weights, model_name, text_model_encoder, results_folder_path)
+        model, model_save_path = train_process(num_epochs, fold+1, train_loader, val_loader, model, device, class_weights, model_name, text_model_encoder, results_folder_path)
         
-        # Avaliação final no fold atual
+        # Avaliação final no fold atual (com validação dentro do fold)
         metrics = model_metrics.evaluate_model(model, val_loader, device, fold+1)
         all_metrics.append(metrics)
         print(f"Metrics for fold {fold+1}: {metrics}")
 
-    # Médias e desvios das métricas
+    # Médias e desvios das métricas dos folds
     avg_metrics = {key: np.mean([m[key] for m in all_metrics]) for key in all_metrics[0]}
     std_metrics = {key: np.std([m[key] for m in all_metrics]) for key in all_metrics[0]}
 
-    print(f"Average Metrics: {avg_metrics}")
-    print(f"Standard Deviation: {std_metrics}")
+    print(f"Average Metrics (from folds): {avg_metrics}")
+    print(f"Standard Deviation (from folds): {std_metrics}")
+
+    # Validação final com o conjunto de teste
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    final_metrics = model_metrics.evaluate_model(model, test_loader, device, 'Final Test')
+    # Evaluate metrics
+    metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, test_loader, device, fold)
+    metrics["data_val"]=str("test")
+    print(f"Final Test Metrics: {final_metrics}")
+    save_model_and_metrics(model, metrics, model_name, model_save_path, fold, all_labels, all_predictions, dataset.targets, data_val="test")
+
 
 if __name__ == "__main__":
     num_epochs = 25
-    batch_size = 4
+    batch_size = 32
     k_folds=5 
-    model_name="mobilenet-v2"
-    text_model_encoder='one-hot-encoder'
+    model_name="resnet-18"
+    text_model_encoder= "facebook/bart-base" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = skinLesionDatasets.SkinLesionDataset(
+    dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
-        # bert_model_name=text_model_encoder,
+        bert_model_name=text_model_encoder,
         image_encoder=model_name,
-        drop_nan=True
+        drop_nan=False
     )
     num_metadata_features = dataset.metadata.shape[1]
     print(f"Número de features do metadados: {num_metadata_features}\n")
