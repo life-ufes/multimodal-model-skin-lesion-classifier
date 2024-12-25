@@ -78,16 +78,13 @@ class SkinLesionDataset(Dataset):
 
     def load_metadata(self):
         # Carregar o CSV
-        metadata = pd.read_csv(self.metadata_file).fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").\
-           replace("NÃO  ENCONTRADO", "EMPTY"). replace("BRASIL", "BRAZIL")
+        metadata = pd.read_csv(self.metadata_file).fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").replace("NÃO  ENCONTRADO", "EMPTY").replace("BRASIL", "BRAZIL")
         
         # Obter as classes
         self.targets = metadata['diagnostic'].unique()
         # Verificar se deve descartar linhas com NaN
         if self.is_to_drop_nan is True:
             metadata = metadata.dropna().reset_index(drop=True)
-        
-
        
         return metadata
 

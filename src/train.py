@@ -47,7 +47,7 @@ def classweights_values(diagnostic_column):
 
 def train_process(num_epochs, fold_num, train_loader, val_loader, model, device, weightes_per_category, model_name, text_model_encoder, results_folder_path):
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
 
     model.to(device)
 
@@ -105,9 +105,9 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
     train_process_time = time.time() - initial_time
     # Adição do tempo de treino nos registros
     metrics["train process time"]=str(train_process_time)
-    metrics["train_loss"]=float(running_loss/len(train_loader))
-    metrics["val_loss"]=float(val_loss)
-    metrics["epochs"]=int(epoch_index)
+    metrics["train_loss"]=str(float(running_loss/len(train_loader)))
+    metrics["val_loss"]=str(float(val_loss))
+    metrics["epochs"]=str(int(epoch_index))
     metrics["data_val"]=str("val")
     # Salvar o modelo treinado
     model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_512")
@@ -174,10 +174,10 @@ def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, mode
 
 if __name__ == "__main__":
     num_epochs = 25
-    batch_size = 32
+    batch_size = 64
     k_folds=5 
     model_name="resnet-18"
-    text_model_encoder= "facebook/bart-base" # 'one-hot-encoder'
+    text_model_encoder= "albert-base-v2" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
