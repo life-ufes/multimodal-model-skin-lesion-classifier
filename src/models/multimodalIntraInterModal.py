@@ -62,15 +62,17 @@ class MultimodalModel(nn.Module):
         )
     
     def forward(self, image, text_metadata):
-        # Pré-processando as imagens
-        inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
-        
-        # Passando as imagens pelo modelo ViT
-        outputs = self.image_encoder(**inputs)
-        
-        # Pegando a saída da última camada (features do token [CLS])
-        image_features = outputs.last_hidden_state[:, 0, :]  # [batch_size, hidden_size]
-        
+        if self.cnn_model_name=="vit-base-patch16-224":
+            # Pré-processando as imagens
+            inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
+            
+            # Passando as imagens pelo modelo ViT
+            outputs = self.image_encoder(**inputs)
+            
+            # Pegando a saída da última camada (features do token [CLS])
+            image_features = outputs.last_hidden_state[:, 0, :]  # [batch_size, hidden_size]
+        else:
+            image_features = self.image_encoder(image)
         # Projeção para o espaço comum
         image_features = self.image_projector(image_features)
         image_features = image_features.unsqueeze(1)  # Shape: (batch_size, seq_length=1, common_dim)
