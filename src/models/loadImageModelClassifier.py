@@ -72,6 +72,6 @@ class loadModels():
         # Congelar os pesos
         for param in bert_model.parameters():
             param.requires_grad = False
-        # Dimensão da saída do 
+        # Saída do modelo
         text_encoder_dim_output = 1024
         return bert_model, text_encoder_dim_output

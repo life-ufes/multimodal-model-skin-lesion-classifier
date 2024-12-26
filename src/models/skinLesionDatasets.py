@@ -8,7 +8,7 @@ from torchvision import transforms
 import torch
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, image_encoder="resnet-18"):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', random_undersampling=False, image_encoder="resnet-18"):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
@@ -62,8 +62,8 @@ class SkinLesionDataset(Dataset):
 
     def load_metadata(self):
         # Carregar o CSV
-        metadata = pd.read_csv(self.metadata_file)
-
+        metadata = pd.read_csv(self.metadata_file).fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").\
+           replace("NÃO  ENCONTRADO", "EMPTY")
         # Verificar se deve descartar linhas com NaN
         if self.is_to_drop_nan:
             metadata = metadata.dropna().reset_index(drop=True)
@@ -87,14 +87,18 @@ class SkinLesionDataset(Dataset):
     
     def one_hot_encoding(self):
         # Seleção das features
-        dataset_features = self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'diagnostic'])  # Features
+        dataset_features = self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'])  # Features
 
         # Identificar variáveis categóricas e numéricas
-        categorical_cols = dataset_features.select_dtypes(include=['object']).columns
+        # Inclui 'bool' nas categóricas para posterior conversão
+        categorical_cols = dataset_features.select_dtypes(include=['object', 'bool']).columns
         numerical_cols = dataset_features.select_dtypes(include=['float64', 'int64']).columns
 
+        # Converter todas as colunas categóricas para string para evitar mistura de tipos
+        dataset_features[categorical_cols] = dataset_features[categorical_cols].astype(str)
+
         # Criar o OneHotEncoder para categóricas
-        ohe = OneHotEncoder(sparse_output=False)
+        ohe = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
         categorical_data = ohe.fit_transform(dataset_features[categorical_cols])
 
         # Escalar variáveis numéricas

@@ -1,58 +1,40 @@
 import torch
 import torch.nn as nn
-from utils import transforms, model_metrics
+from utils import model_metrics
 from utils.early_stopping import EarlyStopping
+import models.focalLoss as focalLoss
 from models import multimodalIntraModal, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 import numpy as np
 import time
 import os
+import pandas as pd
 from torch.utils.data import DataLoader, Subset
 
-def classweights_values(diagnostic_column):
-    # Verificar se há valores NaN e remover (se necessário)
-    diagnostic_column = diagnostic_column.dropna()
-
-    # Garantir que 'diagnostic_column' tenha valores numéricos (se necessário)
-    diagnostic_column = diagnostic_column.astype('category').cat.codes  # Convertendo para códigos de categoria inteiros
-
-    # Obter os rótulos como uma lista
-    all_labels = diagnostic_column.values
-
-    # Verificar os valores únicos após conversão para inteiros
-    print("Valores únicos após conversão para inteiros:", set(all_labels))
-
-    # Contar as ocorrências de cada classe
-    class_counts = Counter(all_labels)
-
-    # Número total de amostras
-    total_samples = len(all_labels)
-
-    # Calcular pesos das classes: inverso da frequência
-    class_weights = {}
-    for class_idx, count in class_counts.items():
-        # Garantir que não dividimos por 0
-        weight = total_samples / (len(class_counts) * max(count, 1))  # 'max(count, 1)' previne divisão por zero
-        class_weights[class_idx] = weight
-
-    # Converter para tensor
-    num_classes = len(class_counts)
-    weights = torch.tensor([class_weights.get(i, 0.0) for i in range(num_classes)], dtype=torch.float)
-
-    print("Pesos das classes:", class_weights)  # Verificar os pesos calculados
-    
-    return weights
+def compute_class_weights(labels):
+    class_counts = Counter(labels)
+    total_samples = len(labels)
+    class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
+    return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
 
 def train_process(num_epochs, fold_num, train_loader, val_loader, model, device, weightes_per_category, model_name, text_model_encoder, results_folder_path):
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
-
+    # criterion = focalLoss.FocalLoss(alpha=None, gamma=2, reduction='mean')
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
+    # ReduceLROnPlateau reduz o LR quando a métrica monitorada (val_loss) não melhora
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',       # Como estamos monitorando val_loss, queremos diminuir LR quando ela não melhora
+        factor=0.1,       # Fator pelo qual a LR será multiplicada
+        patience=2,       # Número de épocas sem melhoria antes de reduzir LR
+        verbose=True      # Imprime quando há mudança de LR
+    )
     model.to(device)
 
     # EarlyStopping
-    early_stopping = EarlyStopping(patience=3, delta=0.01)
+    early_stopping = EarlyStopping(patience=5, delta=0.01)
     # Registro do tempo de treinamento
     initial_time = time.time()
     for epoch_index in range(num_epochs):
@@ -73,7 +55,7 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
 
             running_loss += loss.item()
         
-        print(f"==="*30)
+        print(f"==="*40)
         # Average training loss for the epoch
         print(f"\nTraining: Epoch {epoch_index}, Loss: {running_loss/len(train_loader):.4f}")
         
@@ -91,7 +73,12 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
         # Calculate the average validation loss
         val_loss = val_loss / len(val_loader)
         print(f"Validation Loss: {val_loss:.4f}")
+        # === Atualiza o Scheduler de LR com base no val_loss ===
+        scheduler.step(val_loss)
         
+        # (Opcional) Verificar/Imprimir LR atual
+        current_lr = [param_group['lr'] for param_group in optimizer.param_groups]
+        print(f"Current Learning Rate(s): {current_lr}\n")
         # Evaluate metrics
         metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold_num)
         print(f"Metrics: {metrics}")
@@ -116,27 +103,27 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
 
     return model, model_save_path
 
-def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, results_folder_path):        
-    # Criar o modelo e otimizador fora do loop do K-fold para manter os pesos
-    model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder)
-    
-    # Calcular pesos das classes para o treinamento
-    class_weights = classweights_values(dataset.metadata['diagnostic']).to(device)
-    
-    # Configuração do K-fold
-    kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
-    
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, results_folder_path):        
     all_metrics = []
+    # Criar o modelo e otimizador fora do loop do K-fold para manter os pesos
+    model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder, vocab_size=num_metadata_features)
 
     # Separar dados em treino, validação e teste
     test_size = int(0.2 * len(dataset))  # Usando 20% dos dados para teste
-    train_val_dataset = torch.utils.data.Subset(dataset, range(test_size, len(dataset)))  # Dados para treino e validação
-    test_dataset = torch.utils.data.Subset(dataset, range(test_size))  # Dados para teste final
-    
+    indices = list(range(len(dataset)))
+    train_val_indices, test_indices = train_test_split(indices, test_size=test_size, random_state=42, shuffle=True)
+
+    train_val_dataset = torch.utils.data.Subset(dataset, train_val_indices)  # Dados para treino e validação
+    test_dataset = torch.utils.data.Subset(dataset, test_indices)  # Dados para teste final
+
+    # Calcular pesos das classes para o treinamento com base nos dados de treino
+    train_labels = [dataset.labels[i] for i in train_val_indices]
+    class_weights = compute_class_weights(train_labels).to(device)
+    print(f"Pesos das classes a serem usadas: {class_weights}\n")
     # Configuração do K-fold para os dados de treino e validação
-    kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+    kFold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
     
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(train_val_dataset)):
+    for fold, (train_idx, val_idx) in enumerate(kFold.split(train_val_dataset)):
         print(f"Fold {fold+1}/{k_folds}")
         
         # Dividir os dados
@@ -146,12 +133,11 @@ def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, mode
         # Criar os DataLoaders para treino e validação
         train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
-
         # Treinar o modelo
         model, model_save_path = train_process(num_epochs, fold+1, train_loader, val_loader, model, device, class_weights, model_name, text_model_encoder, results_folder_path)
         
         # Avaliação final no fold atual (com validação dentro do fold)
-        metrics = model_metrics.evaluate_model(model, val_loader, device, fold+1)
+        metrics, all_labels, all_probabilities = model_metrics.evaluate_model(model, val_loader, device, fold+1)
         all_metrics.append(metrics)
         print(f"Metrics for fold {fold+1}: {metrics}")
 
@@ -164,30 +150,36 @@ def pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, mode
 
     # Validação final com o conjunto de teste
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    final_metrics = model_metrics.evaluate_model(model, test_loader, device, 'Final Test')
     # Evaluate metrics
-    metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, test_loader, device, fold)
-    metrics["data_val"]=str("test")
+    final_metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, test_loader, device, fold)
+    # Adição do tempo de treino nos registros
+    final_metrics["train process time"]=str(0)
+    final_metrics["train_loss"]=str(0)
+    final_metrics["val_loss"]=str(0)
+    final_metrics["epochs"]=str(-1)
+    final_metrics["data_val"]=str("test")
+    final_metrics["fold"]=str("test")
     print(f"Final Test Metrics: {final_metrics}")
-    save_model_and_metrics(model, metrics, model_name, model_save_path, fold, all_labels, all_predictions, dataset.targets, data_val="test")
+    save_model_and_metrics(model, final_metrics, model_name, model_save_path, -1, all_labels, all_predictions, dataset.targets, data_val="test")
 
 
 if __name__ == "__main__":
-    num_epochs = 25
-    batch_size = 64
+    num_epochs = 100
+    batch_size = 16
     k_folds=5 
     model_name="resnet-18"
-    text_model_encoder= "albert-base-v2" # 'one-hot-encoder'
+    text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
+    dataset = skinLesionDatasets.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
         bert_model_name=text_model_encoder,
         image_encoder=model_name,
-        drop_nan=False
+        drop_nan=False,
+        random_undersampling=False
     )
-    num_metadata_features = dataset.metadata.shape[1]
+    num_metadata_features = dataset.features.shape[1]
     print(f"Número de features do metadados: {num_metadata_features}\n")
     num_classes = len(dataset.metadata['diagnostic'].unique())
 
-    pipeline(dataset, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights")
+    pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights")
