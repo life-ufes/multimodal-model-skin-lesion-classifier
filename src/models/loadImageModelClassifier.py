@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-from transformers import ViTModel
+from transformers import ViTModel, CLIPProcessor, CLIPModel
 from transformers import AutoTokenizer, AutoModel
 
 class loadModels():
@@ -60,6 +60,9 @@ class loadModels():
                 image_encoder = ViTModel.from_pretrained(f"google/{cnn_model_name}")
                 cnn_dim_output = image_encoder.config.hidden_size  # Ajustando a saída conforme o ViT
 
+            elif cnn_model_name == "openai/clip-vit-base-patch16":
+                image_encoder = CLIPModel.from_pretrained(f"{cnn_model_name}")
+                cnn_dim_output = image_encoder.last_hidden_state.mean(dim=1) # Ajustando a saída conforme o ViT
             else:
                 raise ValueError("CNN não implementada.")
             return image_encoder, cnn_dim_output

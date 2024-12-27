@@ -34,6 +34,8 @@ class MultimodalModel(nn.Module):
             self.feature_extractor = ViTFeatureExtractor.from_pretrained(
                 f"google/{self.cnn_model_name}"
             )
+        elif self.cnn_model_name == "openai/clip-vit-base-patch16":
+            self.feature_extractor = ViTFeatureExtractor.from_pretrained(f"{self.cnn_model_name}")
 
         # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
@@ -93,8 +95,6 @@ class MultimodalModel(nn.Module):
         # -------------------------
         # 4) Gating Mechanisms
         # -------------------------
-        # Aqui definimos camadas lineares para gerar pesos do mesmo tamanho
-        # (batch, common_dim) => (batch, common_dim) via sigmoid
         self.img_gate = nn.Linear(self.common_dim, self.common_dim)
         self.txt_gate = nn.Linear(self.common_dim, self.common_dim)
 
@@ -123,7 +123,7 @@ class MultimodalModel(nn.Module):
         """
 
         # === [A] Extrator de Imagem ===
-        if self.cnn_model_name == "vit-base-patch16-224":
+        if self.cnn_model_name == ("vit-base-patch16-224" or "openai/clip-vit-base-patch16"):
             inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
             outputs = self.image_encoder(**inputs)
             # outputs.last_hidden_state => (batch, seq_len_img, hidden_dim)
@@ -198,7 +198,6 @@ class MultimodalModel(nn.Module):
         )
 
         # === [E] Pooling das atenções finais
-        # (seq_len, batch, common_dim) -> (batch, seq_len, common_dim) -> mean
         image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
         text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
 
@@ -206,14 +205,14 @@ class MultimodalModel(nn.Module):
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
 
         # # === [F] Gating: quanto usar de cada modal?
-        # alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
-        # alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
+        alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
+        alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
 
-        # # Multiplicamos as features pela máscara gerada
-        # image_pooled_gated = alpha_img * image_pooled
-        # text_pooled_gated = alpha_txt * text_pooled
+        # Multiplicamos as features pela máscara gerada
+        image_pooled_gated = alpha_img * image_pooled
+        text_pooled_gated = alpha_txt * text_pooled
 
         # === [G] Fusão e classificação
-        combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+        combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
         output = self.fc_fusion(combined_features)  # (batch, num_classes)
         return output
