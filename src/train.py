@@ -183,32 +183,38 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
     print(f"Final Test Metrics: {final_metrics}")
     save_model_and_metrics(model, final_metrics, model_name, model_save_path, -1, all_labels, all_predictions, dataset.targets, data_val="test")
 
-
-if __name__ == "__main__":
-    num_epochs = 100
-    batch_size = 16
-    k_folds=5 
-    model_name="vgg16"
-    text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
-    attention_mecanism="combined"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = skinLesionDatasets.SkinLesionDataset(
+def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, attention_mecanism, device):
+    list_of_models=["vgg16", "mobilenet-v2", "resnet-50", "vit-base-patch16-224"]
+    
+    for model_name in list_of_models:
+        dataset = skinLesionDatasets.SkinLesionDataset(
         metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
         bert_model_name=text_model_encoder,
         image_encoder=model_name,
         drop_nan=False,
         random_undersampling=False
-    )
-    num_metadata_features = dataset.features.shape[1]
-    print(f"Número de features do metadados: {num_metadata_features}\n")
-    num_classes = len(dataset.metadata['diagnostic'].unique())
+        )
+        num_metadata_features = dataset.features.shape[1]
+        print(f"Número de features do metadados: {num_metadata_features}\n")
+        num_classes = len(dataset.metadata['diagnostic'].unique())
 
-    pipeline(dataset, 
-        num_metadata_features, 
-        num_epochs, batch_size, 
-        device, k_folds, num_classes, 
-        model_name, text_model_encoder,
-        attention_mecanism, 
-        results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/{attention_mecanism}"
-    )
+        pipeline(dataset, 
+            num_metadata_features, 
+            num_epochs, batch_size, 
+            device, k_folds, num_classes, 
+            model_name, text_model_encoder,
+            attention_mecanism, 
+            results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/{attention_mecanism}"
+        )
+
+
+if __name__ == "__main__":
+    num_epochs = 100
+    batch_size = 16
+    k_folds=5 
+    text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
+    attention_mecanism="combined"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Treina todos modelos que podem ser usados no modelo multi-modal
+    run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, attention_mecanism, device)    
