@@ -21,7 +21,7 @@ def compute_class_weights(labels):
     class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
 
-def train_process(num_epochs, fold_num, train_loader, val_loader, model, device, weightes_per_category, model_name, text_model_encoder, attention_mecanism, results_folder_path):
+def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model, device, weightes_per_category, model_name, text_model_encoder, attention_mecanism, results_folder_path):
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
     # criterion = focalLoss.FocalLoss(alpha=None, gamma=2, reduction='mean')
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
@@ -70,7 +70,8 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
             
             print(f"==="*40)
             # Average training loss for the epoch
-            print(f"\nTraining: Epoch {epoch_index}, Loss: {running_loss/len(train_loader):.4f}")
+            train_loss=running_loss/len(train_loader)
+            print(f"\nTraining: Epoch {epoch_index}, Loss: {train_loss:.4f}")
             
             # Validation loop
             model.eval()  # Set model to evaluation mode
@@ -95,6 +96,9 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
             # Evaluate metrics
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold_num)
             metrics["epoch"] = epoch_index
+            
+            metrics["train_loss"]=float(train_loss)
+            metrics["val_loss"]=float(val_loss)
             print(f"Metrics: {metrics}")
             # Logar métricas no MLflow
             for metric_name, metric_value in metrics.items():
@@ -113,13 +117,11 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, model, device,
     train_process_time = time.time() - initial_time
     # Adição do tempo de treino nos registros
     metrics["train process time"]=str(train_process_time)
-    metrics["train_loss"]=str(float(running_loss/len(train_loader)))
-    metrics["val_loss"]=str(float(val_loss))
     metrics["epochs"]=str(int(epoch_index))
     metrics["data_val"]=str("val")
     # Salvar o modelo treinado
     model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_512")
-    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, dataset.targets, data_val="val")
+    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, targets, data_val="val")
     print(f"Model saved at {model_save_path}")
 
     return model, model_save_path
@@ -141,6 +143,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
     train_labels = [dataset.labels[i] for i in train_val_indices]
     class_weights = compute_class_weights(train_labels).to(device)
     print(f"Pesos das classes a serem usadas: {class_weights}\n")
+    # Obter os targets a serem usados
+    targets = dataset.targets
     # Configuração do K-fold para os dados de treino e validação
     kFold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
     
@@ -155,7 +159,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
         # Treinar o modelo
-        model, model_save_path = train_process(num_epochs, fold+1, train_loader, val_loader, model, device, class_weights, model_name, text_model_encoder, attention_mecanism, results_folder_path)
+        model, model_save_path = train_process(num_epochs, fold+1, train_loader, val_loader, targets, model, device, class_weights, model_name, text_model_encoder, attention_mecanism, results_folder_path)
         
         # Avaliação final no fold atual (com validação dentro do fold)
         metrics, all_labels, all_probabilities = model_metrics.evaluate_model(model, val_loader, device, fold+1)
