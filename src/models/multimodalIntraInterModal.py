@@ -145,8 +145,7 @@ class MultimodalModel(nn.Module):
         # === [B] Extrator de Texto ===
         if self.text_model_name == "one-hot-encoder":
             text_features = self.text_fc(text_metadata)  # (batch, 512)
-            # -> (batch, 1, 512)
-            text_features = text_features.unsqueeze(1)
+            text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
         else:
             # Ajustar input_ids e attention_mask p/ shape [batch, seq_len]
             input_ids = text_metadata["input_ids"]
@@ -173,7 +172,7 @@ class MultimodalModel(nn.Module):
         text_features = text_features.view(b_tt*s_tt, d_tt)
         projected_text_features = self.text_projector(text_features)
         text_features = projected_text_features.view(b_tt, s_tt, -1)
-        text_features = text_features.permute(1, 0, 2)  # (seq_len_text, batch, common_dim)
+        text_features = text_features.permute(1, 0, 2)
 
         # === [C] Self-Attention Intra-Modality ===
         image_features_att, _ = self.image_self_attention(
@@ -205,10 +204,15 @@ class MultimodalModel(nn.Module):
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
 
         if self.attention_mecanism == "gated":
-            # # === [F] Gating: quanto usar de cada modal?
+            # # === [F] Gating: quanto usar de 'peso' para cada modal
+            if self.cnn_model_name=="vit-base-patch16-224":
+                # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
+                projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
+                projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
+                
             alpha_img = torch.sigmoid(self.img_gate(projected_image_features))  # (batch, common_dim)
             alpha_txt = torch.sigmoid(self.txt_gate(projected_text_features))   # (batch, common_dim)
-
+            
             # Multiplicamos as features pela máscara gerada
             image_pooled_gated = alpha_img * image_pooled
             text_pooled_gated = alpha_txt * text_pooled
