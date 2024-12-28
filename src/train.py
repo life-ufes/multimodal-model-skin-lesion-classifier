@@ -129,7 +129,7 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, attention_mecanism, results_folder_path):        
     all_metrics = []
     # Criar o modelo e otimizador fora do loop do K-fold para manter os pesos
-    model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder, vocab_size=num_metadata_features)
+    model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
 
     # Separar dados em treino, validação e teste
     test_size = int(0.2 * len(dataset))  # Usando 20% dos dados para teste
@@ -188,7 +188,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
     save_model_and_metrics(model, final_metrics, model_name, model_save_path, -1, all_labels, all_predictions, dataset.targets, data_val="test")
 
 def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, attention_mecanism, device):
-    list_of_models=["vgg16", "mobilenet-v2", "resnet-50", "vit-base-patch16-224"]
+    list_of_models= ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
     
     for model_name in list_of_models:
         dataset = skinLesionDatasets.SkinLesionDataset(
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     batch_size = 16
     k_folds=5 
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
-    attention_mecanism="combined"
+    attention_mecanism="gated"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, attention_mecanism, device)    

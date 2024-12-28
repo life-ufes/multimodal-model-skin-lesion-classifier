@@ -8,7 +8,7 @@ from transformers import ViTFeatureExtractor
 from loadImageModelClassifier import loadModels
 
 class MultimodalModel(nn.Module):
-    def __init__(self, num_classes, device, cnn_model_name, text_model_name, vocab_size=85):
+    def __init__(self, num_classes, device, cnn_model_name, text_model_name, vocab_size=85, attention_mecanism="combined"):
         super(MultimodalModel, self).__init__()
         
         # Dimensões do modelo
@@ -18,7 +18,7 @@ class MultimodalModel(nn.Module):
         self.device = device
         self.cnn_model_name = cnn_model_name
         self.text_model_name = text_model_name
-        
+        self.attention_mecanism = attention_mecanism
         self.num_heads = 8  # para MultiheadAttention
 
         # -------------------------
@@ -137,8 +137,8 @@ class MultimodalModel(nn.Module):
         # Projeção p/ espaço comum
         b_i, s_i, d_i = image_features.shape
         image_features = image_features.view(b_i*s_i, d_i)
-        image_features = self.image_projector(image_features)
-        image_features = image_features.view(b_i, s_i, -1)
+        projected_image_features = self.image_projector(image_features)
+        image_features = projected_image_features.view(b_i, s_i, -1)
         # -> (seq_len_img, batch, common_dim)
         image_features = image_features.permute(1, 0, 2)
 
@@ -171,8 +171,8 @@ class MultimodalModel(nn.Module):
         # Projeção para espaço comum
         b_tt, s_tt, d_tt = text_features.shape
         text_features = text_features.view(b_tt*s_tt, d_tt)
-        text_features = self.text_projector(text_features)
-        text_features = text_features.view(b_tt, s_tt, -1)
+        projected_text_features = self.text_projector(text_features)
+        text_features = projected_text_features.view(b_tt, s_tt, -1)
         text_features = text_features.permute(1, 0, 2)  # (seq_len_text, batch, common_dim)
 
         # === [C] Self-Attention Intra-Modality ===
@@ -197,22 +197,38 @@ class MultimodalModel(nn.Module):
             value=image_features_att
         )
 
-        # === [E] Pooling das atenções finais
+        # === [E] Pooling das atenções finais 
         image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
         text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
 
         image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
 
-        # # === [F] Gating: quanto usar de cada modal?
-        alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
-        alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
+        if self.attention_mecanism == "gated":
+            # # === [F] Gating: quanto usar de cada modal?
+            alpha_img = torch.sigmoid(self.img_gate(projected_image_features))  # (batch, common_dim)
+            alpha_txt = torch.sigmoid(self.txt_gate(projected_text_features))   # (batch, common_dim)
 
-        # Multiplicamos as features pela máscara gerada
-        image_pooled_gated = alpha_img * image_pooled
-        text_pooled_gated = alpha_txt * text_pooled
+            # Multiplicamos as features pela máscara gerada
+            image_pooled_gated = alpha_img * image_pooled
+            text_pooled_gated = alpha_txt * text_pooled
+            combined_features = torch.cat([projected_image_features, projected_text_features], dim=1)
+        
+        elif self.attention_mecanism == "combined":
+            # # === [F] Gating: quanto usar de cada modal?
+            #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
+            alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
+            alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
 
-        # === [G] Fusão e classificação
-        combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
+            # Multiplicamos as features pela máscara gerada
+            image_pooled_gated = alpha_img * image_pooled
+            text_pooled_gated = alpha_txt * text_pooled
+
+            # === [G] Fusão e classificação
+            combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
+
+        elif self.attention_mecanism == "crossattention":
+            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+
         output = self.fc_fusion(combined_features)  # (batch, num_classes)
         return output
