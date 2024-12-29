@@ -41,12 +41,16 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
     initial_time = time.time()
     # A época começa em zero
     epoch_index = 0
+    # Setando o novo experimento
+    experiment_name = "EXPERIMENTOS-PAD-UFES20"
+    mlflow.set_experiment(experiment_name)
     # Iniciar uma execução no MLflow
     with mlflow.start_run(run_name=f"image_extractor__model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold_num}"):
         # Logar parâmetros no MLflow
         mlflow.log_param("fold_num", fold_num)
         mlflow.log_param("batch_size", train_loader.batch_size)
         mlflow.log_param("model_name", model_name)
+        mlflow.log_param("attention_mecanism", attention_mecanism)
         mlflow.log_param("text_model_encoder", text_model_encoder)
         mlflow.log_param("criterion_type", "cross_entropy")  # Ajuste conforme necessário
 
@@ -90,7 +94,6 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
             # === Atualiza o Scheduler de LR com base no val_loss ===
             scheduler.step(val_loss)
             
-            # (Opcional) Verificar/Imprimir LR atual
             current_lr = [param_group['lr'] for param_group in optimizer.param_groups]
             print(f"Current Learning Rate(s): {current_lr}\n")
             # Evaluate metrics
@@ -126,99 +129,90 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, attention_mecanism, results_folder_path):        
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, attention_mecanism, results_folder_path):
     all_metrics = []
-    # Criar o modelo e otimizador fora do loop do K-fold para manter os pesos
-    model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
 
-    # Separar dados em treino, validação e teste
-    test_size = int(0.2 * len(dataset))  # Usando 20% dos dados para teste
-    indices = list(range(len(dataset)))
-    train_val_indices, test_indices = train_test_split(indices, test_size=test_size, random_state=42, shuffle=True)
+    # Obter os rótulos para validação estratificada (se necessário)
+    labels = [dataset.labels[i] for i in range(len(dataset))]
 
-    train_val_dataset = torch.utils.data.Subset(dataset, train_val_indices)  # Dados para treino e validação
-    test_dataset = torch.utils.data.Subset(dataset, test_indices)  # Dados para teste final
-
-    # Calcular pesos das classes para o treinamento com base nos dados de treino
-    train_labels = [dataset.labels[i] for i in train_val_indices]
-    class_weights = compute_class_weights(train_labels).to(device)
-    print(f"Pesos das classes a serem usadas: {class_weights}\n")
-    # Obter os targets a serem usados
-    targets = dataset.targets
-    # Configuração do K-fold para os dados de treino e validação
+    # Configurar o K-Fold
     kFold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
-    
-    for fold, (train_idx, val_idx) in enumerate(kFold.split(train_val_dataset)):
+
+    for fold, (train_idx, val_idx) in enumerate(kFold.split(dataset)):
         print(f"Fold {fold+1}/{k_folds}")
-        
-        # Dividir os dados
-        train_subset = Subset(train_val_dataset, train_idx)
-        val_subset = Subset(train_val_dataset, val_idx)
-        
-        # Criar os DataLoaders para treino e validação
+
+        # Criar datasets para treino e validação do fold atual
+        train_subset = Subset(dataset, train_idx)
+        val_subset = Subset(dataset, val_idx)
+
+        # Criar DataLoaders
         train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
-        # Treinar o modelo
-        model, model_save_path = train_process(num_epochs, fold+1, train_loader, val_loader, targets, model, device, class_weights, model_name, text_model_encoder, attention_mecanism, results_folder_path)
+
+        # Calcular pesos das classes com base no conjunto de treino
+        train_labels = [labels[i] for i in train_idx]
+        class_weights = compute_class_weights(train_labels).to(device)
+        print(f"Pesos das classes no fold {fold+1}: {class_weights}")
+
+        # Criar o modelo
+        model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
+
+        # Treinar o modelo no fold atual
+        model, model_save_path = train_process(
+            num_epochs, fold+1, train_loader, val_loader, dataset.targets, model, device,
+            class_weights, model_name, text_model_encoder, attention_mecanism, results_folder_path
+        )
         
-        # Avaliação final no fold atual (com validação dentro do fold)
+        # Avaliar o desempenho no conjunto de validação
         metrics, all_labels, all_probabilities = model_metrics.evaluate_model(model, val_loader, device, fold+1)
         all_metrics.append(metrics)
         print(f"Metrics for fold {fold+1}: {metrics}")
 
-    # Médias e desvios das métricas dos folds
+    # Calcular médias e desvios das métricas
     avg_metrics = {key: np.mean([m[key] for m in all_metrics]) for key in all_metrics[0]}
     std_metrics = {key: np.std([m[key] for m in all_metrics]) for key in all_metrics[0]}
 
     print(f"Average Metrics (from folds): {avg_metrics}")
     print(f"Standard Deviation (from folds): {std_metrics}")
 
-    # Validação final com o conjunto de teste
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    # Evaluate metrics
-    final_metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, test_loader, device, fold)
-    # Adição do tempo de treino nos registros
-    final_metrics["train process time"]=str(0)
-    final_metrics["train_loss"]=str(0)
-    final_metrics["val_loss"]=str(0)
-    final_metrics["epochs"]=str(-1)
-    final_metrics["data_val"]=str("test")
-    final_metrics["fold"]=str("test")
-    print(f"Final Test Metrics: {final_metrics}")
-    save_model_and_metrics(model, final_metrics, model_name, model_save_path, -1, all_labels, all_predictions, dataset.targets, data_val="test")
+def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device):
+    # Para todas os tipos de estratégias a serem usadas
+    list_of_attention_mecanism = "gated", "crossattention", "combined"
+    for attention_mecanism in list_of_attention_mecanism:
+        # Testar com todos os modelos
+        list_of_models= ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        
+        for model_name in list_of_models:
+            try:
+                dataset = skinLesionDatasets.SkinLesionDataset(
+                metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
+                img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
+                bert_model_name=text_model_encoder,
+                image_encoder=model_name,
+                drop_nan=False,
+                random_undersampling=False
+                )
+                num_metadata_features = dataset.features.shape[1]
+                print(f"Número de features do metadados: {num_metadata_features}\n")
+                num_classes = len(dataset.metadata['diagnostic'].unique())
 
-def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, attention_mecanism, device):
-    list_of_models= ["vit-base-patch16-224"] # ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
-    
-    for model_name in list_of_models:
-        dataset = skinLesionDatasets.SkinLesionDataset(
-        metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
-        img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
-        bert_model_name=text_model_encoder,
-        image_encoder=model_name,
-        drop_nan=False,
-        random_undersampling=False
-        )
-        num_metadata_features = dataset.features.shape[1]
-        print(f"Número de features do metadados: {num_metadata_features}\n")
-        num_classes = len(dataset.metadata['diagnostic'].unique())
-
-        pipeline(dataset, 
-            num_metadata_features, 
-            num_epochs, batch_size, 
-            device, k_folds, num_classes, 
-            model_name, text_model_encoder,
-            attention_mecanism, 
-            results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/{attention_mecanism}"
-        )
-
+                pipeline(dataset, 
+                    num_metadata_features, 
+                    num_epochs, batch_size, 
+                    device, k_folds, num_classes, 
+                    model_name, text_model_encoder,
+                    attention_mecanism, 
+                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/{attention_mecanism}"
+                )
+            except Exception as e:
+                print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
+                continue
 
 if __name__ == "__main__":
     num_epochs = 100
     batch_size = 16
     k_folds=5 
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
-    attention_mecanism="gated" # "gated", "crossattention", "combined"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, attention_mecanism, device)    
+    run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)    
