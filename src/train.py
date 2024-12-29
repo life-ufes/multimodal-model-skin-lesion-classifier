@@ -218,7 +218,7 @@ if __name__ == "__main__":
     batch_size = 16
     k_folds=5 
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
-    attention_mecanism="gated"
+    attention_mecanism="gated" # "gated", "crossattention", "combined"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, attention_mecanism, device)    

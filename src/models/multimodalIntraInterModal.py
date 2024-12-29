@@ -3,7 +3,7 @@ import torch.nn as nn
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from transformers import ViTFeatureExtractor
+from transformers import ViTFeatureExtractor, CLIPProcessor, CLIPModel
 
 from loadImageModelClassifier import loadModels
 
@@ -35,7 +35,8 @@ class MultimodalModel(nn.Module):
                 f"google/{self.cnn_model_name}"
             )
         elif self.cnn_model_name == "openai/clip-vit-base-patch16":
-            self.feature_extractor = ViTFeatureExtractor.from_pretrained(f"{self.cnn_model_name}")
+            self.feature_extractor = CLIPProcessor.from_pretrained(self.cnn_model_name)
+            self.image_encoder = CLIPModel.from_pretrained(self.cnn_model_name)
 
         # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
@@ -209,7 +210,7 @@ class MultimodalModel(nn.Module):
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
                 projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
-                
+
             alpha_img = torch.sigmoid(self.img_gate(projected_image_features))  # (batch, common_dim)
             alpha_txt = torch.sigmoid(self.txt_gate(projected_text_features))   # (batch, common_dim)
             
