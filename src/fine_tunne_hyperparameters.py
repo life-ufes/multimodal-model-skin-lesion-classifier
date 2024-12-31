@@ -1,116 +1,118 @@
 import torch
 import torch.nn as nn
-from utils import model_metrics
 from utils.early_stopping import EarlyStopping
-import models.focalLoss as focalLoss
-from models import multimodalIntraModal, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalGated, multimodalIntraInterModal
+from torch.utils.data import DataLoader, Subset
+from sklearn.model_selection import KFold
+import optuna
+from utils import model_metrics
+from models import multimodalIntraInterModal, multimodalToOptimize, skinLesionDatasets
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
-from sklearn.model_selection import KFold, train_test_split
 import numpy as np
-import time
 import os
-import pandas as pd
-from torch.utils.data import DataLoader, Subset
-# Importações do MLflow
+import time
 import mlflow
 
+# Função para calcular os pesos das classes
 def compute_class_weights(labels):
     class_counts = Counter(labels)
     total_samples = len(labels)
     class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
 
-def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model, device, weightes_per_category, model_name, text_model_encoder, attention_mecanism, results_folder_path):
-    criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
-    # criterion = focalLoss.FocalLoss(alpha=None, gamma=2, reduction='mean')
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
-    # ReduceLROnPlateau reduz o LR quando a métrica monitorada (val_loss) não melhora
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode='min',       # Como estamos monitorando val_loss, queremos diminuir LR quando ela não melhora
-        factor=0.1,       # Fator pelo qual a LR será multiplicada
-        patience=2,       # Número de épocas sem melhoria antes de reduzir LR
-        verbose=True      # Imprime quando há mudança de LR
-    )
+# Função de treino
+def train_model(train_loader, val_loader, dataset, model, device, class_weights, num_epochs, params, fold, model_name, text_model_encoder, attention_mecanism, results_folder_path):
+
     model.to(device)
 
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=1e-4, weight_decay=1e-4
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=2, verbose=True
+    )
     # EarlyStopping
     early_stopping = EarlyStopping(patience=5, delta=0.01)
     # Registro do tempo de treinamento
     initial_time = time.time()
-    # A época começa em zero
-    epoch_index = 0
+    best_val_loss = float('inf')
     # Setando o novo experimento
-    experiment_name = "EXPERIMENTOS-PAD-UFES20"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-FINE-TUNNING"
     mlflow.set_experiment(experiment_name)
-    # Iniciar uma execução no MLflow
-    with mlflow.start_run(run_name=f"image_extractor__model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold_num}"):
-        # Logar parâmetros no MLflow
-        mlflow.log_param("fold_num", fold_num)
-        mlflow.log_param("batch_size", train_loader.batch_size)
-        mlflow.log_param("model_name", model_name)
-        mlflow.log_param("attention_mecanism", attention_mecanism)
-        mlflow.log_param("text_model_encoder", text_model_encoder)
-        mlflow.log_param("criterion_type", "cross_entropy")  # Ajuste conforme necessário
+    # MLflow Logging
+    with mlflow.start_run(run_name=f"image_extractor_model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold}_text_fc_{params['text_fc_config']['hidden_sizes']}_text_fc_dropout_{params['text_fc_config']['dropout']}_num_heads_{params['num_heads']}_fc_fusion_hidden_sizes_{params['fc_fusion_config']['hidden_sizes']}_fc_fusion_dropout_{params['fc_fusion_config']['dropout']}", nested = True):
+        # Log static parameters
+        mlflow.log_params({
+            "text_fc_hidden_sizes": params['text_fc_config']['hidden_sizes'],
+            "text_fc_dropout": params['text_fc_config']['dropout'],
+            "num_heads": params['num_heads'],
+            "fc_fusion_hidden_sizes": params['fc_fusion_config']['hidden_sizes'],
+            "fc_fusion_dropout": params['fc_fusion_config']['dropout'],
+            "model_name": model_name,
+            "attention_mecanism": attention_mecanism,
+            "fold": fold
+        })
 
-        for epoch_index in range(num_epochs):
-            model.train()  # Ensure the model is in training mode
-            running_loss = 0.0
-            
-            # Training loop
-            for batch_index, (image, metadata, label) in enumerate(train_loader):
+        for epoch in range(num_epochs):
+            model.train()
+            train_loss = 0
+
+            for image, metadata, label in train_loader:
                 image, metadata, label = image.to(device), metadata.to(device), label.to(device)
-
                 optimizer.zero_grad()
                 outputs = model(image, metadata)
-
                 loss = criterion(outputs, label)
                 loss.backward()
-                
                 optimizer.step()
+                train_loss += loss.item()
+            train_loss /= len(train_loader)
 
-                running_loss += loss.item()
-            
-            print(f"==="*40)
-            # Average training loss for the epoch
-            train_loss=running_loss/len(train_loader)
-            print(f"\nTraining: Epoch {epoch_index}, Loss: {train_loss:.4f}")
-            
-            # Validation loop
-            model.eval()  # Set model to evaluation mode
-            val_loss = 0.0
-            with torch.no_grad():  # No need to compute gradients during validation
+            model.eval()
+            val_loss = 0
+            with torch.no_grad():
                 for image, metadata, label in val_loader:
                     image, metadata, label = image.to(device), metadata.to(device), label.to(device)
-                    
                     outputs = model(image, metadata)
                     loss = criterion(outputs, label)
                     val_loss += loss.item()
+            val_loss /= len(val_loader)
 
-            # Calculate the average validation loss
-            val_loss = val_loss / len(val_loader)
-            print(f"Validation Loss: {val_loss:.4f}")
-            # === Atualiza o Scheduler de LR com base no val_loss ===
             scheduler.step(val_loss)
-            
-            current_lr = [param_group['lr'] for param_group in optimizer.param_groups]
-            print(f"Current Learning Rate(s): {current_lr}\n")
-            # Evaluate metrics
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold_num)
-            metrics["epoch"] = epoch_index
-            
-            metrics["train_loss"]=float(train_loss)
-            metrics["val_loss"]=float(val_loss)
-            print(f"Metrics: {metrics}")
+
+            # Current learning rate
+            current_lr = [param_group['lr'] for param_group in optimizer.param_groups][0]
+
+            # Salvar o menor val_loss
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+
+            # Log training and validation losses as metrics
+            mlflow.log_metrics({
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "learning_rate": current_lr
+            }, step=epoch)
+
+            # Log evaluation metrics
+            metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold)
             # Logar métricas no MLflow
             for metric_name, metric_value in metrics.items():
                 if isinstance(metric_value, (int, float)):
-                    mlflow.log_metric(metric_name, metric_value, step=epoch_index+1)
+                    mlflow.log_metric(metric_name, metric_value, step=epoch)
                 else:
                     mlflow.log_param(metric_name, metric_value)  
 
 
+
+            model_save_path = os.path.join(
+                results_folder_path,
+                f"model_{model_name}_att_{attention_mecanism}_textfc_{params['text_fc_config']['hidden_sizes'][0]}_dp{params['text_fc_config']['dropout']:.2f}_heads{params['num_heads']}_fusionfc_{params['fc_fusion_config']['hidden_sizes'][0]}_dp{params['fc_fusion_config']['dropout']:.2f}.pth"
+            )
+
+            # if val_loss < best_val_loss:
+            #     best_val_loss = val_loss
+            #     save_model_and_metrics(model, metrics, model_name, model_save_path, fold, all_labels, all_predictions, dataset.targets, data_val="val")
             # Check early stopping
             early_stopping(val_loss, model)
             if early_stopping.early_stop:
@@ -120,103 +122,89 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
     train_process_time = time.time() - initial_time
     # Adição do tempo de treino nos registros
     metrics["train process time"]=str(train_process_time)
-    metrics["epochs"]=str(int(epoch_index))
-    metrics["data_val"]=str("val")
-    # Salvar o modelo treinado
-    model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_512")
-    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, targets, data_val="val")
-    print(f"Model saved at {model_save_path}")
+    model_save_path = os.path.join(
+        results_folder_path,
+        f"model_{model_name}_att_{attention_mecanism}_textfc_{params['text_fc_config']['hidden_sizes'][0]}_dp{params['text_fc_config']['dropout']:.2f}_heads{params['num_heads']}_fusionfc_{params['fc_fusion_config']['hidden_sizes'][0]}_dp{params['fc_fusion_config']['dropout']:.2f}.pth"
+    )
+    save_model_and_metrics(model, metrics, model_name, model_save_path, fold, all_labels, all_predictions, dataset.targets, data_val="val")
+    mlflow.log_artifact(model_save_path)  # Save model path to MLflow
 
-    return model, model_save_path
+    return best_val_loss
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, attention_mecanism, results_folder_path):
-    all_metrics = []
 
+# Função de objetivo para Optuna
+def objective(trial):
+    # Batch size
+    batch_size = 128
+    max_epochs = 1
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_name = "densenet169"
+    text_model_encoder = "one-hot-encoder"
+    attention_mecanism="crossattention"
+
+    params = {
+        'text_fc_config': {
+            'hidden_sizes': trial.suggest_categorical('hidden_sizes', [[256, 512], [512, 512, 256], [1024, 512, 256]]),
+            'dropout': trial.suggest_float('dropout', 0.1, 0.3)
+        },
+        'num_heads': trial.suggest_int('num_heads', 2, 4, 8),
+        'fc_fusion_config': {
+            'hidden_sizes': trial.suggest_categorical('fc_hidden_sizes', [[1024, 512], [512, 256, 128], [1024, 512, 256, 128]]),
+            'dropout': trial.suggest_float('fc_dropout', 0.1, 0.3)
+        }
+    }
+
+    dataset = skinLesionDatasets.SkinLesionDataset(
+        metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
+        img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
+        bert_model_name="one-hot-encoder",
+        image_encoder="densenet169",
+        drop_nan=False,
+        random_undersampling=False
+    )
     # Obter os rótulos para validação estratificada (se necessário)
     labels = [dataset.labels[i] for i in range(len(dataset))]
+    # Definir os parâmetros do K-fold
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    fold_losses = []
 
-    # Configurar o K-Fold
-    kFold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
-
-    for fold, (train_idx, val_idx) in enumerate(kFold.split(dataset)):
-        print(f"Fold {fold+1}/{k_folds}")
-
-        # Criar datasets para treino e validação do fold atual
+    for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
         train_subset = Subset(dataset, train_idx)
         val_subset = Subset(dataset, val_idx)
 
-        # Criar DataLoaders
         train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
-
-        # Calcular pesos das classes com base no conjunto de treino
+        
+        # Calcular pesos das classes com base no conjunto de treino que mudará a cada nova rodada
         train_labels = [labels[i] for i in train_idx]
         class_weights = compute_class_weights(train_labels).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
-
-        # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
-
-        # Treinar o modelo no fold atual
-        model, model_save_path = train_process(
-            num_epochs, fold+1, train_loader, val_loader, dataset.targets, model, device,
-            class_weights, model_name, text_model_encoder, attention_mecanism, results_folder_path
+        
+        model = multimodalToOptimize.MultimodalModel(
+            num_classes=len(dataset.metadata['diagnostic'].unique()),
+            device=device,
+            cnn_model_name=model_name,
+            text_model_name=text_model_encoder,
+            vocab_size=dataset.features.shape[1],
+            attention_mecanism=attention_mecanism,
+            text_fc_config=params['text_fc_config'],
+            num_heads=params['num_heads'],
+            fc_fusion_config=params['fc_fusion_config']
         )
-        
-        # Avaliar o desempenho no conjunto de validação
-        metrics, all_labels, all_probabilities = model_metrics.evaluate_model(model, val_loader, device, fold+1)
-        all_metrics.append(metrics)
-        print(f"Metrics for fold {fold+1}: {metrics}")
 
-    # Calcular médias e desvios das métricas
-    avg_metrics = {key: np.mean([m[key] for m in all_metrics]) for key in all_metrics[0]}
-    std_metrics = {key: np.std([m[key] for m in all_metrics]) for key in all_metrics[0]}
+        val_loss = train_model(
+            train_loader, val_loader, dataset, model, device, class_weights,
+            num_epochs=max_epochs, params=params, fold=fold,
+            model_name=model_name, text_model_encoder=text_model_encoder,
+            attention_mecanism=attention_mecanism, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/fine-tunning"
+        )
+        fold_losses.append(val_loss)
 
-    print(f"Average Metrics (from folds): {avg_metrics}")
-    print(f"Standard Deviation (from folds): {std_metrics}")
-
-def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device):
-    # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = "gated", "crossattention", "combined"
-    for attention_mecanism in list_of_attention_mecanism:
-        # Testar com todos os modelos
-        list_of_models = ["resnet-18"]
-        
-        list_num_of_neurons = [256, 512, 1024]
-        list_of_common_dim = [128, 256, 512, 1024]
-        list_num_neurons_text_fc = [256, 512, 1024]
-        
-        for model_name in list_of_models:
-            try:
-                dataset = skinLesionDatasets.SkinLesionDataset(
-                metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
-                img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
-                bert_model_name=text_model_encoder,
-                image_encoder=model_name,
-                drop_nan=False,
-                random_undersampling=False
-                )
-                num_metadata_features = dataset.features.shape[1]
-                print(f"Número de features do metadados: {num_metadata_features}\n")
-                num_classes = len(dataset.metadata['diagnostic'].unique())
-
-                pipeline(dataset, 
-                    num_metadata_features, 
-                    num_epochs, batch_size, 
-                    device, k_folds, num_classes, 
-                    model_name, text_model_encoder,
-                    attention_mecanism, 
-                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/fine_tune_hyperparameters/{attention_mecanism}"
-                )
-            except Exception as e:
-                print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
-                continue
+    return np.mean(fold_losses)
 
 if __name__ == "__main__":
-    num_epochs = 100
-    batch_size = 16
-    k_folds=5 
-    text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)    
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=20)
+
+    print("Best parameters:", study.best_params)
+    print("Best value:", study.best_value)

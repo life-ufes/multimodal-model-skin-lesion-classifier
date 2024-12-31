@@ -1,4 +1,4 @@
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, roc_auc_score, f1_score
 import torch
 
 def evaluate_model(model, dataloader, device, fold_num):
@@ -24,6 +24,7 @@ def evaluate_model(model, dataloader, device, fold_num):
     balanced_accuracy = balanced_accuracy_score(all_labels, all_predictions)
     precision = precision_score(all_labels, all_predictions, average='macro', zero_division=0)
     recall = recall_score(all_labels, all_predictions, average='macro', zero_division=0)
+    f1score = f1_score(all_labels, all_predictions, average="macro", zero_division=0)
 
     try:
         auc = roc_auc_score(all_labels, all_probabilities, multi_class='ovr', average='macro')
@@ -34,6 +35,7 @@ def evaluate_model(model, dataloader, device, fold_num):
         "fold": fold_num, 
         "accuracy": accuracy,
         "balanced_accuracy": balanced_accuracy,
+        "f1_score": f1score,
         "precision": precision,
         "recall": recall,
         "auc": auc

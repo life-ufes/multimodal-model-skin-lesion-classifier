@@ -3,103 +3,81 @@ import torch.nn as nn
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from transformers import ViTFeatureExtractor, CLIPProcessor, CLIPModel
 
 from loadImageModelClassifier import loadModels
-
 class MultimodalModel(nn.Module):
-    def __init__(self, num_classes, device, cnn_model_name, text_model_name, vocab_size=85, attention_mecanism="combined"):
+    def __init__(self, num_classes, device, cnn_model_name, text_model_name, vocab_size=85, attention_mecanism="combined",
+                 text_fc_config=None, num_heads=8, fc_fusion_config=None):
         super(MultimodalModel, self).__init__()
         
         # Dimensões do modelo
         self.common_dim = 512
         self.text_encoder_dim_output = 512
-        self.cnn_dim_output = 512
         self.device = device
         self.cnn_model_name = cnn_model_name
         self.text_model_name = text_model_name
         self.attention_mecanism = attention_mecanism
-        self.num_heads = 8  # para MultiheadAttention
+        self.num_heads = num_heads  # número de cabeças da atenção multihead
 
         # -------------------------
         # 1) Image Encoder
         # -------------------------
         self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
-            self.cnn_model_name,
-            self.common_dim
+            self.cnn_model_name, self.common_dim
         )
         
-        # Se for ViT, teremos ViTFeatureExtractor
-        if self.cnn_model_name == "vit-base-patch16-224":
-            self.feature_extractor = ViTFeatureExtractor.from_pretrained(
-                f"google/{self.cnn_model_name}"
-            )
-        # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
 
         # -------------------------
         # 2) Text Encoder
         # -------------------------
         if self.text_model_name == "one-hot-encoder":
-            # Metadados / one-hot -> FC
-            self.text_fc = nn.Sequential(
-                nn.Linear(vocab_size, 256),
-                nn.ReLU(),
-                nn.Linear(256, 512),
-                nn.ReLU(),
-                nn.Linear(512, self.text_encoder_dim_output)
-            )
+            layers = []
+            hidden_sizes = text_fc_config.get('hidden_sizes', [256, 512])
+            dropout = text_fc_config.get('dropout', 0.3)
+            input_dim = vocab_size
 
+            for hidden_size in hidden_sizes:
+                layers.append(nn.Linear(input_dim, hidden_size))
+                layers.append(nn.ReLU())
+                layers.append(nn.Dropout(dropout))
+                input_dim = hidden_size
+            layers.append(nn.Linear(input_dim, self.text_encoder_dim_output))
+            self.text_fc = nn.Sequential(*layers)
+        else:
+            # Implementação para outros encoders de texto
+            pass
+        
         # Projeção final p/ espaço comum
         self.text_projector = nn.Linear(self.text_encoder_dim_output, self.common_dim)
 
         # -------------------------
-        # 3) Atenções Intra e Inter
+        # 3) Atenções
         # -------------------------
-        self.image_self_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
-            num_heads=self.num_heads,
-            batch_first=False
-        )
-        self.text_self_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
-            num_heads=self.num_heads,
-            batch_first=False
-        )
+        self.image_self_attention = nn.MultiheadAttention(embed_dim=self.common_dim, num_heads=num_heads, batch_first=False)
+        self.text_self_attention = nn.MultiheadAttention(embed_dim=self.common_dim, num_heads=num_heads, batch_first=False)
         
-        self.image_cross_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
-            num_heads=self.num_heads,
-            batch_first=False
-        )
-        self.text_cross_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
-            num_heads=self.num_heads,
-            batch_first=False
-        )
+        self.image_cross_attention = nn.MultiheadAttention(embed_dim=self.common_dim, num_heads=num_heads, batch_first=False)
+        self.text_cross_attention = nn.MultiheadAttention(embed_dim=self.common_dim, num_heads=num_heads, batch_first=False)
 
         # -------------------------
-        # 4) Gating Mechanisms
+        # 4) Fusão Final
         # -------------------------
-        self.img_gate = nn.Linear(self.common_dim, self.common_dim)
-        self.txt_gate = nn.Linear(self.common_dim, self.common_dim)
+        layers = []
+        hidden_sizes = fc_fusion_config.get('hidden_sizes', [1024, 512])
+        dropout = fc_fusion_config.get('dropout', 0.3)
+        input_dim = self.common_dim * 2
 
-        # -------------------------
-        # 5) Camada de Fusão Final
-        # -------------------------
-        self.fc_fusion = nn.Sequential(
-            nn.Linear(self.common_dim * 2, self.common_dim),
-            nn.BatchNorm1d(self.common_dim),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.common_dim, self.common_dim // 2),
-            nn.BatchNorm1d(self.common_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, num_classes),
-            nn.Softmax(dim=1)
-        )
-    
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(input_dim, hidden_size))
+            layers.append(nn.BatchNorm1d(hidden_size))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout))
+            input_dim = hidden_size
+        layers.append(nn.Linear(input_dim, num_classes))
+        layers.append(nn.Softmax(dim=1))
+        self.fc_fusion = nn.Sequential(*layers)
+
     def forward(self, image, text_metadata):
         """
         image: tensor de imagens (batch, C, H, W) se CNN 

@@ -198,7 +198,7 @@ def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 128
+    batch_size = 16
     k_folds=5 
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
