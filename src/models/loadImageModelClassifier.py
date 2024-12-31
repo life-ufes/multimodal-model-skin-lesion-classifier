@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 from torchvision import models
 from transformers import ViTModel, CLIPModel, AutoModel
+
 class loadModels():
     @staticmethod
     def loadModelImageEncoder(cnn_model_name, common_dim):
-        ''' Seleciona o modelo desejado e entrega-o mesmo assim como as dimensões da sua saída'''
+        ''' Seleciona o modelo desejado e entrega-o mesmo assim como as dimensões da sua saída '''
         try:
             if cnn_model_name == "custom-cnn":
                 image_encoder = nn.Sequential(
@@ -15,6 +16,7 @@ class loadModels():
                     nn.Flatten(),
                     nn.Linear(16 * 56 * 56, common_dim)
                 )
+                cnn_dim_output = common_dim
             elif cnn_model_name == "resnet-50":
                 image_encoder = models.resnet50(pretrained=True)
                 cnn_dim_output = 2048
@@ -46,13 +48,13 @@ class loadModels():
             elif cnn_model_name == "mobilenet-v2":
                 image_encoder = models.mobilenet_v2(pretrained=True)
                 cnn_dim_output = 1280
-                    # Congelar os pesos
+                # Congelar os pesos
                 for param in image_encoder.parameters():
                     param.requires_grad = False
-                # Ajustar a saída para manter a dimensão esperada (4096)
+                # Ajustar a saída para manter a dimensão esperada (1280)
                 image_encoder.classifier = nn.Sequential(
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
-                    nn.Linear(cnn_dim_output, cnn_dim_output)  # Garantir que a saída permanece 4096
+                    nn.Linear(cnn_dim_output, cnn_dim_output)  # Manter a dimensão
                 )
             elif cnn_model_name == "vit-base-patch16-224":
                 # Carregar o modelo ViT pré-treinado
@@ -60,20 +62,22 @@ class loadModels():
                 cnn_dim_output = image_encoder.config.hidden_size  # Ajustando a saída conforme o ViT
 
             elif cnn_model_name == "openai/clip-vit-base-patch16":
-                image_encoder = CLIPModel.from_pretrained(f"{cnn_model_name}")
-                cnn_dim_output = image_encoder.config.hidden_size
+                image_encoder = CLIPModel.from_pretrained(cnn_model_name)
+                cnn_dim_output = image_encoder.config.vision_config.hidden_size  # Correção
+
             else:
                 raise ValueError("CNN não implementada.")
             return image_encoder, cnn_dim_output
-        
+
         except Exception as e:
             print(f"Erro ao tentar carregar o modelo!. Erro: {e}\n")
 
+    @staticmethod
     def loadTextModelEncoder(text_model_encoder):
         bert_model = AutoModel.from_pretrained(text_model_encoder)
         # Congelar os pesos
         for param in bert_model.parameters():
             param.requires_grad = False
         # Saída do modelo
-        text_encoder_dim_output = 1024
+        text_encoder_dim_output = 768  # Atualizado para o padrão do BERT
         return bert_model, text_encoder_dim_output

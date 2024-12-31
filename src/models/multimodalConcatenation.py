@@ -229,22 +229,8 @@ class MultimodalModel(nn.Module):
             # Apenas concatena as features projetadas
             combined_features = torch.cat([projected_image_features, projected_text_features], dim=1)
 
-        
-        elif self.attention_mecanism == "weighted-after-crossattention":
-            # # === [F] Gating: quanto usar de cada modal?
-            #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
-            alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
-            alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
-
-            # Multiplicamos as features pela máscara gerada
-            image_pooled_gated = alpha_img * image_pooled
-            text_pooled_gated = alpha_txt * text_pooled
-
-            # === [G] Fusão e classificação
-            combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
-
-        elif self.attention_mecanism == "crossattention":
-            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+        else:
+            raise KeyError(f"Este módulo processa as features de forma concatenada!\n")
 
         output = self.fc_fusion(combined_features)  # (batch, num_classes)
         return output

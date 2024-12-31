@@ -3,7 +3,7 @@ import torch.nn as nn
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
-from models import multimodalIntraModal, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
+from models import multimodalIntraModal, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalGated, multimodalIntraInterModal
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import KFold, train_test_split
@@ -22,8 +22,8 @@ def compute_class_weights(labels):
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
 
 def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model, device, weightes_per_category, model_name, text_model_encoder, attention_mecanism, results_folder_path):
-    # criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
-    criterion = focalLoss.FocalLoss(alpha=None, gamma=2, reduction='mean')
+    criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
+    # criterion = focalLoss.FocalLoss(alpha=None, gamma=2, reduction='mean')
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
     # ReduceLROnPlateau reduz o LR quando a métrica monitorada (val_loss) não melhora
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -162,13 +162,29 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             num_epochs, fold+1, train_loader, val_loader, dataset.targets, model, device,
             class_weights, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
+        
+        # Avaliar o desempenho no conjunto de validação
+        metrics, all_labels, all_probabilities = model_metrics.evaluate_model(model, val_loader, device, fold+1)
+        all_metrics.append(metrics)
+        print(f"Metrics for fold {fold+1}: {metrics}")
+
+    # Calcular médias e desvios das métricas
+    avg_metrics = {key: np.mean([m[key] for m in all_metrics]) for key in all_metrics[0]}
+    std_metrics = {key: np.std([m[key] for m in all_metrics]) for key in all_metrics[0]}
+
+    print(f"Average Metrics (from folds): {avg_metrics}")
+    print(f"Standard Deviation (from folds): {std_metrics}")
 
 def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device):
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    list_of_attention_mecanism = "gated", "crossattention", "combined"
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["resnet-18"]
+        
+        list_num_of_neurons = [256, 512, 1024]
+        list_of_common_dim = [128, 256, 512, 1024]
+        list_num_neurons_text_fc = [256, 512, 1024]
         
         for model_name in list_of_models:
             try:
@@ -190,7 +206,7 @@ def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)
                     device, k_folds, num_classes, 
                     model_name, text_model_encoder,
                     attention_mecanism, 
-                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/{attention_mecanism}"
+                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/fine_tune_hyperparameters/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
