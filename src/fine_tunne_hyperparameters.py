@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import KFold
 import optuna
 from utils import model_metrics
+from sklearn.model_selection import train_test_split
+import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, multimodalToOptimize, skinLesionDatasets
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
@@ -24,8 +26,9 @@ def compute_class_weights(labels):
 def train_model(train_loader, val_loader, dataset, model, device, class_weights, num_epochs, params, fold, model_name, text_model_encoder, attention_mecanism, results_folder_path):
 
     model.to(device)
+    criterion = focalLoss.FocalLoss(alpha=class_weights, gamma=2, reduction='mean')
 
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    # criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=1e-4, weight_decay=1e-4
     )
@@ -134,13 +137,12 @@ def train_model(train_loader, val_loader, dataset, model, device, class_weights,
 
 # Função de objetivo para Optuna
 def objective(trial):
-    # Batch size
     batch_size = 128
-    max_epochs = 1
+    max_epochs = 100
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = "densenet169"
     text_model_encoder = "one-hot-encoder"
-    attention_mecanism="crossattention"
+    attention_mecanism = "crossattention"
 
     params = {
         'text_fc_config': {
@@ -162,45 +164,39 @@ def objective(trial):
         drop_nan=False,
         random_undersampling=False
     )
-    # Obter os rótulos para validação estratificada (se necessário)
-    labels = [dataset.labels[i] for i in range(len(dataset))]
-    # Definir os parâmetros do K-fold
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    fold_losses = []
+    
+    # Hold-Out Split
+    train_idx, val_idx = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+    train_subset = Subset(dataset, train_idx)
+    val_subset = Subset(dataset, val_idx)
 
-    for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
-        train_subset = Subset(dataset, train_idx)
-        val_subset = Subset(dataset, val_idx)
+    train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
 
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
-        
-        # Calcular pesos das classes com base no conjunto de treino que mudará a cada nova rodada
-        train_labels = [labels[i] for i in train_idx]
-        class_weights = compute_class_weights(train_labels).to(device)
-        print(f"Pesos das classes no fold {fold+1}: {class_weights}")
-        
-        model = multimodalToOptimize.MultimodalModel(
-            num_classes=len(dataset.metadata['diagnostic'].unique()),
-            device=device,
-            cnn_model_name=model_name,
-            text_model_name=text_model_encoder,
-            vocab_size=dataset.features.shape[1],
-            attention_mecanism=attention_mecanism,
-            text_fc_config=params['text_fc_config'],
-            num_heads=params['num_heads'],
-            fc_fusion_config=params['fc_fusion_config']
-        )
+    # Calcular pesos das classes com base no conjunto de treino
+    train_labels = [dataset.labels[i] for i in train_idx]
+    class_weights = compute_class_weights(train_labels).to(device)
 
-        val_loss = train_model(
-            train_loader, val_loader, dataset, model, device, class_weights,
-            num_epochs=max_epochs, params=params, fold=fold,
-            model_name=model_name, text_model_encoder=text_model_encoder,
-            attention_mecanism=attention_mecanism, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/fine-tunning"
-        )
-        fold_losses.append(val_loss)
+    model = multimodalToOptimize.MultimodalModel(
+        num_classes=len(dataset.metadata['diagnostic'].unique()),
+        device=device,
+        cnn_model_name=model_name,
+        text_model_name=text_model_encoder,
+        vocab_size=dataset.features.shape[1],
+        attention_mecanism=attention_mecanism,
+        text_fc_config=params['text_fc_config'],
+        num_heads=params['num_heads'],
+        fc_fusion_config=params['fc_fusion_config']
+    )
 
-    return np.mean(fold_losses)
+    val_loss = train_model(
+        train_loader, val_loader, dataset, model, device, class_weights,
+        num_epochs=max_epochs, params=params, fold=0,
+        model_name=model_name, text_model_encoder=text_model_encoder,
+        attention_mecanism=attention_mecanism, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/fine-tunning"
+    )
+
+    return val_loss
 
 if __name__ == "__main__":
     study = optuna.create_study(direction="minimize")
