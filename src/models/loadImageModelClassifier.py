@@ -44,6 +44,16 @@ class loadModels():
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
                     nn.Linear(4096, 4096)  # Garantir que a saída permanece 4096
                 )
+            elif cnn_model_name == "densenet169":
+                image_encoder = models.densenet169(pretrained=True)
+                cnn_dim_output = 1664
+                for param in image_encoder.parameters():
+                    param.requires_grad = False
+                # Ajustar a saída para manter a dimensão esperada (4096)
+                image_encoder.classifier = nn.Sequential(
+                    *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
+                    nn.Linear(1664, 1664)  # Garantir que a saída permanece 4096
+                )
 
             elif cnn_model_name == "mobilenet-v2":
                 image_encoder = models.mobilenet_v2(pretrained=True)

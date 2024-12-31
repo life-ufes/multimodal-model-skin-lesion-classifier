@@ -22,8 +22,8 @@ def compute_class_weights(labels):
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
 
 def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model, device, weightes_per_category, model_name, text_model_encoder, attention_mecanism, results_folder_path):
-    # criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
-    criterion = focalLoss.FocalLoss(alpha=None, gamma=2, reduction='mean')
+    criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
+    # criterion = focalLoss.FocalLoss(alpha=weightes_per_category, gamma=2, reduction='mean')
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
     # ReduceLROnPlateau reduz o LR quando a métrica monitorada (val_loss) não melhora
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -168,7 +168,7 @@ def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)
     list_of_attention_mecanism = ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
         
         for model_name in list_of_models:
             try:
@@ -198,7 +198,7 @@ def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 16
+    batch_size = 128
     k_folds=5 
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
