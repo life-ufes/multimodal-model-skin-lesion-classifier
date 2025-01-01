@@ -42,17 +42,18 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
     # A época começa em zero
     epoch_index = 0
     # Setando o novo experimento
-    experiment_name = "EXPERIMENTOS-PAD-UFES20"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-OPTIMIZED-MODEL-AFTER-FINE-TUNNIG-HYPERPARAMETERS"
     mlflow.set_experiment(experiment_name)
     # Iniciar uma execução no MLflow
-    with mlflow.start_run(run_name=f"image_extractor__model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold_num}"):
+    with mlflow.start_run(run_name=f"image_extractor_model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold_num}_num_heads_4"):
         # Logar parâmetros no MLflow
         mlflow.log_param("fold_num", fold_num)
         mlflow.log_param("batch_size", train_loader.batch_size)
         mlflow.log_param("model_name", model_name)
         mlflow.log_param("attention_mecanism", attention_mecanism)
         mlflow.log_param("text_model_encoder", text_model_encoder)
-        mlflow.log_param("criterion_type", "cross_entropy")  # Ajuste conforme necessário
+        mlflow.log_param("criterion_type", "cross_entropy")
+        mlflow.log_param("num_heads", 4)
 
         for epoch_index in range(num_epochs):
             model.train()  # Ensure the model is in training mode
@@ -165,7 +166,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
 def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device):
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    list_of_attention_mecanism = ["crossattention"] # ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
         list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
@@ -190,7 +191,7 @@ def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)
                     device, k_folds, num_classes, 
                     model_name, text_model_encoder,
                     attention_mecanism, 
-                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/{attention_mecanism}"
+                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/{model_name}/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")

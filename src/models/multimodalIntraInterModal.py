@@ -3,7 +3,7 @@ import torch.nn as nn
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from transformers import ViTFeatureExtractor, CLIPProcessor, CLIPModel
+from transformers import ViTFeatureExtractor
 
 from loadImageModelClassifier import loadModels
 
@@ -19,7 +19,7 @@ class MultimodalModel(nn.Module):
         self.cnn_model_name = cnn_model_name
         self.text_model_name = text_model_name
         self.attention_mecanism = attention_mecanism
-        self.num_heads = 8  # para MultiheadAttention
+        self.num_heads = 2  # para MultiheadAttention
 
         # -------------------------
         # 1) Image Encoder
@@ -34,10 +34,6 @@ class MultimodalModel(nn.Module):
             self.feature_extractor = ViTFeatureExtractor.from_pretrained(
                 f"google/{self.cnn_model_name}"
             )
-        elif self.cnn_model_name == "openai/clip-vit-base-patch16":
-            self.feature_extractor = CLIPProcessor.from_pretrained(self.cnn_model_name)
-            self.image_encoder = CLIPModel.from_pretrained(self.cnn_model_name)
-
         # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
 
@@ -49,8 +45,10 @@ class MultimodalModel(nn.Module):
             self.text_fc = nn.Sequential(
                 nn.Linear(vocab_size, 256),
                 nn.ReLU(),
+                nn.Dropout(0.1),
                 nn.Linear(256, 512),
                 nn.ReLU(),
+                nn.Dropout(0.1),
                 nn.Linear(512, self.text_encoder_dim_output)
             )
         else:
@@ -107,11 +105,7 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim, self.common_dim // 2),
-            nn.BatchNorm1d(self.common_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, num_classes),
+            nn.Linear(self.common_dim, num_classes),
             nn.Softmax(dim=1)
         )
     
@@ -124,7 +118,7 @@ class MultimodalModel(nn.Module):
         """
 
         # === [A] Extrator de Imagem ===
-        if self.cnn_model_name == ("vit-base-patch16-224" or "openai/clip-vit-base-patch16"):
+        if self.cnn_model_name == ("vit-base-patch16-224"):
             inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
             outputs = self.image_encoder(**inputs)
             # outputs.last_hidden_state => (batch, seq_len_img, hidden_dim)
@@ -203,7 +197,7 @@ class MultimodalModel(nn.Module):
 
         image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
-
+        
         if self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
             if self.cnn_model_name=="vit-base-patch16-224":

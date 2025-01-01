@@ -146,10 +146,10 @@ def objective(trial):
 
     params = {
         'text_fc_config': {
-            'hidden_sizes': trial.suggest_categorical('hidden_sizes', [[256, 512], [512, 512, 256], [1024, 512, 256]]),
+            'hidden_sizes': trial.suggest_categorical('hidden_sizes', [[1024, 512]]),
             'dropout': trial.suggest_float('dropout', 0.1, 0.3)
         },
-        'num_heads': trial.suggest_int('num_heads', 2, 4, 8),
+        'num_heads': trial.suggest_int('num_heads', 4, 8),
         'fc_fusion_config': {
             'hidden_sizes': trial.suggest_categorical('fc_hidden_sizes', [[1024, 512], [512, 256, 128], [1024, 512, 256, 128]]),
             'dropout': trial.suggest_float('fc_dropout', 0.1, 0.3)
