@@ -12,7 +12,7 @@ class MultimodalModel(nn.Module):
         super(MultimodalModel, self).__init__()
         
         # Dimensões do modelo
-        self.common_dim = 512
+        self.common_dim = 1024
         self.text_encoder_dim_output = 512
         self.cnn_dim_output = 512
         self.device = device
@@ -197,7 +197,7 @@ class MultimodalModel(nn.Module):
 
         image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
-
+        
         if self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
             if self.cnn_model_name=="vit-base-patch16-224":

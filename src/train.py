@@ -41,11 +41,13 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
     initial_time = time.time()
     # A época começa em zero
     epoch_index = 0
+    # Best val loss   
+    best_val_loss = float('inf')
     # Setando o novo experimento
     experiment_name = "EXPERIMENTOS-PAD-UFES20-OPTIMIZED-MODEL-AFTER-FINE-TUNNIG-HYPERPARAMETERS"
     mlflow.set_experiment(experiment_name)
     # Iniciar uma execução no MLflow
-    with mlflow.start_run(run_name=f"image_extractor_model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold_num}_num_heads_4"):
+    with mlflow.start_run(run_name=f"image_extractor_model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold_num}_num_heads_2"):
         # Logar parâmetros no MLflow
         mlflow.log_param("fold_num", fold_num)
         mlflow.log_param("batch_size", train_loader.batch_size)
@@ -53,7 +55,7 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
         mlflow.log_param("attention_mecanism", attention_mecanism)
         mlflow.log_param("text_model_encoder", text_model_encoder)
         mlflow.log_param("criterion_type", "cross_entropy")
-        mlflow.log_param("num_heads", 4)
+        mlflow.log_param("num_heads", 2)
 
         for epoch_index in range(num_epochs):
             model.train()  # Ensure the model is in training mode
@@ -110,7 +112,11 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
                     mlflow.log_metric(metric_name, metric_value, step=epoch_index+1)
                 else:
                     mlflow.log_param(metric_name, metric_value)  
-
+            
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                #  Salva o novo melhor modelo
+                early_stopping.best_model_wts = model
 
             # Check early stopping
             early_stopping(val_loss, model)
@@ -124,7 +130,7 @@ def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model
     metrics["epochs"]=str(int(epoch_index))
     metrics["data_val"]=str("val")
     # Salvar o modelo treinado
-    model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_512")
+    model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_1024")
     save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, targets, data_val="val")
     print(f"Model saved at {model_save_path}")
 
