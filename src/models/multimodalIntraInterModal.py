@@ -19,7 +19,7 @@ class MultimodalModel(nn.Module):
         self.cnn_model_name = cnn_model_name
         self.text_model_name = text_model_name
         self.attention_mecanism = attention_mecanism
-        self.num_heads = 2  # para MultiheadAttention
+        self.num_heads = 4  # para MultiheadAttention
 
         # -------------------------
         # 1) Image Encoder
@@ -197,7 +197,7 @@ class MultimodalModel(nn.Module):
 
         image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
-        
+
         if self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
             if self.cnn_model_name=="vit-base-patch16-224":
