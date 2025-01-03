@@ -12,14 +12,14 @@ class MultimodalModel(nn.Module):
         super(MultimodalModel, self).__init__()
         
         # Dimensões do modelo
-        self.common_dim = 1024
+        self.common_dim = 512
         self.text_encoder_dim_output = 512
         self.cnn_dim_output = 512
         self.device = device
         self.cnn_model_name = cnn_model_name
         self.text_model_name = text_model_name
         self.attention_mecanism = attention_mecanism
-        self.num_heads = 4  # para MultiheadAttention
+        self.num_heads = 8  # para MultiheadAttention
 
         # -------------------------
         # 1) Image Encoder
@@ -45,10 +45,8 @@ class MultimodalModel(nn.Module):
             self.text_fc = nn.Sequential(
                 nn.Linear(vocab_size, 256),
                 nn.ReLU(),
-                nn.Dropout(0.1),
                 nn.Linear(256, 512),
                 nn.ReLU(),
-                nn.Dropout(0.1),
                 nn.Linear(512, self.text_encoder_dim_output)
             )
         else:
@@ -105,7 +103,11 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim, num_classes),
+            nn.Linear(self.common_dim, self.common_dim // 2),
+            nn.BatchNorm1d(self.common_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(self.common_dim // 2, num_classes),
             nn.Softmax(dim=1)
         )
     
