@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 import torch
+import os
+import pickle
 
 class SkinLesionDataset(Dataset):
     def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', random_undersampling=False, image_encoder="resnet-18"):
@@ -84,33 +86,56 @@ class SkinLesionDataset(Dataset):
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         return train_loader, val_loader
-    
+
     def one_hot_encoding(self):
         # Seleção das features
-        dataset_features = self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'])  # Features
+        dataset_features = self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'])
 
         # Identificar variáveis categóricas e numéricas
-        # Inclui 'bool' nas categóricas para posterior conversão
         categorical_cols = dataset_features.select_dtypes(include=['object', 'bool']).columns
         numerical_cols = dataset_features.select_dtypes(include=['float64', 'int64']).columns
 
-        # Converter todas as colunas categóricas para string para evitar mistura de tipos
+        # Converter categóricas para string
         dataset_features[categorical_cols] = dataset_features[categorical_cols].astype(str)
 
-        # Criar o OneHotEncoder para categóricas
-        ohe = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-        categorical_data = ohe.fit_transform(dataset_features[categorical_cols])
+        os.makedirs('./src/results/preprocess_data', exist_ok=True)
 
-        # Escalar variáveis numéricas
-        scaler = StandardScaler()
-        numerical_data = scaler.fit_transform(dataset_features[numerical_cols])
+        # OneHotEncoder
+        if os.path.exists("./src/results/preprocess_data/ohe.pickle"):
+            with open('./src/results/preprocess_data/ohe.pickle', 'rb') as f:
+                ohe = pickle.load(f)
+            categorical_data = ohe.transform(dataset_features[categorical_cols])
+        else:
+            ohe = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+            categorical_data = ohe.fit_transform(dataset_features[categorical_cols])
+            with open('./src/results/preprocess_data/ohe.pickle', 'wb') as f:
+                pickle.dump(ohe, f)
 
-        # Concatenar dados categóricos e numéricos
+        # StandardScaler
+        if os.path.exists("./src/results/preprocess_data/scaler.pickle"):
+            with open('./src/results/preprocess_data/scaler.pickle', 'rb') as f:
+                scaler = pickle.load(f)
+            numerical_data = scaler.transform(dataset_features[numerical_cols])
+        else:
+            scaler = StandardScaler()
+            numerical_data = scaler.fit_transform(dataset_features[numerical_cols])
+            with open('./src/results/preprocess_data/scaler.pickle', 'wb') as f:
+                pickle.dump(scaler, f)
+
+        # Concatenar dados
         processed_data = np.hstack((categorical_data, numerical_data))
 
         # Labels
         labels = self.metadata['diagnostic'].values
-        label_encoder = LabelEncoder()
-        encoded_labels = label_encoder.fit_transform(labels)
+        if os.path.exists("./src/results/preprocess_data/label_encoder.pickle"):
+            with open('./src/results/preprocess_data/label_encoder.pickle', 'rb') as f:
+                label_encoder = pickle.load(f)
+            encoded_labels = label_encoder.transform(labels)
+        else:
+            label_encoder = LabelEncoder()
+            encoded_labels = label_encoder.fit_transform(labels)
+            with open('./src/results/preprocess_data/label_encoder.pickle', 'wb') as f:
+                pickle.dump(label_encoder, f)
 
         return processed_data, encoded_labels, self.metadata['diagnostic'].unique()
+
