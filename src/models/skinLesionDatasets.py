@@ -65,7 +65,7 @@ class SkinLesionDataset(Dataset):
     def load_metadata(self):
         # Carregar o CSV
         metadata = pd.read_csv(self.metadata_file).fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").\
-           replace("NÃO  ENCONTRADO", "EMPTY")
+           replace("NÃO  ENCONTRADO", "EMPTY").replace("BRASIL","BRAZIL")
         # Verificar se deve descartar linhas com NaN
         if self.is_to_drop_nan:
             metadata = metadata.dropna().reset_index(drop=True)
@@ -90,13 +90,19 @@ class SkinLesionDataset(Dataset):
     def one_hot_encoding(self):
         # Seleção das features
         dataset_features = self.metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'])
+        # Convert specific columns to numeric if possible
+        # Definir as colunas categóricas e numéricas corretamente
+        for col in ['age', 'diameter_1', 'diameter_2', 'fitspatrick']:
+            dataset_features[col] = pd.to_numeric(dataset_features[col], errors='coerce')
 
-        # Identificar variáveis categóricas e numéricas
+        # Identify categorical and numerical columns
         categorical_cols = dataset_features.select_dtypes(include=['object', 'bool']).columns
         numerical_cols = dataset_features.select_dtypes(include=['float64', 'int64']).columns
-
         # Converter categóricas para string
         dataset_features[categorical_cols] = dataset_features[categorical_cols].astype(str)
+
+        # Preencher valores faltantes nas colunas numéricas com a média da coluna
+        dataset_features[numerical_cols] = dataset_features[numerical_cols].fillna(-1)
 
         os.makedirs('./src/results/preprocess_data', exist_ok=True)
 

@@ -10,14 +10,14 @@ model = multimodalIntraInterModal.MultimodalModel(
     device=device, 
     cnn_model_name="densenet169", 
     text_model_name="one-hot-encoder", 
-    vocab_size=172,
+    vocab_size=86,
     attention_mecanism="crossattention"
 )
 model.to(device)
 model.eval()
 
 # Load your trained model weights
-model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/weights/crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20241231_061130/model.pth"  # Update with your actual model path
+model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
 state_dict = torch.load(model_path, map_location=device)
 model.load_state_dict(state_dict, strict=False)
 
@@ -35,7 +35,7 @@ for name, module in model.named_children():
 
 # Create dummy inputs
 dummy_image = torch.randn(1, 3, 224, 224).to(device)
-dummy_text = torch.randn(1, 172).to(device)
+dummy_text = torch.randn(1, 86).to(device)
 
 # Forward pass to trigger hooks
 output = model(dummy_image, dummy_text)
