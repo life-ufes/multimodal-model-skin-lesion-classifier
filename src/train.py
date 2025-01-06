@@ -21,122 +21,175 @@ def compute_class_weights(labels):
     class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
 
-def train_process(num_epochs, fold_num, train_loader, val_loader, targets, model, device, weightes_per_category, model_name, text_model_encoder, attention_mecanism, results_folder_path):
+def train_process(num_epochs, 
+                  num_heads, 
+                  fold_num, 
+                  train_loader, 
+                  val_loader, 
+                  targets, 
+                  model, 
+                  device, 
+                  weightes_per_category, 
+                  common_dim, 
+                  model_name, 
+                  text_model_encoder, 
+                  attention_mecanism, 
+                  results_folder_path):
+    
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
-    # criterion = focalLoss.FocalLoss(alpha=weightes_per_category, gamma=2, reduction='mean')
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
-    # ReduceLROnPlateau reduz o LR quando a métrica monitorada (val_loss) não melhora
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
+
+    # ReduceLROnPlateau
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        mode='min',       # Como estamos monitorando val_loss, queremos diminuir LR quando ela não melhora
-        factor=0.1,       # Fator pelo qual a LR será multiplicada
-        patience=2,       # Número de épocas sem melhoria antes de reduzir LR
-        verbose=True      # Imprime quando há mudança de LR
+        mode='min',
+        factor=0.1,
+        patience=2,
+        verbose=True
     )
     model.to(device)
 
-    # EarlyStopping
-    early_stopping = EarlyStopping(patience=5, delta=0.01)
-    # Registro do tempo de treinamento
+    # Instantiate EarlyStopping
+    # Make sure EarlyStopping stores model.state_dict(), not the entire model.
+    early_stopping = EarlyStopping(
+        patience=5, 
+        delta=0.01, 
+        verbose=True,
+        path='best_model.pt',   # Where to save the best weights (optional)
+        save_to_disk=True       # If True, saves best weights to 'best_model.pt'
+    )
+
     initial_time = time.time()
-    # A época começa em zero
-    epoch_index = 0
-    # Best val loss   
-    best_val_loss = float('inf')
-    # Setando o novo experimento
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-OPTIMIZED-MODEL-AFTER-FINE-TUNNIG-HYPERPARAMETERS"
+    epoch_index = 0  # Track the epoch
+
+    # Set your MLflow experiment
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA"
     mlflow.set_experiment(experiment_name)
-    # Iniciar uma execução no MLflow
-    with mlflow.start_run(run_name=f"image_extractor_model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold_num}_num_heads_2"):
-        # Logar parâmetros no MLflow
+
+    with mlflow.start_run(
+        run_name=(
+            f"image_extractor_model_{model_name}_with_mecanism_"
+            f"{attention_mecanism}_fold_{fold_num}_num_heads_{num_heads}"
+        )
+    ):
+        # Log MLflow parameters
         mlflow.log_param("fold_num", fold_num)
         mlflow.log_param("batch_size", train_loader.batch_size)
         mlflow.log_param("model_name", model_name)
         mlflow.log_param("attention_mecanism", attention_mecanism)
         mlflow.log_param("text_model_encoder", text_model_encoder)
         mlflow.log_param("criterion_type", "cross_entropy")
-        mlflow.log_param("num_heads", 2)
+        mlflow.log_param("num_heads", num_heads)
 
+        # -----------------------------
+        # Training Loop
+        # -----------------------------
         for epoch_index in range(num_epochs):
-            model.train()  # Ensure the model is in training mode
+            model.train()
             running_loss = 0.0
-            
-            # Training loop
+
             for batch_index, (image, metadata, label) in enumerate(train_loader):
-                image, metadata, label = image.to(device), metadata.to(device), label.to(device)
+                image, metadata, label = (
+                    image.to(device),
+                    metadata.to(device),
+                    label.to(device)
+                )
 
                 optimizer.zero_grad()
                 outputs = model(image, metadata)
-
                 loss = criterion(outputs, label)
                 loss.backward()
-                
                 optimizer.step()
 
                 running_loss += loss.item()
             
-            print(f"==="*40)
-            # Average training loss for the epoch
-            train_loss=running_loss/len(train_loader)
+            train_loss = running_loss / len(train_loader)
+            print("===" * 40)
             print(f"\nTraining: Epoch {epoch_index}, Loss: {train_loss:.4f}")
-            
-            # Validation loop
-            model.eval()  # Set model to evaluation mode
+
+            # -----------------------------
+            # Validation Loop
+            # -----------------------------
+            model.eval()
             val_loss = 0.0
-            with torch.no_grad():  # No need to compute gradients during validation
+            with torch.no_grad():
                 for image, metadata, label in val_loader:
-                    image, metadata, label = image.to(device), metadata.to(device), label.to(device)
-                    
+                    image, metadata, label = (
+                        image.to(device),
+                        metadata.to(device),
+                        label.to(device)
+                    )
                     outputs = model(image, metadata)
                     loss = criterion(outputs, label)
                     val_loss += loss.item()
 
-            # Calculate the average validation loss
             val_loss = val_loss / len(val_loader)
             print(f"Validation Loss: {val_loss:.4f}")
-            # === Atualiza o Scheduler de LR com base no val_loss ===
+
+            # Step the scheduler with validation loss
             scheduler.step(val_loss)
-            
-            current_lr = [param_group['lr'] for param_group in optimizer.param_groups]
+            current_lr = [pg['lr'] for pg in optimizer.param_groups]
             print(f"Current Learning Rate(s): {current_lr}\n")
-            # Evaluate metrics
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold_num)
+
+            # -----------------------------
+            # Evaluate Metrics
+            # -----------------------------
+            metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+                model, val_loader, device, fold_num
+            )
             metrics["epoch"] = epoch_index
-            
-            metrics["train_loss"]=float(train_loss)
-            metrics["val_loss"]=float(val_loss)
+            metrics["train_loss"] = float(train_loss)
+            metrics["val_loss"] = float(val_loss)
             print(f"Metrics: {metrics}")
-            # Logar métricas no MLflow
+
+            # Log metrics to MLflow
             for metric_name, metric_value in metrics.items():
                 if isinstance(metric_value, (int, float)):
-                    mlflow.log_metric(metric_name, metric_value, step=epoch_index+1)
+                    mlflow.log_metric(metric_name, metric_value, step=epoch_index + 1)
                 else:
-                    mlflow.log_param(metric_name, metric_value)  
-            
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                #  Salva o novo melhor modelo
-                early_stopping.best_model_wts = model
+                    mlflow.log_param(metric_name, metric_value)
 
-            # Check early stopping
+            # -----------------------------
+            # Early Stopping
+            # -----------------------------
             early_stopping(val_loss, model)
+
+            # Check if we should stop early
             if early_stopping.early_stop:
-                print("Early stopping")
+                print("Early stopping triggered!")
                 break
-    # Fim do treinamento
+
+    # Load the best model weights
+    early_stopping.load_best_weights(model)
+
+    # End of training
     train_process_time = time.time() - initial_time
-    # Adição do tempo de treino nos registros
-    metrics["train process time"]=str(train_process_time)
-    metrics["epochs"]=str(int(epoch_index))
-    metrics["data_val"]=str("val")
-    # Salvar o modelo treinado
-    model_save_path = os.path.join(results_folder_path, f"model_{model_name}_with_{text_model_encoder}_1024")
-    save_model_and_metrics(model, metrics, model_name, model_save_path, fold_num, all_labels, all_predictions, targets, data_val="val")
+    metrics["train process time"] = str(train_process_time)
+    metrics["epochs"] = str(int(epoch_index))
+    metrics["data_val"] = "val"
+
+    # Save the final (or best) model
+    model_save_path = os.path.join(
+        results_folder_path, 
+        f"model_{model_name}_with_{text_model_encoder}_{common_dim}"
+    )
+    save_model_and_metrics(
+        model, 
+        metrics, 
+        model_name, 
+        model_save_path, 
+        fold_num, 
+        all_labels, 
+        all_predictions, 
+        targets, 
+        data_val="val"
+    )
     print(f"Model saved at {model_save_path}")
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, text_model_encoder, attention_mecanism, results_folder_path):
+
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, common_dim, text_model_encoder, attention_mecanism, results_folder_path):
     all_metrics = []
 
     # Obter os rótulos para validação estratificada (se necessário)
@@ -162,20 +215,20 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, device, cnn_model_name=model_name, text_model_name=text_model_encoder, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
+        model = multimodalIntraInterModal.MultimodalModel(num_classes, 2, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
 
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
-            num_epochs, fold+1, train_loader, val_loader, dataset.targets, model, device,
-            class_weights, model_name, text_model_encoder, attention_mecanism, results_folder_path
+            num_epochs, 2, fold+1, train_loader, val_loader, dataset.targets, model, device,
+            class_weights, common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
 
-def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device):
+def run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device):
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["crossattention"] # ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["vgg16"] #, "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
         
         for model_name in list_of_models:
             try:
@@ -195,9 +248,9 @@ def run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)
                     num_metadata_features, 
                     num_epochs, batch_size, 
                     device, k_folds, num_classes, 
-                    model_name, text_model_encoder,
+                    model_name, common_dim, text_model_encoder,
                     attention_mecanism, 
-                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/{model_name}/{attention_mecanism}"
+                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -207,7 +260,8 @@ if __name__ == "__main__":
     num_epochs = 100
     batch_size = 16
     k_folds=5 
+    common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(num_epochs, batch_size, k_folds, text_model_encoder, device)    
+    run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device)    

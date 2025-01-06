@@ -126,7 +126,7 @@ if __name__ == "__main__":
     model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
 
     # Carregar imagem de teste
-    image = Image.open("/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images/PAT_1516_1765_530.png")
+    image = Image.open("/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images/PAT_771_1491_390.png")
     processed_image = process_image(image, image_encoder="densenet169")
 
     # Definir nomes das colunas
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     ]
 
     # Carregar dados de teste
-    text = "PAT_1516,1765,,,,,8,,,,,,,,ARM,,,NEV,False,False,False,False,False,False,PAT_1516_1765_530.png,False"
+    text = "PAT_771,1491,True,True,ITALY,ITALY,69,False,MALE,False,True,True,True,3.0,FACE,6.0,3.0,BCC,True,UNK,False,UNK,False,True,PAT_771_1491_390.png,True"  # "PAT_1516,1765,,,,,8,,,,,,,,ARM,,,NEV,False,False,False,False,False,False,PAT_1516_1765_530.png,False"
     metadata = process_data(text, column_names)
 
     # Processar metadados
