@@ -225,10 +225,10 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
 def run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device):
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["crossattention"] # ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    list_of_attention_mecanism = ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["vgg16"] #, "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
         
         for model_name in list_of_models:
             try:
