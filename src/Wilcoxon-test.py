@@ -3,7 +3,7 @@ from scipy.stats import wilcoxon
 
 # Define the metrics (mean and std dev) for each model
 metrics = {
-    "Our Model": {"ACC": (0.7977, 0.0118), "BACC": (0.7837, 0.0258), "AUC": (0.9387, 0.0115)},
+    "Our Model": {"ACC": (0.7916, 0.0245), "BACC": (0.7826, 0.0316), "AUC": (0.9295, 0.0163)},
     "No Metadata": {"ACC": (0.616, 0.051), "BACC": (0.651, 0.050), "AUC": (0.901, 0.007)},
     "Concatenation": {"ACC": (0.741, 0.014), "BACC": (0.728, 0.029), "AUC": (0.929, 0.006)},
     "MetaBlock": {"ACC": (0.735, 0.013), "BACC": (0.765, 0.017), "AUC": (0.935, 0.004)},

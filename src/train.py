@@ -63,7 +63,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-OPTIMING-NUM-OF-HEADS"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -189,7 +189,7 @@ def train_process(num_epochs,
     return model, model_save_path
 
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, common_dim, text_model_encoder, attention_mecanism, results_folder_path):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, attention_mecanism, results_folder_path):
     all_metrics = []
 
     # Obter os rótulos para validação estratificada (se necessário)
@@ -215,15 +215,15 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, 2, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
+        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
 
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
-            num_epochs, 2, fold+1, train_loader, val_loader, dataset.targets, model, device,
+            num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
             class_weights, common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
 
-def run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device):
+def run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads):
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
@@ -245,12 +245,14 @@ def run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_enco
                 num_classes = len(dataset.metadata['diagnostic'].unique())
 
                 pipeline(dataset, 
-                    num_metadata_features, 
-                    num_epochs, batch_size, 
-                    device, k_folds, num_classes, 
-                    model_name, common_dim, text_model_encoder,
-                    attention_mecanism, 
-                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/{attention_mecanism}"
+                    num_metadata_features=num_metadata_features, 
+                    num_epochs=num_epochs, batch_size=batch_size, 
+                    device=device, k_folds=k_folds, num_classes=num_classes, 
+                    model_name=model_name, common_dim=common_dim, 
+                    text_model_encoder=text_model_encoder,
+                    num_heads=num_heads,
+                    attention_mecanism=attention_mecanism, 
+                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/{num_heads}/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -263,5 +265,6 @@ if __name__ == "__main__":
     common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    num_heads=32
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device)    
+    run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    
