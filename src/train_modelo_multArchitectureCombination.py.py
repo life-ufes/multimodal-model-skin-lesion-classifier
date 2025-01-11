@@ -3,8 +3,9 @@ import torch.nn as nn
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
-from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
+from models import multimodalIntraModalWithBert, multimodalModels, multimodalToOptimizeMultArchitectureCombination, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
 from utils.save_model_and_metrics import save_model_and_metrics
+from utils.save_experiments_log_for_opt import save_experiment_log
 from collections import Counter
 from sklearn.model_selection import KFold, train_test_split
 import numpy as np
@@ -63,7 +64,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-OPTIMING-NUM-OF-HEADS"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-OPTIMING-MODEL-ARCHITECTURE"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -186,10 +187,13 @@ def train_process(num_epochs,
     )
     print(f"Model saved at {model_save_path}")
 
-    return model, model_save_path
+    return model, model_save_path, metrics
 
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, attention_mecanism, results_folder_path):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, 
+        num_classes, model_name, num_heads, common_dim, 
+        text_model_encoder, attention_mecanism, results_folder_path,
+        fc_fusion_config, fc_fusion_config_dropout, text_fc_config, text_fc_config_dropout):
     all_metrics = []
 
     # Obter os rótulos para validação estratificada (se necessário)
@@ -215,56 +219,106 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
+        model = multimodalToOptimizeMultArchitectureCombination.MultimodalModelToOptmizeWithGridSearch(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim,
+            vocab_size=num_metadata_features, attention_mecanism=attention_mecanism,
+            text_fc_config=text_fc_config, fc_fusion_config=fc_fusion_config, fc_fusion_config_dropout=fc_fusion_config_dropout, text_fc_config_dropout=text_fc_config_dropout)
 
         # Treinar o modelo no fold atual
-        model, model_save_path = train_process(
+        model, model_save_path, metrics = train_process(
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
             class_weights, common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
 
-def run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads):
-    # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["weighted-after-crossattention"] #["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
-    for attention_mecanism in list_of_attention_mecanism:
-        # Testar com todos os modelos
-        list_of_models = ["densenet169"] #["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
-        
-        for model_name in list_of_models:
-            try:
-                dataset = skinLesionDatasets.SkinLesionDataset(
-                metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
-                img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
-                bert_model_name=text_model_encoder,
-                image_encoder=model_name,
-                drop_nan=False,
-                random_undersampling=False
-                )
-                num_metadata_features = dataset.features.shape[1]
-                print(f"Número de features do metadados: {num_metadata_features}\n")
-                num_classes = len(dataset.metadata['diagnostic'].unique())
+        # Salvar os parâmetros dos dados após o treino  nos 5 folds
+        params = {
+            "model_name": model_name,
+            "num_heads": num_heads,
+            "fc_fusion_config": fc_fusion_config,
+            "fc_fusion_config_dropout": fc_fusion_config_dropout,
+            "text_fc_config": text_fc_config,
+            "text_fc_config_dropout": text_fc_config_dropout,
+            "attention_mecanism": attention_mecanism,
+            "common_dim": common_dim,
+            # Adicione outros parâmetros conforme necessário
+        }
+        # Supondo que 'metrics' seja um dicionário com as métricas finais do experimento
+        save_experiment_log(f"{results_folder_path}/experiment_log.csv", params, metrics)
 
-                pipeline(dataset, 
-                    num_metadata_features=num_metadata_features, 
-                    num_epochs=num_epochs, batch_size=batch_size, 
-                    device=device, k_folds=k_folds, num_classes=num_classes, 
-                    model_name=model_name, common_dim=common_dim, 
-                    text_model_encoder=text_model_encoder,
-                    num_heads=num_heads,
-                    attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/{num_heads}/{attention_mecanism}"
-                )
-            except Exception as e:
-                print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
-                continue
+
+def run_expirements(num_epochs, batch_size, k_folds, common_dims, text_model_encoder, device, num_heads_list):
+    # Definir listas de hiperparâmetros a testar
+    fc_fusion_configs = [
+        [256, 128],
+        [512, 256, 128],
+        [512, 1024, 2048]
+    ]
+    fc_fusion_config_dropouts = [0.1, 0.5]
+    text_fc_configs = [
+        [128, 64],
+        [256, 128],
+        [256, 512, 1024],
+        [256, 1024, 2048]
+    ]
+    text_fc_config_dropouts = [0.1, 0.5]
+
+    # Outros parâmetros e listas já existentes
+    list_of_attention_mecanism = ["weighted-after-crossattention"]
+    list_of_models = ["densenet169"]
+
+    for common_dim in common_dims:  # supondo que common_dims foi definido
+        for num_heads in num_heads_list:
+            for fc_fusion_config in fc_fusion_configs:
+                for fc_fusion_dropout in fc_fusion_config_dropouts:
+                    for text_fc_config in text_fc_configs:
+                        for text_fc_config_dropout in text_fc_config_dropouts:
+                            for attention_mecanism in list_of_attention_mecanism:
+                                for model_name in list_of_models:
+                                    try:
+                                        # Inicialização do dataset conforme seu código...
+                                        dataset = skinLesionDatasets.SkinLesionDataset(
+                                            metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
+                                            img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
+                                            bert_model_name=text_model_encoder,
+                                            image_encoder=model_name,
+                                            drop_nan=False,
+                                            random_undersampling=False
+                                        )
+                                        num_metadata_features = dataset.features.shape[1]
+                                        print(f"Número de features do metadados: {num_metadata_features}\n")
+                                        num_classes = len(dataset.metadata['diagnostic'].unique())
+
+                                        # Chamada ao pipeline com os hiperparâmetros atuais
+                                        pipeline(
+                                            dataset, 
+                                            num_metadata_features=num_metadata_features, 
+                                            num_epochs=num_epochs, 
+                                            batch_size=batch_size, 
+                                            device=device, 
+                                            k_folds=k_folds, 
+                                            num_classes=num_classes, 
+                                            model_name=model_name, 
+                                            common_dim=common_dim, 
+                                            text_model_encoder=text_model_encoder,
+                                            num_heads=num_heads,
+                                            attention_mecanism=attention_mecanism,
+                                            # Passe os hiperparâmetros adicionais no pipeline
+                                            fc_fusion_config=fc_fusion_config,
+                                            fc_fusion_config_dropout=fc_fusion_dropout,
+                                            text_fc_config=text_fc_config,
+                                            text_fc_config_dropout=text_fc_config_dropout,
+                                            results_folder_path=f"/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-model-architecture/{num_heads}/{attention_mecanism}"
+                                        )
+                                    except Exception as e:
+                                        print(f"Erro ao processar o treino do modelo {model_name} com mecanismo {attention_mecanism}. Erro:{e}\n")
+                                        continue
 
 if __name__ == "__main__":
     num_epochs = 100
     batch_size = 16
-    k_folds=5 
-    common_dim=512
-    text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
+    k_folds = 5 
+    common_dims = [512]             # Lista de dimensões comuns a serem testadas
+    text_model_encoder = "one-hot-encoder"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_heads=512
-    # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    
+    num_heads_list = [2, 4,6, 16, 32, 64, 128]          # Lista de valores para num_heads a serem testados
+
+    run_expirements(num_epochs, batch_size, k_folds, common_dims, text_model_encoder, device, num_heads_list)
