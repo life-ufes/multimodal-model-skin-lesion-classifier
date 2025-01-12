@@ -9,6 +9,7 @@ from sklearn.model_selection import train_test_split
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, multimodalToOptimize, skinLesionDatasets
 from utils.save_model_and_metrics import save_model_and_metrics
+from utils.save_experiments_log_for_opt import save_experiment_log
 from collections import Counter
 import numpy as np
 import os
@@ -26,9 +27,9 @@ def compute_class_weights(labels):
 def train_model(train_loader, val_loader, dataset, model, device, class_weights, num_epochs, params, fold, model_name, text_model_encoder, attention_mecanism, results_folder_path):
 
     model.to(device)
-    criterion = focalLoss.FocalLoss(alpha=class_weights, gamma=2, reduction='mean')
+    # criterion = focalLoss.FocalLoss(alpha=class_weights, gamma=2, reduction='mean')
 
-    # criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=1e-4, weight_decay=1e-4
     )
@@ -41,7 +42,7 @@ def train_model(train_loader, val_loader, dataset, model, device, class_weights,
     initial_time = time.time()
     best_val_loss = float('inf')
     # Setando o novo experimento
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-FINE-TUNNING"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-OPT-MODEL-ARCHITECTURE"
     mlflow.set_experiment(experiment_name)
     # MLflow Logging
     with mlflow.start_run(run_name=f"image_extractor_model_{model_name}_with_mecanism_{attention_mecanism}_fold_{fold}_text_fc_{params['text_fc_config']['hidden_sizes']}_text_fc_dropout_{params['text_fc_config']['dropout']}_num_heads_{params['num_heads']}_fc_fusion_hidden_sizes_{params['fc_fusion_config']['hidden_sizes']}_fc_fusion_dropout_{params['fc_fusion_config']['dropout']}", nested = True):
@@ -123,6 +124,10 @@ def train_model(train_loader, val_loader, dataset, model, device, class_weights,
                 break
     # Fim do treinamento
     train_process_time = time.time() - initial_time
+
+    # Load the best model weights
+    early_stopping.load_best_weights(model)
+
     # Adição do tempo de treino nos registros
     metrics["train process time"]=str(train_process_time)
     model_save_path = os.path.join(
@@ -132,12 +137,15 @@ def train_model(train_loader, val_loader, dataset, model, device, class_weights,
     save_model_and_metrics(model, metrics, model_name, model_save_path, fold, all_labels, all_predictions, dataset.targets, data_val="val")
     mlflow.log_artifact(model_save_path)  # Save model path to MLflow
 
+    # Supondo que 'metrics' seja um dicionário com as métricas finais do experimento
+    save_experiment_log(f"{results_folder_path}/experiment_log.csv", params, metrics)
+
     return best_val_loss
 
 
 # Função de objetivo para Optuna
 def objective(trial):
-    batch_size = 128
+    batch_size = 16
     max_epochs = 100
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = "densenet169"
@@ -146,13 +154,13 @@ def objective(trial):
 
     params = {
         'text_fc_config': {
-            'hidden_sizes': trial.suggest_categorical('hidden_sizes', [[1024, 512]]),
-            'dropout': trial.suggest_float('dropout', 0.1, 0.3)
+            'hidden_sizes': trial.suggest_categorical('hidden_sizes', [[1024, 512], [512, 256], [1024, 512, 256], [2048, 1024, 512, 128]]),
+            'dropout': trial.suggest_float('dropout', 0.1, 0.5)
         },
-        'num_heads': trial.suggest_int('num_heads', 4, 8),
+        'num_heads': trial.suggest_int('num_heads', 2, 4),
         'fc_fusion_config': {
             'hidden_sizes': trial.suggest_categorical('fc_hidden_sizes', [[1024, 512], [512, 256, 128], [1024, 512, 256, 128]]),
-            'dropout': trial.suggest_float('fc_dropout', 0.1, 0.3)
+            'dropout': trial.suggest_float('fc_dropout', 0.1, 0.5)
         }
     }
 
@@ -193,14 +201,14 @@ def objective(trial):
         train_loader, val_loader, dataset, model, device, class_weights,
         num_epochs=max_epochs, params=params, fold=0,
         model_name=model_name, text_model_encoder=text_model_encoder,
-        attention_mecanism=attention_mecanism, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/fine-tunning"
+        attention_mecanism=attention_mecanism, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/fine-tunning"
     )
 
     return val_loss
 
 if __name__ == "__main__":
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=20)
+    study.optimize(objective, n_trials=100)
 
     print("Best parameters:", study.best_params)
     print("Best value:", study.best_value)

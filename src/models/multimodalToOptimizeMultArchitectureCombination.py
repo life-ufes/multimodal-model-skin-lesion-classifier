@@ -10,8 +10,8 @@ from loadImageModelClassifier import loadModels
 class MultimodalModelToOptmizeWithGridSearch(nn.Module):
     ''' Este módulo é responsável por montar a arquitetura do modelo a ser salvo'''
     def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85,
-            attention_mecanism="combined", text_fc_config=None, fc_fusion_config=None, fc_fusion_config_dropout=None, text_fc_config_dropout=None ):
-        super(MultimodalModelToOptmizeWithGridSearch, self).__init__()
+        attention_mecanism="combined", text_fc_config=None, fc_fusion_config=None, 
+        fc_fusion_config_dropout=None, text_fc_config_dropout=None):
         
         # Dimensões do modelo
         self.common_dim = common_dim
