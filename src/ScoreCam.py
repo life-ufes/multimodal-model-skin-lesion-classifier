@@ -216,7 +216,7 @@ if __name__ == "__main__":
     model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
 
     # Load and preprocess image
-    image_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images/PAT_771_1491_390.png"
+    image_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images/PAT_967_1827_247.png"
     image_pil = Image.open(image_path)
     processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
@@ -235,7 +235,8 @@ if __name__ == "__main__":
     ]
 
     # Carregar dados de teste
-    text = "PAT_771,1491,True,True,ITALY,ITALY,69,False,MALE,False,True,True,True,3.0,FACE,6.0,3.0,BCC,True,UNK,False,UNK,False,True,PAT_771_1491_390.png,True"  # "PAT_1516,1765,,,,,8,,,,,,,,ARM,,,NEV,False,False,False,False,False,False,PAT_1516_1765_530.png,False"
+    # text = "PAT_771,1491,True,True,ITALY,ITALY,69,False,MALE,False,True,True,True,3.0,FACE,6.0,3.0,BCC,True,UNK,False,UNK,False,True,PAT_771_1491_390.png,True"  # "PAT_1516,1765,,,,,8,,,,,,,,ARM,,,NEV,False,False,False,False,False,False,PAT_1516_1765_530.png,False"
+    text = "PAT_967,1827,False,False,POMERANIA,POMERANIA,34,True,FEMALE,True,False,False,False,2.0,NOSE,5.0,4.0,BCC,True,UNK,False,UNK,True,True,PAT_967_1827_247.png,True"
     metadata = process_data(text, column_names)
 
     # Processar metadados
@@ -261,13 +262,21 @@ if __name__ == "__main__":
     # Remove hook after use
     scorecam.remove_hook()
 
-    # Visualize heatmap overlay on the original image
-    plt.figure(figsize=(10, 5))
-    # Convert processed_image back to CPU and unnormalize for visualization if needed
-    img_np = processed_image.squeeze().detach().cpu().permute(1, 2, 0).numpy()
-    # If normalization applied, revert normalization here for accurate display
-    plt.imshow(img_np, alpha=0.6)
-    plt.imshow(heatmap, cmap='jet', alpha=0.4)
-    plt.title("ScoreCAM Heatmap")
-    plt.axis('off')
+    # Visualizar a imagem original e a do ScoreCAM juntas
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+    # Exibir imagem original no primeiro subplot
+    axes[0].imshow(image_pil)
+    axes[0].set_title("Imagem Original")
+    axes[0].axis('off')
+
+    # Exibir imagem com ScoreCAM sobreposta no segundo subplot
+    # Primeiro, exiba a imagem original como fundo
+    axes[1].imshow(image_pil)
+    # Em seguida, sobreponha o heatmap com transparência
+    axes[1].imshow(heatmap, cmap='jet', alpha=0.4)
+    axes[1].set_title("Imagem com ScoreCAM")
+    axes[1].axis('off')
+
+    plt.tight_layout()
     plt.show()
