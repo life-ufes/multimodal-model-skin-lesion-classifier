@@ -157,7 +157,7 @@ def objective(trial):
             'hidden_sizes': trial.suggest_categorical('hidden_sizes', [[1024, 512], [512, 256], [1024, 512, 256], [2048, 1024, 512, 128]]),
             'dropout': trial.suggest_float('dropout', 0.1, 0.5)
         },
-        'num_heads': trial.suggest_int('num_heads', 2, 4),
+        'num_heads': trial.suggest_int('num_heads', 4, 8),
         'fc_fusion_config': {
             'hidden_sizes': trial.suggest_categorical('fc_hidden_sizes', [[1024, 512], [512, 256, 128], [1024, 512, 256, 128]]),
             'dropout': trial.suggest_float('fc_dropout', 0.1, 0.5)
@@ -208,7 +208,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, n_trials=10)
 
     print("Best parameters:", study.best_params)
     print("Best value:", study.best_value)

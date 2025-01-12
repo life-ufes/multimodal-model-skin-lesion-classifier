@@ -40,7 +40,7 @@ def process_image(img, image_encoder="densenet169"):
     transform = load_transforms(image_encoder)
     return transform(image)
 
-def load_multimodal_model(device, model_path):
+def load_multimodal_model(device, model_path, attention_mecanism):
     model = multimodalIntraInterModal.MultimodalModel(
         num_classes=6,
         num_heads=2,
@@ -48,7 +48,7 @@ def load_multimodal_model(device, model_path):
         cnn_model_name="densenet169",
         text_model_name="one-hot-encoder",
         vocab_size=86,
-        attention_mecanism="crossattention"
+        attention_mecanism=attention_mecanism
     )
     model.to(device)
     model.eval()
@@ -101,8 +101,7 @@ class ScoreCAM:
         # 2. Get spatial dimensions and upsample factor
         _, num_channels, fH, fW = feature_maps.shape
         _, _, H, W = image.shape
-        upsample = torch.nn.Upsample(size=(H, W), mode='bilinear', align_corners=False)
-
+        upsample = torch.nn.Upsample(size=(H, W), mode='bilinear')
         # 3. Initialize the score weights list and collect weighted activation maps
         score_weights = []
         weighted_maps = []
@@ -151,7 +150,7 @@ class ScoreCAM:
         combined_map = np.maximum(combined_map, 0)
 
         # Normalize the final heatmap
-        heatmap = (combined_map - combined_map.min()) / (combined_map.max() - combined_map.min() + 1e-8)
+        heatmap = (combined_map - combined_map.min()) / (combined_map.max() - combined_map.min())
         return heatmap
 
 def process_data(text, column_names):
@@ -208,15 +207,28 @@ def one_hot_encoding(metadata):
     processed_metadata = np.hstack((categorical_data, numerical_data))
     return processed_metadata
 
+def resize_heatmap(heatmap, target_size):
+    """
+    Resize heatmap to match the size of the original image.
+    Args:
+        heatmap (np.ndarray): Heatmap with shape (H, W).
+        target_size (tuple): Target size (height, width) of the original image.
+    Returns:
+        np.ndarray: Resized heatmap.
+    """
+    heatmap_tensor = torch.tensor(heatmap).unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
+    heatmap_resized = F.interpolate(heatmap_tensor, size=target_size, mode='bilinear', align_corners=False)
+    return heatmap_resized.squeeze().numpy()  # Remove batch and channel dimensions
+
 
 # === Main Script for Inference with ScoreCAM ===
 
 if __name__ == "__main__":
     device =  "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
-
+    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
+    model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     # Load and preprocess image
-    image_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images/PAT_967_1827_247.png"
+    image_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images/PAT_795_1508_925.png"
     image_pil = Image.open(image_path)
     processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
@@ -235,8 +247,7 @@ if __name__ == "__main__":
     ]
 
     # Carregar dados de teste
-    # text = "PAT_771,1491,True,True,ITALY,ITALY,69,False,MALE,False,True,True,True,3.0,FACE,6.0,3.0,BCC,True,UNK,False,UNK,False,True,PAT_771_1491_390.png,True"  # "PAT_1516,1765,,,,,8,,,,,,,,ARM,,,NEV,False,False,False,False,False,False,PAT_1516_1765_530.png,False"
-    text = "PAT_967,1827,False,False,POMERANIA,POMERANIA,34,True,FEMALE,True,False,False,False,2.0,NOSE,5.0,4.0,BCC,True,UNK,False,UNK,True,True,PAT_967_1827_247.png,True"
+    text = "PAT_795,1508,False,True,GERMANY,GERMANY,69,True,MALE,True,True,True,True,3.0,HAND,11.0,10.0,ACK,True,False,False,False,False,True,PAT_795_1508_925.png,True"
     metadata = process_data(text, column_names)
 
     # Processar metadados
@@ -244,7 +255,7 @@ if __name__ == "__main__":
     print(f"Processed_metadata:{processed_metadata}\n")
 
     # Load model
-    model = load_multimodal_model(device, model_path)
+    model = load_multimodal_model(device, model_path, "weighted-after-crossattention")
 
     # Choose a target layer for ScoreCAM
     # For DenseNet, for example, hook the last convolutional layer:
@@ -254,7 +265,7 @@ if __name__ == "__main__":
     scorecam = ScoreCAM(model, target_layer, device)
 
     # Select target class index for which to generate a heatmap
-    target_class = 0  # Change as needed
+    target_class = 2  # Change as needed
 
     # Generate heatmap using ScoreCAM
     heatmap = scorecam.generate_heatmap(processed_image, torch.tensor(processed_metadata, dtype=torch.float32), target_class)
@@ -262,19 +273,24 @@ if __name__ == "__main__":
     # Remove hook after use
     scorecam.remove_hook()
 
+
+    # Converter imagem PIL para numpy
+    image_np = np.array(image_pil)
+
+    # Aplicar colormap ao heatmap
+    heatmap_resized = resize_heatmap(heatmap, (image_pil.height, image_pil.width))
+
     # Visualizar a imagem original e a do ScoreCAM juntas
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
 
-    # Exibir imagem original no primeiro subplot
+    # Subplot 1: Imagem Original
     axes[0].imshow(image_pil)
     axes[0].set_title("Imagem Original")
     axes[0].axis('off')
 
-    # Exibir imagem com ScoreCAM sobreposta no segundo subplot
-    # Primeiro, exiba a imagem original como fundo
-    axes[1].imshow(image_pil)
-    # Em seguida, sobreponha o heatmap com transparência
-    axes[1].imshow(heatmap, cmap='jet', alpha=0.4)
+    # Subplot 2: Imagem com ScoreCAM sobreposta
+    axes[1].imshow(image_pil)  # Exibe a imagem original como fundo
+    axes[1].imshow(heatmap_resized, cmap='jet', alpha=0.4)  # Sobrepõe o heatmap com transparência
     axes[1].set_title("Imagem com ScoreCAM")
     axes[1].axis('off')
 
