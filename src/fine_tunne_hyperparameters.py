@@ -165,8 +165,8 @@ def objective(trial):
     }
 
     dataset = skinLesionDatasets.SkinLesionDataset(
-        metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
-        img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
+        metadata_file="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/metadata.csv",
+        img_dir="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/images",
         bert_model_name="one-hot-encoder",
         image_encoder="densenet169",
         drop_nan=False,
@@ -201,7 +201,7 @@ def objective(trial):
         train_loader, val_loader, dataset, model, device, class_weights,
         num_epochs=max_epochs, params=params, fold=0,
         model_name=model_name, text_model_encoder=text_model_encoder,
-        attention_mecanism=attention_mecanism, results_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/fine-tunning"
+        attention_mecanism=attention_mecanism, results_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/fine-tunning"
     )
 
     return val_loss

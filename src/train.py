@@ -233,8 +233,8 @@ def run_expirements(num_epochs, batch_size, k_folds, common_dim, text_model_enco
         for model_name in list_of_models:
             try:
                 dataset = skinLesionDatasets.SkinLesionDataset(
-                metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
-                img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
+                metadata_file="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/metadata.csv",
+                img_dir="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/images",
                 bert_model_name=text_model_encoder,
                 image_encoder=model_name,
                 drop_nan=False,
