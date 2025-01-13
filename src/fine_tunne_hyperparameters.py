@@ -145,7 +145,7 @@ def train_model(train_loader, val_loader, dataset, model, device, class_weights,
 
 # Função de objetivo para Optuna
 def objective(trial):
-    batch_size = 16
+    batch_size = 512
     max_epochs = 100
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = "densenet169"

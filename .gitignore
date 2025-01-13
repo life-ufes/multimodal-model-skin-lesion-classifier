@@ -3,3 +3,5 @@ src/results/*
 mlruns/*
 best_model.pt
 multimodal_model_architecture.png
+src/models/__pycache__/*
+src/utils/__pycache__/*
