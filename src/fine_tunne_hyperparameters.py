@@ -145,7 +145,7 @@ def train_model(train_loader, val_loader, dataset, model, device, class_weights,
 
 # Função de objetivo para Optuna
 def objective(trial):
-    batch_size = 512
+    batch_size = 128
     max_epochs = 100
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = "densenet169"
@@ -157,7 +157,7 @@ def objective(trial):
             'hidden_sizes': trial.suggest_categorical('hidden_sizes', [[1024, 512], [512, 256], [1024, 512, 256], [2048, 1024, 512, 128]]),
             'dropout': trial.suggest_float('dropout', 0.1, 0.5)
         },
-        'num_heads': trial.suggest_int('num_heads', 4, 8),
+        'num_heads': trial.suggest_categorical('num_heads', [4, 8, 16, 32, 64, 128, 256, 512]),
         'fc_fusion_config': {
             'hidden_sizes': trial.suggest_categorical('fc_hidden_sizes', [[1024, 512], [512, 256, 128], [1024, 512, 256, 128]]),
             'dropout': trial.suggest_float('fc_dropout', 0.1, 0.5)
@@ -208,7 +208,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=10)
+    study.optimize(objective, n_trials=50)
 
     print("Best parameters:", study.best_params)
     print("Best value:", study.best_value)
