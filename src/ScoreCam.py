@@ -224,7 +224,7 @@ def resize_heatmap(heatmap, target_size):
 # === Main Script for Inference with ScoreCAM ===
 
 if __name__ == "__main__":
-    device =  "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device =  torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
     model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     # Load and preprocess image
@@ -265,10 +265,10 @@ if __name__ == "__main__":
     scorecam = ScoreCAM(model, target_layer, device)
 
     # Select target class index for which to generate a heatmap
-    target_class = 2  # Change as needed
+    target_class = -1  # Change as needed
 
     # Generate heatmap using ScoreCAM
-    heatmap = scorecam.generate_heatmap(processed_image, torch.tensor(processed_metadata, dtype=torch.float32), target_class)
+    heatmap = scorecam.generate_heatmap(processed_image, torch.tensor(processed_metadata, dtype=torch.float32).to(device), target_class)
 
     # Remove hook after use
     scorecam.remove_hook()
