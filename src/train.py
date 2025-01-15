@@ -171,7 +171,7 @@ def train_process(num_epochs,
     # Save the final (or best) model
     model_save_path = os.path.join(
         results_folder_path, 
-        f"model_{model_name}_with_{text_model_encoder}_{common_dim}"
+        f"model_{model_name}_with_{text_model_encoder}_{common_dim}_last_layer_unfrozen_with_best_architecture"
     )
     save_model_and_metrics(
         model, 
@@ -215,7 +215,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModalToOptimzeAfterFIneTunning.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
+        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
 
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_heads=32
+    num_heads=8
     dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data"
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    
