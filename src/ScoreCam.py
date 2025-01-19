@@ -47,7 +47,7 @@ def load_multimodal_model(device, model_path, attention_mecanism):
         device=device,
         cnn_model_name="densenet169",
         text_model_name="one-hot-encoder",
-        vocab_size=85,
+        vocab_size=86,
         attention_mecanism=attention_mecanism
     )
     model.to(device)
@@ -224,13 +224,13 @@ def resize_heatmap(heatmap, target_size):
 # === Main Script for Inference with ScoreCAM ===
 
 if __name__ == "__main__":
-    device =  "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device =  torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
-    # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/8/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_last_3_layers_unfrozen_with_best_architecture/densenet169_fold_4_20250115_122657/model.pth"
+    model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/8/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_last_3_layers_unfrozen_with_best_architecture/densenet169_fold_4_20250115_122657/model.pth"
     # model_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/8/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_last_layer_unfrozen_with_best_architecture/densenet169_fold_3_20250115_145328/model.pth"
     # Load and preprocess image
-    image_path="./data/images/PAT_795_1508_925.png"
+    image_path="./data/images/PAT_46_881_14.png"
     image_pil = Image.open(image_path)
     processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
@@ -249,7 +249,8 @@ if __name__ == "__main__":
     ]
 
     # Carregar dados de teste
-    text = "PAT_795,1508,,,,,,,,,,,,,,,,ACK,,,,,,,PAT_795_1508_925.png,"
+    # text = "PAT_46,881,True,True,POMERANIA,POMERANIA,55,True,MALE,False,False,False,False,3.0,NECK,6.0,5.0,BCC,False,False,True,False,False,False,PAT_46_881_14.png,False"
+    text = "PAT_742,1470,False,False,POMERANIA,POMERANIA,79,False,FEMALE,False,False,True,True,2.0,HAND,15.0,10.0,ACK,True,True,False,False,False,True,PAT_742_1470_425.png,False"
     metadata = process_data(text, column_names)
 
     # Processar metadados
