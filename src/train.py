@@ -6,7 +6,7 @@ import models.focalLoss as focalLoss
 from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import KFold, train_test_split, StratifiedKFold
 import numpy as np
 import time
 import os
@@ -63,7 +63,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-OPTIMING-BEST-MODEL-ARCHITECTURE"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-OPTIMING-BEST-MODEL-ARCHITECTURE-WITH-10-FOLDS-WITH-STRATIFIED"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -171,7 +171,7 @@ def train_process(num_epochs,
     # Save the final (or best) model
     model_save_path = os.path.join(
         results_folder_path, 
-        f"model_{model_name}_with_{text_model_encoder}_{common_dim}_last_layer_unfrozen_with_best_architecture"
+        f"model_{model_name}_with_{text_model_encoder}_{common_dim}_with_best_architecture"
     )
     save_model_and_metrics(
         model, 
@@ -188,7 +188,6 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, attention_mecanism, results_folder_path):
     all_metrics = []
 
@@ -196,9 +195,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
     labels = [dataset.labels[i] for i in range(len(dataset))]
 
     # Configurar o K-Fold
-    kFold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+    stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(kFold.split(dataset)):
+    for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
         print(f"Fold {fold+1}/{k_folds}")
 
         # Criar datasets para treino e validação do fold atual
@@ -206,8 +205,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         val_subset = Subset(dataset, val_idx)
 
         # Criar DataLoaders
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=12)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=12)
 
         # Calcular pesos das classes com base no conjunto de treino
         train_labels = [labels[i] for i in train_idx]
@@ -222,6 +221,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
             class_weights, common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
+
 
 def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads):
     # Para todas os tipos de estratégias a serem usadas
@@ -252,7 +252,7 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
                     text_model_encoder=text_model_encoder,
                     num_heads=num_heads,
                     attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/{num_heads}/{attention_mecanism}"
+                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/{num_heads}/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -260,12 +260,12 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 16
-    k_folds=5 
+    batch_size = 64
+    k_folds=5
     common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_heads=8
+    num_heads=128
     dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data"
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    

@@ -40,19 +40,34 @@ class MultimodalModel(nn.Module):
         # -------------------------
         # 2) Text Encoder
         # -------------------------
+        # Balanced accuracy 81,13 %
+        # if self.text_model_name == "one-hot-encoder":
+        #     # Metadados / one-hot -> FC
+        #     self.text_fc = nn.Sequential(
+        #         nn.Linear(vocab_size, 1024),
+        #         nn.ReLU(),
+        #         nn.Dropout(0.19),
+        #         nn.Linear(1024, 512),
+        #         nn.ReLU(),
+        #         nn.Dropout(0.19),
+        #         nn.Linear(512, 256),
+        #         nn.ReLU(),
+        #         nn.Dropout(0.19),
+        #         nn.Linear(256, self.text_encoder_dim_output)
+            
+        #     )
+        
+        # Balanced Accuracy
         if self.text_model_name == "one-hot-encoder":
             # Metadados / one-hot -> FC
             self.text_fc = nn.Sequential(
                 nn.Linear(vocab_size, 1024),
                 nn.ReLU(),
-                nn.Dropout(0.19),
+                nn.Dropout(0.34),
                 nn.Linear(1024, 512),
                 nn.ReLU(),
-                nn.Dropout(0.19),
-                nn.Linear(512, 256),
-                nn.ReLU(),
-                nn.Dropout(0.19),
-                nn.Linear(256, self.text_encoder_dim_output)
+                nn.Dropout(0.34),
+                nn.Linear(512, self.text_encoder_dim_output)
             
             )
         else:
@@ -117,16 +132,31 @@ class MultimodalModel(nn.Module):
         #     nn.Softmax(dim=1)
         # )
 
+        # balanced accuracy gotten with 81,13%
+        # self.fc_fusion = nn.Sequential(
+        #     nn.Linear(self.common_dim * 2, 1024),
+        #     nn.BatchNorm1d(1024),
+        #     nn.ReLU(),
+        #     nn.Dropout(0.145),
+        #     nn.Linear(1024, 512),
+        #     nn.BatchNorm1d(512),
+        #     nn.ReLU(),
+        #     nn.Dropout(0.145),
+        #     nn.Linear(512, num_classes),
+        #     nn.Softmax(dim=1)
+        # )
+
+        # Balanced Accuracy 81,25% 
         self.fc_fusion = nn.Sequential(
-            nn.Linear(self.common_dim * 2, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Dropout(0.145),
-            nn.Linear(1024, 512),
+            nn.Linear(self.common_dim * 2, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
-            nn.Dropout(0.145),
-            nn.Linear(512, num_classes),
+            nn.Dropout(0.34),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.34),
+            nn.Linear(256, num_classes),
             nn.Softmax(dim=1)
         )
     
