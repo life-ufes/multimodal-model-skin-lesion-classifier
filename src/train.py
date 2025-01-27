@@ -63,7 +63,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-OPTIMING-BEST-MODEL-ARCHITECTURE-WITH-10-FOLDS-WITH-STRATIFIED"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-BEST-MODEL-ARCHITECTURE-WITH STRATIFIED"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -205,8 +205,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         val_subset = Subset(dataset, val_idx)
 
         # Criar DataLoaders
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=12)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=12)
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=10)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=10)
 
         # Calcular pesos das classes com base no conjunto de treino
         train_labels = [labels[i] for i in train_idx]
@@ -225,10 +225,10 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
 def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads):
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["weighted-after-crossattention"] #["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    list_of_attention_mecanism = ["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["densenet169"] #["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["vgg16", "mobilenet-v2"] #, "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
         
         for model_name in list_of_models:
             try:
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_heads=128
+    num_heads=2
     dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data"
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    
