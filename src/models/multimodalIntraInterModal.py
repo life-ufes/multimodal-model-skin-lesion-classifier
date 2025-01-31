@@ -215,7 +215,7 @@ class MultimodalModel(nn.Module):
             text_pooled_gated = alpha_txt * projected_text_features
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
 
-        if self.attention_mecanism == "concatenation":
+        elif self.attention_mecanism == "concatenation":
             # 
             if self.cnn_model_name=="vit-base-patch16-224":
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
@@ -241,6 +241,18 @@ class MultimodalModel(nn.Module):
 
         elif self.attention_mecanism == "crossattention":
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+
+        elif self.attention_mecanism == "cross-weights-after-crossattention":
+            #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
+            alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
+            alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
+
+            # Multiplicamos as features pela máscara gerada
+            image_pooled_gated = alpha_txt * image_pooled
+            text_pooled_gated = alpha_img * text_pooled
+
+            # === [G] Fusão e classificação
+            combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
 
         output = self.fc_fusion(combined_features)  # (batch, num_classes)
         return output
