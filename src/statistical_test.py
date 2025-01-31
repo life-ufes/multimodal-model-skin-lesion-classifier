@@ -41,13 +41,14 @@ if __name__ == "__main__":
     list_all_models_metrics = []
     list_all_models_metrics_all_lists = []
     method_names = []
+    base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/2/"
     list_of_attention_mecanism = ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
         list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
         for model_name in list_of_models:
             for wanted_metric_metric_name in wanted_metric_list:
-                file_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/2/{attention_mecanism}/model_{model_name}_with_one-hot-encoder_512_with_best_architecture"
+                file_folder_path = f"{base_folder_path}/{attention_mecanism}/model_{model_name}_with_one-hot-encoder_512_with_best_architecture"
                 aux_metric_values = get_metric_values(file_folder_path, wanted_metric_metric_name)  
 
                 list_all_models_metrics.extend(aux_metric_values)
@@ -56,7 +57,9 @@ if __name__ == "__main__":
         # Limpar a memória antes de analisar os próximos dados
     list_all_models_metrics=[]
     out=statistical_test(data=list_all_models_metrics_all_lists, alg_names=list_of_attention_mecanism)
-        # Salvar os resultados
-        # save_statistics_tests(test_results={out}, model_name=model_name, encoder_method=encoder_method, file_folder_path='/home/wyctor/PROJETOS/deep-hub-pipelines/benchmarks/pad-20/results/experiment_missing_values_new/resultados-PAD-UFES-25/')
-        # Limpando a lista
-        #list_all_models_metrics_all_lists=[]
+    # Salvar os resultados
+    save_statistics_tests(test_results={out}, model_name=model_name, encoder_method="all_methods", file_folder_path=base_folder_path)
+
+    
+    # Limpando a lista
+    #list_all_models_metrics_all_lists=[]
