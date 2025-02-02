@@ -36,6 +36,12 @@ This repository contains a multimodal model for classifying skin lesions. The mo
    ```
 3. Monitor the training process and metrics via **MLFlow** (if configured in the script).
 
+## 3.1 Training a model using ISIC 2019 dataset
+
+1. Change the dataset folder path diretory on 'preprocess_isic_2019.py' script and then run it to create the "metadata.csv" equivalent to this dataset.
+
+2. Then, with the metadata.csv created, run the 'train_isic_2019.py' script to train the defined model.
+
 ## 4. Plotting the Model
 
 1. Set the path to the model you want to visualize in the script.

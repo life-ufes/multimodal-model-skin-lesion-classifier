@@ -64,7 +64,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-BEST-MODEL-ARCHITECTURE-WITH STRATIFIED"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20- MODEL-STRATIFIED K-FOLD - ISIC 2019"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -261,7 +261,7 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 64
+    batch_size = 128
     k_folds=5
     common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'

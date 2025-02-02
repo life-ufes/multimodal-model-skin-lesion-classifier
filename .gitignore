@@ -6,6 +6,7 @@ best_model.pt
 multimodal_model_architecture.png
 src/models/__pycache__/*
 src/utils/__pycache__/*
+src/results
 src/src/results/preprocess_data/label_encoder_isic2019.pickle
 src/src/results/preprocess_data/ohe_isic2019.pickle
 src/src/results/preprocess_data/scaler_isic2019.pickle
