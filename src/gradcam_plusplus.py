@@ -174,6 +174,7 @@ class GradCAMPlusPlus:
         cam = F.interpolate(cam, size=(H, W), mode='bilinear', align_corners=False)
         return cam.squeeze().cpu().detach().numpy()
 
+
 # ===== Main Script for GradCAM++ =====
 
 if __name__ == "__main__":
@@ -182,7 +183,7 @@ if __name__ == "__main__":
     # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # Load and preprocess image
-    image_path = "./data/images/PAT_795_1508_925.png"
+    image_path = "./PAD-UFES-20/images/PAT_795_1508_925.png"
     image_pil = Image.open(image_path)
     processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
