@@ -121,6 +121,14 @@ def process_data(text, column_names):
     data = data.replace("BRASIL", "BRAZIL")
     return data
 
+def get_target(wanted_label):
+    target_index=-1
+    LABELS = ["ACK", "BCC", "MEL", "NEV", "SCC", "SEK"] # PAD-UFES-20
+    for i in LABELS:
+        if wanted_label==LABELS[i]:
+            target_index        
+    return target_index
+
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

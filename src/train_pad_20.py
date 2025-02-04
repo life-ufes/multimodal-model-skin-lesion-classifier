@@ -225,10 +225,10 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
 def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads):
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["cross-weights-after-crossattention"] #["concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
         
         for model_name in list_of_models:
             try:
@@ -252,7 +252,7 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
                     text_model_encoder=text_model_encoder,
                     num_heads=num_heads,
                     attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/{num_heads}/{attention_mecanism}"
+                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-last-layer-weights/{num_heads}/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")

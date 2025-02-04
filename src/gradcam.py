@@ -181,8 +181,7 @@ if __name__ == "__main__":
     target_layer = model.image_encoder.features[-1]  # Ajuste conforme necessário
     
     gradcam = GradCAM(model, target_layer, device)
-    target_class = -1  # Ajuste o índice da classe alvo conforme necessário
-    
+    target_class = -1
     heatmap = gradcam.generate_heatmap(processed_image, processed_metadata_tensor, target_class)
     heatmap_resized = resize_heatmap(heatmap, (image_pil.height, image_pil.width))
     

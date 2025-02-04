@@ -35,14 +35,14 @@ def process_image(img, image_encoder="densenet169"):
     transform = load_transforms(image_encoder)
     return transform(image)
 
-def load_multimodal_model(device, model_path, attention_mecanism):
+def load_multimodal_model(device, model_path, attention_mecanism, vocab_size=85):
     model = multimodalIntraInterModal.MultimodalModel(
         num_classes=6,
         num_heads=2,
         device=device,
         cnn_model_name="densenet169",
         text_model_name="one-hot-encoder",
-        vocab_size=86,
+        vocab_size=vocab_size,
         attention_mecanism=attention_mecanism
     )
     model.to(device)
@@ -195,7 +195,7 @@ if __name__ == "__main__":
         "has_sewage_system", "fitspatrick", "region", "diameter_1", "diameter_2", "diagnostic", "itch",
         "grew", "hurt", "changed", "bleed", "elevation", "img_id", "biopsed"
     ]
-    text="PAT_795,1508,False,True,GERMANY,GERMANY,69,True,MALE,True,True,True,True,3.0,HAND,11.0,10.0,ACK,True,True,True,True,True,True,PAT_795_1508_925.png,True"
+    text="PAT_795,1508,False,True,GERMANY,GERMANY,69,True,MALE,True,True,True,True,3.0,HAND,11.0,10.0,ACK,False,False,False,False,False,False,PAT_795_1508_925.png,True"
     metadata = process_data(text, column_names)
     processed_metadata = one_hot_encoding(metadata)
     processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
