@@ -142,6 +142,6 @@ class SkinLesionDataset(Dataset):
             encoded_labels = label_encoder.fit_transform(labels)
             with open('./src/results/preprocess_data/label_encoder.pickle', 'wb') as f:
                 pickle.dump(label_encoder, f)
-
+                
         return processed_data, encoded_labels, self.metadata['diagnostic'].unique()
 

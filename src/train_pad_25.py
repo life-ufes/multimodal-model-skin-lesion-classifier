@@ -3,7 +3,7 @@ import torch.nn as nn
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
-from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning
+from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsPAD2025, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import KFold, train_test_split, StratifiedKFold
@@ -232,17 +232,18 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
         
         for model_name in list_of_models:
             try:
-                dataset = skinLesionDatasets.SkinLesionDataset(
-                metadata_file=f"{dataset_folder_path}/metadata.csv",
-                img_dir=f"{dataset_folder_path}/images",
+                dataset = skinLesionDatasetsPAD2025.SkinLesionDataset(
+                metadata_file=f"{dataset_folder_path}/anonymous-metadata.csv",
+                img_dir=f"{dataset_folder_path}/anonymous-images",
                 bert_model_name=text_model_encoder,
                 image_encoder=model_name,
                 drop_nan=False,
                 random_undersampling=False
                 )
+
                 num_metadata_features = dataset.features.shape[1]
                 print(f"Número de features do metadados: {num_metadata_features}\n")
-                num_classes = len(dataset.metadata['diagnostic'].unique())
+                num_classes = len(dataset.metadata['macroCIDDiagnostic'].unique())
 
                 pipeline(dataset, 
                     num_metadata_features=num_metadata_features, 
@@ -252,7 +253,7 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
                     text_model_encoder=text_model_encoder,
                     num_heads=num_heads,
                     attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-last-layer-weights/{num_heads}/{attention_mecanism}"
+                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/{num_heads}/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -266,6 +267,6 @@ if __name__ == "__main__":
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_heads=2
-    dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
+    dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-25"
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    
