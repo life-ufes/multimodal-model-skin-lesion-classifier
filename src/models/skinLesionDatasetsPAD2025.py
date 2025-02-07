@@ -16,7 +16,7 @@ class SkinLesionDataset(Dataset):
         self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
         self.image_encoder = image_encoder
-        self.image_type = "" # 
+        self.image_type = "CLINICAL" # Tipo de imagens
         self.transform = self.load_transforms()
 
         self.CLUSTER_TARGETS = {
@@ -127,53 +127,40 @@ class SkinLesionDataset(Dataset):
         try:
             # Substituir os IDs pelos labels mapeados conforme o dicionário CLUSTER_TARGETS
             self.metadata['macroCIDDiagnostic'] = self.metadata['macroCIDDiagnostic'].map(self.CLUSTER_TARGETS)
-            # Label Encoding
-            if os.path.exists("./src/results/preprocess_data/label_encoder_pad_25.pickle"):
-                # Carregar o LabelEncoder salvo
-                with open('./src/results/preprocess_data/label_encoder_pad_25.pickle', 'rb') as f:
-                    label_encoder = pickle.load(f)
-            else:
-                # Fazer o fit com todos os labels únicos presentes nos dados
-                label_encoder = LabelEncoder()
-                label_encoder.fit(self.metadata['macroCIDDiagnostic'].unique())
-
-                # Salvar o LabelEncoder
-                with open('./src/results/preprocess_data/label_encoder_pad_25.pickle', 'wb') as f:
-                    pickle.dump(label_encoder, f)
-
-            # Convertendo os rótulos usando o LabelEncoder
-            encoded_labels = label_encoder.transform(self.metadata['macroCIDDiagnostic'].values)
-
-            return encoded_labels
-
         except Exception as e:
             print(f"Erro ao converter os IDs para rótulos: {e}")
             return None
 
 
     def one_hot_encoding(self):
-        # Codificação dos dados
-        self.convert_ids_labels()  # Converte os IDs para os labels necessários
-        # Seleção das features
-        dataset_features = self.metadata
-        # dataset_features = dataset_features[dataset_features['img-src'] == 'CLINICAL']
-        dataset_features=dataset_features.drop(columns=["macroCIDDiagnostic"])
-        # Selecionar apenas as variáveis a serem pré-processadas
+        # Converter IDs para labels
+        self.convert_ids_labels()
+        
+        # Filtrar os dados para 'img-src' == 'CLINICAL'
+        clinical_metadata = self.metadata[self.metadata['img-src'] == self.image_type].copy()
+        
+        # **Atualizar o self.metadata** para manter apenas as linhas filtradas
+        self.metadata = clinical_metadata
+        
+        # Extraindo features e labels de forma consistente
+        labels = clinical_metadata['macroCIDDiagnostic'].values
+        dataset_features = clinical_metadata.drop(columns=["macroCIDDiagnostic"])
+        # Selecionar as variáveis a serem pré-processadas
         categorical_cols = [
             "usePesticide", "gender", "familySkinCancerHistory", "familyCancerHistory", 
             "fitzpatrickSkinType", "macroBodyRegion", "hasItched", "hasGrown", "hasHurt", 
             "hasChanged", "hasBled", "hasElevation"
         ]
         numerical_cols = ["age"]
-
-        # Converter categóricas para string
+        
+        # Converter variáveis categóricas para string
         dataset_features[categorical_cols] = dataset_features[categorical_cols].astype(str)
         
-        # Preencher valores faltantes nas colunas numéricas com -1 (ou média, se preferir)
+        # Preencher valores faltantes nas colunas numéricas
         dataset_features[numerical_cols] = dataset_features[numerical_cols].fillna(-1)
-                    
+        
         os.makedirs('./src/results/preprocess_data', exist_ok=True)
-
+        
         # Carregar ou criar o OneHotEncoder
         ohe_file = './src/results/preprocess_data/ohe_pad_25.pickle'
         if os.path.exists(ohe_file):
@@ -185,11 +172,11 @@ class SkinLesionDataset(Dataset):
             categorical_data = ohe.fit_transform(dataset_features[categorical_cols])
             with open(ohe_file, 'wb') as f:
                 pickle.dump(ohe, f)
-
+        
         # Carregar ou criar o StandardScaler
         scaler_file = './src/results/preprocess_data/scaler_pad_25.pickle'
         if os.path.exists(scaler_file):
-            with open(scaler_file, 'rb') as f:
+            with open(scaler_file, 'rb') as f:  
                 scaler = pickle.load(f)
             numerical_data = scaler.transform(dataset_features[numerical_cols])
         else:
@@ -197,15 +184,11 @@ class SkinLesionDataset(Dataset):
             numerical_data = scaler.fit_transform(dataset_features[numerical_cols])
             with open(scaler_file, 'wb') as f:
                 pickle.dump(scaler, f)
-
-        # Concatenar dados
-        processed_data = np.hstack((categorical_data, numerical_data))
-
-        print(processed_data.shape)
-
-        # Codificação de Labels (target)
-        labels = self.metadata['macroCIDDiagnostic'].values
         
+        # Concatenar dados pré-processados
+        processed_data = np.hstack((categorical_data, numerical_data))
+        
+        # Codificação de Labels (target)
         label_encoder_file = './src/results/preprocess_data/label_encoder_pad_25.pickle'
         if os.path.exists(label_encoder_file):
             with open(label_encoder_file, 'rb') as f:
@@ -216,6 +199,8 @@ class SkinLesionDataset(Dataset):
             encoded_labels = label_encoder.fit_transform(labels)
             with open(label_encoder_file, 'wb') as f:
                 pickle.dump(label_encoder, f)
+        
         print(f"Shape dos processed_data {processed_data.shape}")
         print(f"Shape dos labels {len(labels)}")
-        return processed_data, encoded_labels, self.metadata['macroCIDDiagnostic'].unique()
+        
+        return processed_data, encoded_labels, clinical_metadata['macroCIDDiagnostic'].unique()

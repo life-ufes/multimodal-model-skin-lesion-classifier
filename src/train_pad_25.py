@@ -253,7 +253,7 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
                     text_model_encoder=text_model_encoder,
                     num_heads=num_heads,
                     attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/{num_heads}/{attention_mecanism}"
+                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-weights/{num_heads}/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
