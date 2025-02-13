@@ -19,9 +19,9 @@ if __name__ == "__main__":
     # Lista para armazenar todos os resultados
     all_results = []
 
-    list_of_attention_mecanism = ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    list_of_attention_mecanism = ["no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     
-    base_folder_path = "src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/2"
+    base_folder_path ="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-weights/2"
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
         list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]

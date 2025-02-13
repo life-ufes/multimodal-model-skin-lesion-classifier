@@ -47,11 +47,11 @@ class loadModels():
             elif cnn_model_name == "densenet169":
                 image_encoder = models.densenet169(pretrained=True)
                 cnn_dim_output = 1664
-                # for param in image_encoder.parameters():
-                #     param.requires_grad = False
-                # # Unfreeze some layers
-                for param in list(image_encoder.features[-1:].parameters()):
+                for param in image_encoder.parameters():
                     param.requires_grad = True
+                # # Unfreeze some layers
+                # for param in list(image_encoder.features[-1:].parameters()):
+                #     param.requires_grad = True
                 # Ajustar a saída para manter a dimensão esperada (4096)
                 image_encoder.classifier = nn.Sequential(
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)

@@ -43,7 +43,8 @@ def load_multimodal_model(device, model_path, attention_mecanism, vocab_size=85)
         cnn_model_name="densenet169",
         text_model_name="one-hot-encoder",
         vocab_size=vocab_size,
-        attention_mecanism=attention_mecanism
+        attention_mecanism=attention_mecanism,
+        n=1
     )
     model.to(device)
     model.eval()

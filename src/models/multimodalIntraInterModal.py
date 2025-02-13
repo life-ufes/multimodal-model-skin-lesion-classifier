@@ -8,7 +8,7 @@ from transformers import ViTFeatureExtractor
 from loadImageModelClassifier import loadModels
 
 class MultimodalModel(nn.Module):
-    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85, attention_mecanism="combined"):
+    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85, attention_mecanism="combined", n=2):
         super(MultimodalModel, self).__init__()
         
         # Dimensões do modelo
@@ -20,6 +20,8 @@ class MultimodalModel(nn.Module):
         self.text_model_name = text_model_name
         self.attention_mecanism = attention_mecanism
         self.num_heads = num_heads  # para MultiheadAttention
+        self.n = n 
+        self.num_classes = num_classes
 
         # -------------------------
         # 1) Image Encoder
@@ -98,8 +100,11 @@ class MultimodalModel(nn.Module):
         # -------------------------
         # 5) Camada de Fusão Final
         # -------------------------
-        self.fc_fusion = nn.Sequential(
-            nn.Linear(self.common_dim * 2, self.common_dim),
+        self.fc_fusion = self.fc_mlp_module(n=self.n)
+
+    def fc_mlp_module(self, n=1):
+        fc_fusion = nn.Sequential(
+            nn.Linear(self.common_dim * n, self.common_dim),
             nn.BatchNorm1d(self.common_dim),
             nn.ReLU(),
             nn.Dropout(0.3),
@@ -107,9 +112,13 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, num_classes),
+            nn.Linear(self.common_dim // 2, self.num_classes),
             nn.Softmax(dim=1)
         )
+
+        return fc_fusion
+
+        
     
     def forward(self, image, text_metadata):
         """
@@ -127,7 +136,7 @@ class MultimodalModel(nn.Module):
             image_features = outputs.last_hidden_state
         else:
             # CNN -> (batch, cnn_dim_output)
-            image_features = self.image_encoder(image)
+            image_features = self.image_encoder(image).to(self.device)
             # Dá forma (batch, 1, cnn_dim_output)
             image_features = image_features.unsqueeze(1)
 
@@ -200,7 +209,12 @@ class MultimodalModel(nn.Module):
         image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
         
-        if self.attention_mecanism == "weighted":
+        if self.attention_mecanism=="no-metadata":
+            combined_features = projected_image_features
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
+
+        elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
             if self.cnn_model_name=="vit-base-patch16-224":
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada

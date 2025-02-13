@@ -51,10 +51,12 @@ def plot_heatmaps(image_pil, heatmap_resized_scorecam, heatmap_gradcam_resized, 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250125_160415/model.pth"    
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250203_201404/model.pth"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250203_201404/model.pth"
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-last-layer-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250203_203727/model.pth"
+    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-last-layer-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_110209/model.pth"
+    model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
     # Carrega e pré-processa a imagem
-    image_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/images/PAT_46_881_14.png"
+    image_path = "./PAD-UFES-20/images/PAT_46_881_14.png"
     image_pil = Image.open(image_path)
     processed_image = gradcam_plusplus.process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Adiciona dimensão de batch
@@ -72,7 +74,7 @@ if __name__ == "__main__":
     processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
 
     # Carrega o modelo multimodal
-    model = gradcam_plusplus.load_multimodal_model(device, model_path, "weighted-after-crossattention")
+    model = gradcam_plusplus.load_multimodal_model(device, model_path, "no-metadata", vocab_size=86)
     
     # Seleciona a camada alvo para os métodos de CAM
     target_layer = model.image_encoder.features[-1]  # Ajuste conforme necessário
