@@ -35,7 +35,7 @@ def process_image(img, image_encoder="densenet169"):
     transform = load_transforms(image_encoder)
     return transform(image)
 
-def load_multimodal_model(device, model_path, attention_mecanism, vocab_size=85):
+def load_multimodal_model(device, model_path, attention_mecanism, vocab_size=85, n=1):
     model = multimodalIntraInterModal.MultimodalModel(
         num_classes=6,
         num_heads=2,
@@ -44,7 +44,7 @@ def load_multimodal_model(device, model_path, attention_mecanism, vocab_size=85)
         text_model_name="one-hot-encoder",
         vocab_size=vocab_size,
         attention_mecanism=attention_mecanism,
-        n=1
+        n=n
     )
     model.to(device)
     model.eval()
@@ -179,12 +179,15 @@ class GradCAMPlusPlus:
 # ===== Main Script for GradCAM++ =====
 
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu") # torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
-    model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
+    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
+    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
+    #model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250211_093309/model.pth" # "frozen-weights"
     # Load and preprocess image
-    image_path = "./PAD-UFES-20/images/PAT_795_1508_925.png"
+    image_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20/images/PAT_46_881_14.png"
     image_pil = Image.open(image_path)
     processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
@@ -196,13 +199,13 @@ if __name__ == "__main__":
         "has_sewage_system", "fitspatrick", "region", "diameter_1", "diameter_2", "diagnostic", "itch",
         "grew", "hurt", "changed", "bleed", "elevation", "img_id", "biopsed"
     ]
-    text="PAT_795,1508,False,True,GERMANY,GERMANY,69,True,MALE,True,True,True,True,3.0,HAND,11.0,10.0,ACK,False,False,False,False,False,False,PAT_795_1508_925.png,True"
+    text = "PAT_46,881,,,,,,,,,,,,,,,,BCC,,True,,,,,PAT_46_881_14.png,"
     metadata = process_data(text, column_names)
     processed_metadata = one_hot_encoding(metadata)
     processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
     
     # Load multimodal model
-    model = load_multimodal_model(device, model_path, "weighted-after-crossattention")
+    model = load_multimodal_model(device, model_path, "weighted-after-crossattention", n=2)
     
     # Choose target layer for GradCAM++
     target_layer = model.image_encoder.features[-1]  # Adjust as needed

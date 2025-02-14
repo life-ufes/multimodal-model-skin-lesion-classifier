@@ -48,7 +48,7 @@ class loadModels():
                 image_encoder = models.densenet169(pretrained=True)
                 cnn_dim_output = 1664
                 for param in image_encoder.parameters():
-                    param.requires_grad = True
+                    param.requires_grad = False
                 # # Unfreeze some layers
                 # for param in list(image_encoder.features[-1:].parameters()):
                 #     param.requires_grad = True

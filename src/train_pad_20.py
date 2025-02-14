@@ -252,7 +252,7 @@ def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common
                     text_model_encoder=text_model_encoder,
                     num_heads=num_heads,
                     attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"./src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/unfrozen-weights/{num_heads}/{attention_mecanism}"
+                    results_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/{num_heads}/{attention_mecanism}"
                 )
             except Exception as e:
                 print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -266,6 +266,6 @@ if __name__ == "__main__":
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_heads=2
-    dataset_folder_path="./PAD-UFES-20"
+    dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    

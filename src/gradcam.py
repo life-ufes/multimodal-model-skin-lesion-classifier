@@ -156,7 +156,8 @@ class GradCAM:
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
+    model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
+    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     #model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # Carregar e pré-processar a imagem.
     image_path = "./PAD-UFES-20/images/PAT_8_15_820.png"
@@ -172,7 +173,7 @@ if __name__ == "__main__":
         "grew", "hurt", "changed", "bleed", "elevation", "img_id", "biopsed"
     ]
     
-    text="PAT_8,15,False,False,GERMANY,GERMANY,68,True,FEMALE,False,False,False,False,2.0,CHEST,11.0,7.0,BCC,False,False,False,False,True,True,PAT_8_15_820.png,True"
+    text = "PAT_46,881,,,,,,,,,,,,,,,,BCC,,,,,True,,PAT_46_881_14.png,True"
     metadata = process_data(text, column_names)
     processed_metadata = one_hot_encoding(metadata)
     processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)

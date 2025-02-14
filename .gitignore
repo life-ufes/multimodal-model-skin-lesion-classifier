@@ -35,3 +35,7 @@ Heatmaps-unfrozen-weights-missing-metadata-with-age.png
 Heatmaps-unfrozen-weights.gif
 Heatmaps-frozen-weights.gif
 Heatmaps-unfrozen-last-layer-weights.gif
+heatmaps
+.gitignore
+teste_CLINICAL
+processed_data_one_hot_CLINICAL

@@ -16,7 +16,7 @@ class SkinLesionDataset(Dataset):
         self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
         self.image_encoder = image_encoder
-        self.image_type = "CLINICAL" # Tipo de imagens
+        self.image_type = "CLINICAL" #"DERMATOSCOPE" # "CLINICAL" # Tipo de imagens
         self.transform = self.load_transforms()
 
         self.CLUSTER_TARGETS = {
@@ -127,6 +127,10 @@ class SkinLesionDataset(Dataset):
         try:
             # Substituir os IDs pelos labels mapeados conforme o dicionário CLUSTER_TARGETS
             self.metadata['macroCIDDiagnostic'] = self.metadata['macroCIDDiagnostic'].map(self.CLUSTER_TARGETS)
+            self.metadata = self.metadata.dropna(subset=['macroCIDDiagnostic'], inplace=False)
+            dataframe_one_hot = pd.DataFrame(self.metadata)
+            dataframe_one_hot.to_csv(f"./teste_{self.image_type}")
+        
         except Exception as e:
             print(f"Erro ao converter os IDs para rótulos: {e}")
             return None
@@ -187,7 +191,7 @@ class SkinLesionDataset(Dataset):
         
         # Concatenar dados pré-processados
         processed_data = np.hstack((categorical_data, numerical_data))
-        
+
         # Codificação de Labels (target)
         label_encoder_file = './src/results/preprocess_data/label_encoder_pad_25.pickle'
         if os.path.exists(label_encoder_file):
