@@ -5,7 +5,7 @@ from transformers import ViTModel, CLIPModel, AutoModel
 
 class loadModels():
     @staticmethod
-    def loadModelImageEncoder(cnn_model_name, common_dim):
+    def loadModelImageEncoder(cnn_model_name, common_dim, unfreeze_weights=False):
         ''' Seleciona o modelo desejado e entrega-o mesmo assim como as dimensões da sua saída '''
         try:
             if cnn_model_name == "custom-cnn":
@@ -22,7 +22,7 @@ class loadModels():
                 cnn_dim_output = 2048
                 # Congelar os pesos da ResNet-50
                 for param in image_encoder.parameters():
-                    param.requires_grad = False
+                    param.requires_grad = unfreeze_weights
                 # Substituir a camada final por uma identidade
                 image_encoder.fc = nn.Identity()
             elif cnn_model_name == "resnet-18":
@@ -30,7 +30,7 @@ class loadModels():
                 cnn_dim_output = 512
                 # Congelar os pesos da ResNet-18
                 for param in image_encoder.parameters():
-                    param.requires_grad = False
+                    param.requires_grad = unfreeze_weights
                 # Substituir a camada final por uma identidade
                 image_encoder.fc = nn.Identity()
 
@@ -38,7 +38,7 @@ class loadModels():
                 image_encoder = models.vgg16(pretrained=True)
                 cnn_dim_output = 4096
                 for param in image_encoder.parameters():
-                    param.requires_grad = False
+                    param.requires_grad = unfreeze_weights
                 # Ajustar a saída para manter a dimensão esperada (4096)
                 image_encoder.classifier = nn.Sequential(
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
@@ -48,7 +48,7 @@ class loadModels():
                 image_encoder = models.densenet169(pretrained=True)
                 cnn_dim_output = 1664
                 for param in image_encoder.parameters():
-                    param.requires_grad = False
+                    param.requires_grad = unfreeze_weights
                 # # Unfreeze some layers
                 # for param in list(image_encoder.features[-1:].parameters()):
                 #     param.requires_grad = True
@@ -63,7 +63,7 @@ class loadModels():
                 cnn_dim_output = 1280
                 # Congelar os pesos
                 for param in image_encoder.parameters():
-                    param.requires_grad = False
+                    param.requires_grad = unfreeze_weights
                 # Ajustar a saída para manter a dimensão esperada (1280)
                 image_encoder.classifier = nn.Sequential(
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)

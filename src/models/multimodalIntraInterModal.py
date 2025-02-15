@@ -8,7 +8,7 @@ from transformers import ViTFeatureExtractor
 from loadImageModelClassifier import loadModels
 
 class MultimodalModel(nn.Module):
-    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85, attention_mecanism="combined", n=2):
+    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85, unfreeze_weights=False, attention_mecanism="combined", n=2):
         super(MultimodalModel, self).__init__()
         
         # Dimensões do modelo
@@ -22,13 +22,15 @@ class MultimodalModel(nn.Module):
         self.num_heads = num_heads  # para MultiheadAttention
         self.n = n 
         self.num_classes = num_classes
+        self.unfreeze_weights_of_visual_feat_extractor = unfreeze_weights
 
         # -------------------------
         # 1) Image Encoder
         # -------------------------
         self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
             self.cnn_model_name,
-            self.common_dim
+            self.common_dim,
+            unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor
         )
         
         # Se for ViT, teremos ViTFeatureExtractor
