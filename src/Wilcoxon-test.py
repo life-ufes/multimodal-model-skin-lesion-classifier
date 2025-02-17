@@ -1,31 +1,44 @@
 import numpy as np
-from scipy.stats import wilcoxon
+from stats import statistical_test
 
-# Define the metrics (mean and std dev) for each model
+# Define as métricas (média e desvio padrão) para cada modelo
 metrics = {
-    "Our Model": {"ACC": (0.7916, 0.0245), "BACC": (0.7826, 0.0316), "AUC": (0.9295, 0.0163)},
-    "No Metadata": {"ACC": (0.616, 0.051), "BACC": (0.651, 0.050), "AUC": (0.901, 0.007)},
-    "Concatenation": {"ACC": (0.741, 0.014), "BACC": (0.728, 0.029), "AUC": (0.929, 0.006)},
-    "MetaBlock": {"ACC": (0.735, 0.013), "BACC": (0.765, 0.017), "AUC": (0.935, 0.004)},
-    "MetaNet": {"ACC": (0.732, 0.054), "BACC": (0.742, 0.019), "AUC": (0.936, 0.006)},
-    "MD-Net": {"ACC": (0.796, 0.0), "BACC": (0.814, 0.0), "AUC": (0.956, 0.0)},
-    "Fully-CrossAttention": {"ACC": (0.768, 0.022), "BACC": (0.775, 0.022), "AUC": (0.947, 0.007)},
+    "Our Model": {"ACC": (0.8194, 0.0169), "BACC": (0.8117, 0.0179), "AUC": (0.9494, 0.0057)},
+    "No Metadata": {"ACC": (0.6160, 0.0510), "BACC": (0.6510, 0.0500), "AUC": (0.901, 0.0070)},
+    "Concatenation": {"ACC": (0.7410, 0.0140), "BACC": (0.7280, 0.0290), "AUC": (0.9290, 0.0060)},
+    "MetaBlock": {"ACC": (0.7350, 0.0130), "BACC": (0.7650, 0.0170), "AUC": (0.9350, 0.0040)},
+    "MetaNet": {"ACC": (0.7320, 0.0540), "BACC": (0.7420, 0.0190), "AUC": (0.9360, 0.0060)},
+    "Fully-CrossAttention": {"ACC": (0.7680, 0.0220), "BACC": (0.7750, 0.0220), "AUC": (0.9470, 0.0070)},
 }
 
-# Generate random samples and perform Wilcoxon test
-for model, values in metrics.items():
-    if model == "Our Model":
-        continue
-    print(f"Comparing 'Our Model' with {model}:")
+def collect_samples(model_data):
+    """
+    Para cada métrica (ACC, BACC, AUC), coleta os dois valores (média e desvio padrão)
+    e os armazena em uma lista. Assim, cada modelo terá 6 amostras.
+    """
+    samples = []
     for metric in ["ACC", "BACC", "AUC"]:
-        mean_our, std_our = metrics["Our Model"][metric]
-        mean_model, std_model = values[metric]
-        
-        # Generate samples for both models
-        samples_our = np.random.normal(mean_our, std_our, 100)
-        samples_model = np.random.normal(mean_model, std_model, 100)
-        
-        # Wilcoxon test
-        stat, p_value = wilcoxon(samples_our, samples_model)
-        print(f"{metric}: Wilcoxon stat={stat}, p-value={p_value}")
-    print("\n")
+        mean_val, std_val = model_data[metric]
+        samples.append(mean_val)
+        samples.append(std_val)
+    return samples
+
+def main():
+    # Constrói a matriz de dados: cada linha representa um modelo e cada coluna uma "amostra"
+    all_samples = []
+    alg_names = []
+    for model, values in metrics.items():
+        samples = collect_samples(values)
+        all_samples.append(samples)
+        alg_names.append(model)
+
+    data_array = np.array(all_samples)
+
+    print("Data array (transposed):")
+    print(data_array.transpose())
+    print("\nAlgorithm names:")
+    print(alg_names)
+    # Realiza o teste estatístico entre todos os modelos
+    out = statistical_test(data=data_array.transpose(), alg_names=alg_names, pv_wilcoxon=0.1)
+if __name__=="__main__":
+    main()

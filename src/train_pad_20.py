@@ -56,7 +56,7 @@ def train_process(num_epochs,
         delta=0.01, 
         verbose=True,
         path='best_model.pt',   # Where to save the best weights (optional)
-        save_to_disk=True       # If True, saves best weights to 'best_model.pt'
+        save_to_disk=False       # If True, saves best weights to 'best_model.pt'
     )
 
     initial_time = time.time()
@@ -223,51 +223,52 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         )
 
 
-def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, num_heads):
-    # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
-        # Testar com todos os modelos
-        list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
-        
         for model_name in list_of_models:
-            try:
-                dataset = skinLesionDatasets.SkinLesionDataset(
-                metadata_file=f"{dataset_folder_path}/metadata.csv",
-                img_dir=f"{dataset_folder_path}/images",
-                bert_model_name=text_model_encoder,
-                image_encoder=model_name,
-                drop_nan=False,
-                random_undersampling=False
-                )
-                num_metadata_features = dataset.features.shape[1]
-                print(f"Número de features do metadados: {num_metadata_features}\n")
-                num_classes = len(dataset.metadata['diagnostic'].unique())
+            for num_heads in list_num_heads:
+                try:
+                    dataset = skinLesionDatasets.SkinLesionDataset(
+                    metadata_file=f"{dataset_folder_path}/metadata.csv",
+                    img_dir=f"{dataset_folder_path}/images",
+                    bert_model_name=text_model_encoder,
+                    image_encoder=model_name,
+                    drop_nan=False,
+                    random_undersampling=False
+                    )
+                    num_metadata_features = dataset.features.shape[1]
+                    print(f"Número de features do metadados: {num_metadata_features}\n")
+                    num_classes = len(dataset.metadata['diagnostic'].unique())
 
-                pipeline(dataset, 
-                    num_metadata_features=num_metadata_features, 
-                    num_epochs=num_epochs, batch_size=batch_size, 
-                    device=device, k_folds=k_folds, num_classes=num_classes, 
-                    model_name=model_name, common_dim=common_dim, 
-                    text_model_encoder=text_model_encoder,
-                    num_heads=num_heads,
-                    unfreeze_weights=unfreeze_weights,
-                    attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/{num_heads}/{attention_mecanism}"
-                )
-            except Exception as e:
-                print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
-                continue
+                    pipeline(dataset, 
+                        num_metadata_features=num_metadata_features, 
+                        num_epochs=num_epochs, batch_size=batch_size, 
+                        device=device, k_folds=k_folds, num_classes=num_classes, 
+                        model_name=model_name, common_dim=common_dim, 
+                        text_model_encoder=text_model_encoder,
+                        num_heads=num_heads,
+                        unfreeze_weights=unfreeze_weights,
+                        attention_mecanism=attention_mecanism, 
+                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
+                    )
+                except Exception as e:
+                    print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
+                    continue
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 16
+    batch_size = 64
     k_folds=5
     common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_heads=2
+    list_num_heads=[4, 8, 16, 32, 64, 128, 256, 512]
     dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
-    unfreeze_weights =  True # Caso queira descongelar os pesos da CNN desejada
+    results_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights"
+    unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
+    # Para todas os tipos de estratégias a serem usadas
+    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    # Testar com todos os modelos
+    list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, num_heads)    
+    run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
