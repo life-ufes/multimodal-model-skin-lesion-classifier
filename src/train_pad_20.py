@@ -264,7 +264,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[4, 8, 16, 32, 64, 128, 256, 512]
     dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
-    results_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights"
+    results_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights"
     unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["weighted-after-crossattention"] # ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
