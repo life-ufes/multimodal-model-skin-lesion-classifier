@@ -24,7 +24,7 @@ def main():
     ]
     
     # Create a figure for the plot
-    f, axarr = plt.subplots(nrows=2, ncols=3, figsize=(12, 8))  # Adjust the grid size to match the number of images
+    f, axarr = plt.subplots(nrows=1, ncols=6, figsize=(12, 8))  # Adjust the grid size to match the number of images
     axarr = axarr.ravel()  # Flatten the array of axes for easy indexing
 
     for i, item in enumerate(wanted_image_list):
