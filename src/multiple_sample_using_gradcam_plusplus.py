@@ -175,7 +175,7 @@ class GradCAMPlusPlus:
         cam = F.interpolate(cam, size=(H, W), mode='bilinear', align_corners=False)
         return cam.squeeze().cpu().detach().numpy()
     
-def generated_heatmap_image(text, image_pil, device):
+def generated_heatmap_image(text, image_pil, device, model_path):
     try:
         metadata = process_data(text, column_names)
         processed_metadata = one_hot_encoding(metadata)
@@ -206,8 +206,8 @@ if __name__ == "__main__":
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
     #model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "unfrozen-weights" 
-    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_074145/model.pth"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "unfrozen-weights" 
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_074145/model.pth"
     # Define column names for metadata processing
     column_names = [
         "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         {"class":"MEL", "image":"PAT_680_1289_182.png", "age": "78", "orig_metadata": "PAT_680,1289,True,False,PORTUGAL,ITALY,78,False,MALE,True,True,True,True,2.0,BACK,10.0,10.0,MEL,False,True,False,True,False,True,PAT_680_1289_182.png,True"}
     ]
         # Create the subplots (6 images, each with 6 variations)
-    fig, axes = plt.subplots(len(wanted_image_list), 10, figsize=(21, len(wanted_image_list) * 2))
+    fig, axes = plt.subplots(len(wanted_image_list), 12, figsize=(21, len(wanted_image_list) * 2))
 
     for i, item in enumerate(wanted_image_list):
         image_class = item["class"]
@@ -241,32 +241,38 @@ if __name__ == "__main__":
 
         # Generating heatmaps for various attributes
         text_orig_metadata = image_orig_metadata
-        heatmap_resized_orig_metadata = generated_heatmap_image(text_orig_metadata, image_pil, device)
+        heatmap_resized_orig_metadata = generated_heatmap_image(text_orig_metadata, image_pil, device, model_path)
 
         # Missing data
         text_missing_metadata = f",881,,,,,,,,,,,,,,,,{image_class},,,,,,,{image_name},"
-        heatmap_resized_missing_metadata = generated_heatmap_image(text_missing_metadata, image_pil, device)
+        heatmap_resized_missing_metadata = generated_heatmap_image(text_missing_metadata, image_pil, device, model_path)
 
         text_age = f",881,,,,,{image_age},,,,,,,,,,,{image_class},,,,,,,{image_name},"
-        heatmap_resized_age = generated_heatmap_image(text_age, image_pil, device)
+        heatmap_resized_age = generated_heatmap_image(text_age, image_pil, device, model_path)
         
         text_grew = f",881,,,,,,,,,,,,,,,,{image_class},,True,,,,,{image_name},"
-        heatmap_resized_grew = generated_heatmap_image(text_grew, image_pil, device)
+        heatmap_resized_grew = generated_heatmap_image(text_grew, image_pil, device, model_path)
         
         text_bleed = f",881,,,,,,,,,,,,,,,,{image_class},,,,,True,,{image_name},"
-        heatmap_resized_bleed = generated_heatmap_image(text_bleed, image_pil, device)
+        heatmap_resized_bleed = generated_heatmap_image(text_bleed, image_pil, device, model_path)
         
         text_smoke = f",881,True,,,,,,,,,,,,,,,{image_class},,,,,,,{image_name},"
-        heatmap_resized_smoke = generated_heatmap_image(text_smoke, image_pil, device)
+        heatmap_resized_smoke = generated_heatmap_image(text_smoke, image_pil, device, model_path)
         
         text_itch = f",881,,,,,,,,,,,,,,,,{image_class},True,,,,,,{image_name},"
-        heatmap_resized_itch = generated_heatmap_image(text_itch, image_pil, device)
+        heatmap_resized_itch = generated_heatmap_image(text_itch, image_pil, device, model_path)
 
         text_elevation = f",881,,,,,,,,,,,,,,,,{image_class},,,,,,True,{image_name},"
-        heatmap_resized_elevation = generated_heatmap_image(text_itch, image_pil, device)
+        heatmap_resized_elevation = generated_heatmap_image(text_itch, image_pil, device, model_path)
 
-        text_cancer_history = f",881,,,,,,,,,,,,,,,,{image_class},,,,,,,{image_name},"
-        heatmap_resized_cancer_history = generated_heatmap_image(text_cancer_history, image_pil, device)
+        text_changed = f",881,,,,,,,,,,,,,,,,{image_class},,,,True,,,{image_name},"
+        heatmap_resized_changed = generated_heatmap_image(text_itch, image_pil, device, model_path)
+        
+        text_cancer_history = f",881,,,,,,,,,True,,,,,,,{image_class},,,,,,,{image_name},"
+        heatmap_resized_cancer_history = generated_heatmap_image(text_cancer_history, image_pil, device, model_path)
+
+        text_hurt = f",881,,,,,,,,,,,,,,,,{image_class},,,True,,,,{image_name},"
+        heatmap_resized_hurt = generated_heatmap_image(text_hurt, image_pil, device, model_path)
 
         # Plot the original image and heatmaps for each variation
         axes[i, 0].imshow(image_pil)
@@ -319,5 +325,14 @@ if __name__ == "__main__":
         axes[i, 9].set_title("Cancer history")
         axes[i, 9].axis('off')
 
+        axes[i, 10].imshow(image_pil)
+        axes[i, 10].imshow(heatmap_resized_changed, cmap='jet', alpha=0.4)
+        axes[i, 10].set_title("Changed")
+        axes[i, 10].axis('off')
+
+        axes[i, 11].imshow(image_pil)
+        axes[i, 11].imshow(heatmap_resized_hurt, cmap='jet', alpha=0.4)
+        axes[i, 11].set_title("Hurt")
+        axes[i, 11].axis('off')
     plt.tight_layout()
     plt.show()
