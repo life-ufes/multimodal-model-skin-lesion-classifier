@@ -206,8 +206,8 @@ if __name__ == "__main__":
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
     #model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
-    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "unfrozen-weights" 
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_074145/model.pth"
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "unfrozen-weights" 
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_074145/model.pth"
     # Define column names for metadata processing
     column_names = [
         "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
@@ -221,11 +221,11 @@ if __name__ == "__main__":
         {"class":"ACK", "image":"PAT_705_4015_413.png", "age": "58", "orig_metadata": "PAT_705,4015,False,True,GERMANY,GERMANY,58,True,FEMALE,True,True,True,True,1.0,FOREARM,9.0,7.0,ACK,False,True,False,False,False,False,PAT_705_4015_413.png,False"}, 
         {"class":"SCC", "image":"PAT_380_1540_959.png", "age": "60", "orig_metadata": "PAT_380,1540,False,False,NETHERLANDS,GERMANY,60,True,MALE,False,True,True,True,2.0,NOSE,3.0,3.0,SCC,True,False,False,False,False,False,PAT_380_1540_959.png,True"},
         {"class":"SEK", "image":"PAT_107_160_609.png", "age": "82", "orig_metadata": "PAT_107,160,False,False,POMERANIA,POMERANIA,82,False,FEMALE,False,False,False,False,1.0,CHEST,9.0,8.0,SEK,False,True,False,False,False,True,PAT_107_160_609.png,True"}, 
-        {"class":"NEV", "image":"PAT_793_1512_327.png", "age": "36", "orig_metadata": "PAT_793,1512,False,False,ITALY,ITALY,36,False,MALE,False,True,True,False,4.0,BACK,7.0,4.0,NEV,True,False,False,False,False,False,PAT_793_1512_327.png,True"}, 
+        {"class":"NEV", "image":"PAT_958_1812_62.png", "age": "66", "orig_metadata": "PAT_958,1812,False,False,POMERANIA,POMERANIA,66,False,FEMALE,False,False,True,True,3.0,SCALP,17.0,15.0,NEV,True,UNK,False,UNK,False,False,PAT_958_1812_62.png,True"}, 
         {"class":"MEL", "image":"PAT_680_1289_182.png", "age": "78", "orig_metadata": "PAT_680,1289,True,False,PORTUGAL,ITALY,78,False,MALE,True,True,True,True,2.0,BACK,10.0,10.0,MEL,False,True,False,True,False,True,PAT_680_1289_182.png,True"}
     ]
         # Create the subplots (6 images, each with 6 variations)
-    fig, axes = plt.subplots(len(wanted_image_list), 8, figsize=(21, len(wanted_image_list) * 2))
+    fig, axes = plt.subplots(len(wanted_image_list), 10, figsize=(21, len(wanted_image_list) * 2))
 
     for i, item in enumerate(wanted_image_list):
         image_class = item["class"]
@@ -261,6 +261,12 @@ if __name__ == "__main__":
         
         text_itch = f",881,,,,,,,,,,,,,,,,{image_class},True,,,,,,{image_name},"
         heatmap_resized_itch = generated_heatmap_image(text_itch, image_pil, device)
+
+        text_elevation = f",881,,,,,,,,,,,,,,,,{image_class},,,,,,True,{image_name},"
+        heatmap_resized_elevation = generated_heatmap_image(text_itch, image_pil, device)
+
+        text_cancer_history = f",881,,,,,,,,,,,,,,,,{image_class},,,,,,,{image_name},"
+        heatmap_resized_cancer_history = generated_heatmap_image(text_cancer_history, image_pil, device)
 
         # Plot the original image and heatmaps for each variation
         axes[i, 0].imshow(image_pil)
@@ -301,6 +307,17 @@ if __name__ == "__main__":
         axes[i, 7].imshow(heatmap_resized_itch, cmap='jet', alpha=0.4)
         axes[i, 7].set_title("Itch")
         axes[i, 7].axis('off')
+
+
+        axes[i, 8].imshow(image_pil)
+        axes[i, 8].imshow(heatmap_resized_elevation, cmap='jet', alpha=0.4)
+        axes[i, 8].set_title("Elevation")
+        axes[i, 8].axis('off')
+
+        axes[i, 9].imshow(image_pil)
+        axes[i, 9].imshow(heatmap_resized_cancer_history, cmap='jet', alpha=0.4)
+        axes[i, 9].set_title("Cancer history")
+        axes[i, 9].axis('off')
 
     plt.tight_layout()
     plt.show()
