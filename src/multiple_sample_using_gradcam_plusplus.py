@@ -206,8 +206,8 @@ if __name__ == "__main__":
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
     #model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "frozen-weights"
-    
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "unfrozen-weights" 
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_074145/model.pth"
     # Define column names for metadata processing
     column_names = [
         "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
@@ -217,19 +217,21 @@ if __name__ == "__main__":
     ]
 
     wanted_image_list = [
-        {"class":"BCC", "image":"PAT_46_881_939.png"}, 
-        {"class":"ACK", "image":"PAT_705_4015_413.png"}, 
-        {"class":"SCC", "image":"PAT_380_1540_959.png"},
-        {"class":"SEK", "image":"PAT_107_160_609.png"}, 
-        {"class":"NEV", "image":"PAT_793_1512_327.png"}, 
-        {"class":"MEL", "image":"PAT_680_1289_182.png"}
+        {"class":"BCC", "image":"PAT_46_881_939.png", "age": "55", "orig_metadata": "PAT_46,881,False,False,POMERANIA,POMERANIA,55,False,FEMALE,True,True,True,True,3.0,NECK,6.0,5.0,BCC,True,True,False,True,True,True,PAT_46_881_939.png,True"}, 
+        {"class":"ACK", "image":"PAT_705_4015_413.png", "age": "58", "orig_metadata": "PAT_705,4015,False,True,GERMANY,GERMANY,58,True,FEMALE,True,True,True,True,1.0,FOREARM,9.0,7.0,ACK,False,True,False,False,False,False,PAT_705_4015_413.png,False"}, 
+        {"class":"SCC", "image":"PAT_380_1540_959.png", "age": "60", "orig_metadata": "PAT_380,1540,False,False,NETHERLANDS,GERMANY,60,True,MALE,False,True,True,True,2.0,NOSE,3.0,3.0,SCC,True,False,False,False,False,False,PAT_380_1540_959.png,True"},
+        {"class":"SEK", "image":"PAT_107_160_609.png", "age": "82", "orig_metadata": "PAT_107,160,False,False,POMERANIA,POMERANIA,82,False,FEMALE,False,False,False,False,1.0,CHEST,9.0,8.0,SEK,False,True,False,False,False,True,PAT_107_160_609.png,True"}, 
+        {"class":"NEV", "image":"PAT_793_1512_327.png", "age": "36", "orig_metadata": "PAT_793,1512,False,False,ITALY,ITALY,36,False,MALE,False,True,True,False,4.0,BACK,7.0,4.0,NEV,True,False,False,False,False,False,PAT_793_1512_327.png,True"}, 
+        {"class":"MEL", "image":"PAT_680_1289_182.png", "age": "78", "orig_metadata": "PAT_680,1289,True,False,PORTUGAL,ITALY,78,False,MALE,True,True,True,True,2.0,BACK,10.0,10.0,MEL,False,True,False,True,False,True,PAT_680_1289_182.png,True"}
     ]
         # Create the subplots (6 images, each with 6 variations)
-    fig, axes = plt.subplots(len(wanted_image_list), 6, figsize=(18, len(wanted_image_list) * 3))
+    fig, axes = plt.subplots(len(wanted_image_list), 8, figsize=(21, len(wanted_image_list) * 2))
 
     for i, item in enumerate(wanted_image_list):
         image_class = item["class"]
         image_name = item["image"]
+        image_age = item["age"]
+        image_orig_metadata = item["orig_metadata"]
 
         # Load and preprocess image
         image_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20/images/{image_name}"
@@ -238,19 +240,26 @@ if __name__ == "__main__":
         processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
 
         # Generating heatmaps for various attributes
-        text_age = f",881,,,,,69,,,,,,,,,,,BCC,,,,,,,{image_name},"
+        text_orig_metadata = image_orig_metadata
+        heatmap_resized_orig_metadata = generated_heatmap_image(text_orig_metadata, image_pil, device)
+
+        # Missing data
+        text_missing_metadata = f",881,,,,,,,,,,,,,,,,{image_class},,,,,,,{image_name},"
+        heatmap_resized_missing_metadata = generated_heatmap_image(text_missing_metadata, image_pil, device)
+
+        text_age = f",881,,,,,{image_age},,,,,,,,,,,{image_class},,,,,,,{image_name},"
         heatmap_resized_age = generated_heatmap_image(text_age, image_pil, device)
         
-        text_grew = f",881,,,,,,,,,,,,,,,,BCC,,True,,,,,{image_name},"
+        text_grew = f",881,,,,,,,,,,,,,,,,{image_class},,True,,,,,{image_name},"
         heatmap_resized_grew = generated_heatmap_image(text_grew, image_pil, device)
         
-        text_bleed = f",881,,,,,,,,,,,,,,,,BCC,,,,,True,,{image_name},"
+        text_bleed = f",881,,,,,,,,,,,,,,,,{image_class},,,,,True,,{image_name},"
         heatmap_resized_bleed = generated_heatmap_image(text_bleed, image_pil, device)
         
-        text_smoke = f",881,True,,,,,,,,,,,,,,,BCC,,,,,,,{image_name},"
+        text_smoke = f",881,True,,,,,,,,,,,,,,,{image_class},,,,,,,{image_name},"
         heatmap_resized_smoke = generated_heatmap_image(text_smoke, image_pil, device)
         
-        text_itch = f",881,,,,,,,,,,,,,,,,BCC,True,,,,,,{image_name},"
+        text_itch = f",881,,,,,,,,,,,,,,,,{image_class},True,,,,,,{image_name},"
         heatmap_resized_itch = generated_heatmap_image(text_itch, image_pil, device)
 
         # Plot the original image and heatmaps for each variation
@@ -259,29 +268,39 @@ if __name__ == "__main__":
         axes[i, 0].axis('off')
 
         axes[i, 1].imshow(image_pil)
-        axes[i, 1].imshow(heatmap_resized_age, cmap='jet', alpha=0.4)
-        axes[i, 1].set_title("Age")
+        axes[i, 1].imshow(heatmap_resized_orig_metadata, cmap='jet', alpha=0.4)
+        axes[i, 1].set_title("Original metadata")
         axes[i, 1].axis('off')
 
         axes[i, 2].imshow(image_pil)
-        axes[i, 2].imshow(heatmap_resized_grew, cmap='jet', alpha=0.4)
-        axes[i, 2].set_title("Grew")
+        axes[i, 2].imshow(heatmap_resized_missing_metadata, cmap='jet', alpha=0.4)
+        axes[i, 2].set_title("No metadata")
         axes[i, 2].axis('off')
 
         axes[i, 3].imshow(image_pil)
-        axes[i, 3].imshow(heatmap_resized_bleed, cmap='jet', alpha=0.4)
-        axes[i, 3].set_title("Bleed")
+        axes[i, 3].imshow(heatmap_resized_age, cmap='jet', alpha=0.4)
+        axes[i, 3].set_title("Age")
         axes[i, 3].axis('off')
 
         axes[i, 4].imshow(image_pil)
-        axes[i, 4].imshow(heatmap_resized_smoke, cmap='jet', alpha=0.4)
-        axes[i, 4].set_title("Smoke")
+        axes[i, 4].imshow(heatmap_resized_grew, cmap='jet', alpha=0.4)
+        axes[i, 4].set_title("Grew")
         axes[i, 4].axis('off')
 
         axes[i, 5].imshow(image_pil)
-        axes[i, 5].imshow(heatmap_resized_itch, cmap='jet', alpha=0.4)
-        axes[i, 5].set_title("Itch")
+        axes[i, 5].imshow(heatmap_resized_bleed, cmap='jet', alpha=0.4)
+        axes[i, 5].set_title("Bleed")
         axes[i, 5].axis('off')
+
+        axes[i, 6].imshow(image_pil)
+        axes[i, 6].imshow(heatmap_resized_smoke, cmap='jet', alpha=0.4)
+        axes[i, 6].set_title("Smoke")
+        axes[i, 6].axis('off')
+
+        axes[i, 7].imshow(image_pil)
+        axes[i, 7].imshow(heatmap_resized_itch, cmap='jet', alpha=0.4)
+        axes[i, 7].set_title("Itch")
+        axes[i, 7].axis('off')
 
     plt.tight_layout()
     plt.show()
