@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler
 
 from models import multimodalIntraInterModal
 
@@ -35,9 +36,9 @@ def process_image(img, image_encoder="densenet169"):
     transform = load_transforms(image_encoder)
     return transform(image)
 
-def load_multimodal_model(device, model_path, attention_mecanism, vocab_size=85, n=1):
+def load_multimodal_model(device, model_path, attention_mecanism, vocab_size=85, n=1, num_classes=6):
     model = multimodalIntraInterModal.MultimodalModel(
-        num_classes=6,
+        num_classes=num_classes,
         num_heads=2,
         device=device,
         cnn_model_name="densenet169",
@@ -86,6 +87,65 @@ def one_hot_encoding(metadata):
         raise FileNotFoundError("StandardScaler file not found.")
     processed_metadata = np.hstack((categorical_data, numerical_data))
     return processed_metadata
+
+def one_hot_encoding_isic2019(metadata):
+    # Seleção das features
+    dataset_features = metadata.drop(columns=['image', 'lesion_id', 'category'])
+    # Convert specific columns to numeric if possible
+    # Definir as colunas categóricas e numéricas corretamente
+    for col in ['age_approx']:
+        dataset_features[col] = pd.to_numeric(dataset_features[col], errors='coerce')
+
+    # Identify categorical and numerical columns
+    categorical_cols = dataset_features.select_dtypes(include=['object', 'bool']).columns
+    numerical_cols = dataset_features.select_dtypes(include=['float64', 'int64']).columns
+    # Converter categóricas para string
+    dataset_features[categorical_cols] = dataset_features[categorical_cols].astype(str)
+
+    # Preencher valores faltantes nas colunas numéricas com a média da coluna
+    dataset_features[numerical_cols] = dataset_features[numerical_cols].fillna(-1)
+
+    os.makedirs('./src/results/preprocess_data', exist_ok=True)
+
+    # OneHotEncoder
+    if os.path.exists("./src/results/preprocess_data/ohe_isic2019.pickle"):
+        with open('./src/results/preprocess_data/ohe_isic2019.pickle', 'rb') as f:
+            ohe = pickle.load(f)
+        categorical_data = ohe.transform(dataset_features[categorical_cols])
+    else:
+        ohe = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+        categorical_data = ohe.fit_transform(dataset_features[categorical_cols])
+        with open('./src/results/preprocess_data/ohe_isic2019.pickle', 'wb') as f:
+            pickle.dump(ohe, f)
+
+    # StandardScaler
+    if os.path.exists("./src/results/preprocess_data/scaler_isic2019.pickle"):
+        with open('./src/results/preprocess_data/scaler_isic2019.pickle', 'rb') as f:
+            scaler = pickle.load(f)
+        numerical_data = scaler.transform(dataset_features[numerical_cols])
+    else:
+        scaler = StandardScaler()
+        numerical_data = scaler.fit_transform(dataset_features[numerical_cols])
+        with open('./src/results/preprocess_data/scaler_isic2019.pickle', 'wb') as f:
+            pickle.dump(scaler, f)
+
+    # Concatenar dados
+    processed_data = np.hstack((categorical_data, numerical_data))
+
+    # Labels
+    labels = metadata['category'].values
+    if os.path.exists("./src/results/preprocess_data/label_encoder_isic2019.pickle"):
+        with open('./src/results/preprocess_data/label_encoder_isic2019.pickle', 'rb') as f:
+            label_encoder = pickle.load(f)
+        encoded_labels = label_encoder.transform(labels)
+    else:
+        label_encoder = LabelEncoder()
+        encoded_labels = label_encoder.fit_transform(labels)
+        with open('./src/results/preprocess_data/label_encoder_isic2019.pickle', 'wb') as f:
+            pickle.dump(label_encoder, f)
+
+    return processed_data, encoded_labels, metadata['category'].unique()
+
 
 def resize_heatmap(heatmap, target_size):
     heatmap_tensor = torch.tensor(heatmap).unsqueeze(0).unsqueeze(0)
@@ -175,38 +235,61 @@ class GradCAMPlusPlus:
         cam = F.interpolate(cam, size=(H, W), mode='bilinear', align_corners=False)
         return cam.squeeze().cpu().detach().numpy()
 
-
+def get_colmns_format(dataset_name: str = "PAD-UFES-20"):
+    dataset_name_dict=[
+        { "dataset_name": "PAD-UFES-20", "columns": ["patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
+        "pesticide", "gender", "skin_cancer_history", "cancer_history", "has_piped_water",
+        "has_sewage_system", "fitspatrick", "region", "diameter_1", "diameter_2", "diagnostic", "itch",
+        "grew", "hurt", "changed", "bleed", "elevation", "img_id", "biopsed"] },
+        { "dataset_name": "ISIC-2019", "columns": ["image", "category", "age_approx", "anatom_site_general","lesion_id", "sex"] }
+    ]
+    # Verifica se há um dicionário válido em relação aos dados
+    for i, elem in enumerate(dataset_name_dict):
+        if elem["dataset_name"]==dataset_name:
+            aux = elem["columns"]
+    return aux
 # ===== Main Script for GradCAM++ =====
 
 if __name__ == "__main__":
-    device = torch.device("cpu") # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu") # torch.device("cuda" if torch.cuda.is_available() else "cpu")]
+    ## Escolha o modelo a ser usado
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
-    #model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250211_093309/model.pth" # "frozen-weights"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250211_093309/model.pth" # "frozen-weights"
+    ## ISIC-2019
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/ISIC2019/stratifiedkfold/2/all-weights-unfrozen/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250206_225539/model.pth"
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/ISIC2019/stratifiedkfold/2/all-weights-unfroozen/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250205_205810/model.pth"
     # Load and preprocess image
-    image_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20/images/PAT_46_881_14.png"
+    image_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/ISIC2019/ISIC_2019_Training_Input/ISIC_2019_Training_Input/ISIC_0000001.jpg"
     image_pil = Image.open(image_path)
     processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
     
-    # Define column names for metadata processing
-    column_names = [
-        "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
-        "pesticide", "gender", "skin_cancer_history", "cancer_history", "has_piped_water",
-        "has_sewage_system", "fitspatrick", "region", "diameter_1", "diameter_2", "diagnostic", "itch",
-        "grew", "hurt", "changed", "bleed", "elevation", "img_id", "biopsed"
-    ]
-    text = "PAT_46,881,,,,,,,,,,,,,,,,BCC,,True,,,,,PAT_46_881_14.png,"
-    metadata = process_data(text, column_names)
-    processed_metadata = one_hot_encoding(metadata)
-    processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
+    dataset_name="ISIC-2019"
     
-    # Load multimodal model
-    model = load_multimodal_model(device, model_path, "weighted-after-crossattention", n=2)
-    
+    if dataset_name == "ISIC-2019":
+        # ISIC-2019
+        text = "ISIC_0000000,NV,69.0,anterior torso,,female"
+        column_names=get_colmns_format(dataset_name=dataset_name) #"ISIC-2019")
+        metadata = process_data(text, column_names)
+        processed_metadata, _, _ = one_hot_encoding_isic2019(metadata) # one_hot_encoding(metadata)
+        processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
+        # Load multimodal model
+        model = load_multimodal_model(device, model_path, "weighted-after-crossattention", vocab_size=13, n=2, num_classes=8)
+    else:
+        # Define column names for metadata processing
+        ## PAD-UFES-20
+        text = "PAT_46,881,,,,,,,,,,,,,,,,BCC,,True,,,,,PAT_46_881_14.png,"
+        column_names=get_colmns_format(dataset_name=dataset_name) #"ISIC-2019")
+        metadata = process_data(text, column_names)
+        processed_metadata = one_hot_encoding(metadata)
+        processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
+        # Load multimodal model
+        model = load_multimodal_model(device, model_path, "weighted-after-crossattention", vocab_size=85, n=2, num_classes=6)
+        
     # Choose target layer for GradCAM++
     target_layer = model.image_encoder.features[-1]  # Adjust as needed
     
@@ -225,7 +308,7 @@ if __name__ == "__main__":
     
     axes[1].imshow(image_pil)
     axes[1].imshow(heatmap_resized, cmap='jet', alpha=0.4)
-    axes[1].set_title("Image with GradCAM++")
+    axes[1].set_title(f"Image with GradCAM++ - {dataset_name}")
     axes[1].axis('off')
     
     plt.tight_layout()

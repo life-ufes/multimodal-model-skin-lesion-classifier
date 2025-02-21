@@ -205,7 +205,7 @@ if __name__ == "__main__":
     # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
-    #model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "unfrozen-weights" 
     model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_074145/model.pth"
     # Define column names for metadata processing
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         {"class":"MEL", "image":"PAT_680_1289_182.png", "age": "78", "orig_metadata": "PAT_680,1289,True,False,PORTUGAL,ITALY,78,False,MALE,True,True,True,True,2.0,BACK,10.0,10.0,MEL,False,True,False,True,False,True,PAT_680_1289_182.png,True"}
     ]
         # Create the subplots (6 images, each with 6 variations)
-    fig, axes = plt.subplots(len(wanted_image_list), 12, figsize=(21, len(wanted_image_list) * 2))
+    fig, axes = plt.subplots(len(wanted_image_list), 12, figsize=(100, len(wanted_image_list) * 2))
 
     for i, item in enumerate(wanted_image_list):
         image_class = item["class"]
@@ -276,63 +276,63 @@ if __name__ == "__main__":
 
         # Plot the original image and heatmaps for each variation
         axes[i, 0].imshow(image_pil)
-        axes[i, 0].set_title(f"Original Image - {image_class}")
+        axes[i, 0].set_title(f"Original Image - {image_class}",  fontsize=10)
         axes[i, 0].axis('off')
 
         axes[i, 1].imshow(image_pil)
         axes[i, 1].imshow(heatmap_resized_orig_metadata, cmap='jet', alpha=0.4)
-        axes[i, 1].set_title("Original metadata")
+        axes[i, 1].set_title("Original metadata", fontsize=10)
         axes[i, 1].axis('off')
 
         axes[i, 2].imshow(image_pil)
         axes[i, 2].imshow(heatmap_resized_missing_metadata, cmap='jet', alpha=0.4)
-        axes[i, 2].set_title("No metadata")
+        axes[i, 2].set_title("No metadata", fontsize=10)
         axes[i, 2].axis('off')
 
         axes[i, 3].imshow(image_pil)
         axes[i, 3].imshow(heatmap_resized_age, cmap='jet', alpha=0.4)
-        axes[i, 3].set_title("Age")
+        axes[i, 3].set_title("Age", fontsize=10)
         axes[i, 3].axis('off')
 
         axes[i, 4].imshow(image_pil)
         axes[i, 4].imshow(heatmap_resized_grew, cmap='jet', alpha=0.4)
-        axes[i, 4].set_title("Grew")
+        axes[i, 4].set_title("Grew", fontsize=10)
         axes[i, 4].axis('off')
 
         axes[i, 5].imshow(image_pil)
         axes[i, 5].imshow(heatmap_resized_bleed, cmap='jet', alpha=0.4)
-        axes[i, 5].set_title("Bleed")
+        axes[i, 5].set_title("Bleed", fontsize=10)
         axes[i, 5].axis('off')
 
         axes[i, 6].imshow(image_pil)
         axes[i, 6].imshow(heatmap_resized_smoke, cmap='jet', alpha=0.4)
-        axes[i, 6].set_title("Smoke")
+        axes[i, 6].set_title("Smoke", fontsize=10)
         axes[i, 6].axis('off')
 
         axes[i, 7].imshow(image_pil)
         axes[i, 7].imshow(heatmap_resized_itch, cmap='jet', alpha=0.4)
-        axes[i, 7].set_title("Itch")
+        axes[i, 7].set_title("Itch", fontsize=10)
         axes[i, 7].axis('off')
 
 
         axes[i, 8].imshow(image_pil)
         axes[i, 8].imshow(heatmap_resized_elevation, cmap='jet', alpha=0.4)
-        axes[i, 8].set_title("Elevation")
+        axes[i, 8].set_title("Elevation", fontsize=10)
         axes[i, 8].axis('off')
 
         axes[i, 9].imshow(image_pil)
         axes[i, 9].imshow(heatmap_resized_cancer_history, cmap='jet', alpha=0.4)
-        axes[i, 9].set_title("Cancer history")
+        axes[i, 9].set_title("Cancer history", fontsize=10)
         axes[i, 9].axis('off')
 
         axes[i, 10].imshow(image_pil)
         axes[i, 10].imshow(heatmap_resized_changed, cmap='jet', alpha=0.4)
-        axes[i, 10].set_title("Changed")
+        axes[i, 10].set_title("Changed", fontsize=10)
         axes[i, 10].axis('off')
 
         axes[i, 11].imshow(image_pil)
         axes[i, 11].imshow(heatmap_resized_hurt, cmap='jet', alpha=0.4)
-        axes[i, 11].set_title("Hurt")
+        axes[i, 11].set_title("Hurt", fontsize=10)
         axes[i, 11].axis('off')
     plt.tight_layout()
     plt.show()
