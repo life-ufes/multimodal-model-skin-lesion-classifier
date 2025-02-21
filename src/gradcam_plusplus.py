@@ -257,18 +257,18 @@ if __name__ == "__main__":
     # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
-    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250211_093309/model.pth" # "frozen-weights"
     ## ISIC-2019
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/ISIC2019/stratifiedkfold/2/all-weights-unfrozen/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250206_225539/model.pth"
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/ISIC2019/stratifiedkfold/2/all-weights-unfroozen/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250205_205810/model.pth"
+    ## model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/ISIC2019/stratifiedkfold/2/all-weights-unfroozen/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250205_205810/model.pth"
     # Load and preprocess image
     image_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/ISIC2019/ISIC_2019_Training_Input/ISIC_2019_Training_Input/ISIC_0000001.jpg"
     image_pil = Image.open(image_path)
     processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
     
-    dataset_name="ISIC-2019"
+    dataset_name="PAD-UFES-20"
     
     if dataset_name == "ISIC-2019":
         # ISIC-2019
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     else:
         # Define column names for metadata processing
         ## PAD-UFES-20
-        text = "PAT_46,881,,,,,,,,,,,,,,,,BCC,,True,,,,,PAT_46_881_14.png,"
+        text = "PAT_46,881,,,,,30,,,,,,,,,,,BCC,,True,,,,,PAT_46_881_14.png,"
         column_names=get_colmns_format(dataset_name=dataset_name) #"ISIC-2019")
         metadata = process_data(text, column_names)
         processed_metadata = one_hot_encoding(metadata)

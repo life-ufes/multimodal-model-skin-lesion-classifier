@@ -39,3 +39,6 @@ heatmaps
 .gitignore
 teste_CLINICAL
 processed_data_one_hot_CLINICAL
+
+/src/tests/results
+src/tests/resultsstatistics_tests_results.csv
