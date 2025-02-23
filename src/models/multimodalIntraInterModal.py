@@ -4,7 +4,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from transformers import ViTFeatureExtractor
-
+from residualBlock import ResidualBlock
 from loadImageModelClassifier import loadModels
 
 class MultimodalModel(nn.Module):
@@ -70,7 +70,7 @@ class MultimodalModel(nn.Module):
 
         # -------------------------
         # 3) Atenções Intra e Inter
-        # -------------------------
+        # ------------------------
         self.image_self_attention = nn.MultiheadAttention(
             embed_dim=self.common_dim, 
             num_heads=self.num_heads,
@@ -92,7 +92,7 @@ class MultimodalModel(nn.Module):
             num_heads=self.num_heads,
             batch_first=False
         )
-
+        
         # -------------------------
         # 4) Gating Mechanisms
         # -------------------------
@@ -103,6 +103,11 @@ class MultimodalModel(nn.Module):
         # 5) Camada de Fusão Final
         # -------------------------
         self.fc_fusion = self.fc_mlp_module(n=self.n)
+
+        # 6) Residual Blocks
+        # -------------------------
+        self.image_residual = ResidualBlock(dim=self.common_dim)
+        self.text_residual = ResidualBlock(dim=self.common_dim)
 
     def fc_mlp_module(self, n=1):
         fc_fusion = nn.Sequential(
@@ -190,30 +195,60 @@ class MultimodalModel(nn.Module):
         text_features = text_features.permute(1, 0, 2)
 
         # === [C] Self-Attention Intra-Modality ===
+        # image_features_att, _ = self.image_self_attention(
+        #     image_features, image_features, image_features
+        # )
+        # text_features_att, _ = self.text_self_attention(
+        #     text_features, text_features, text_features
+        # )
+
+        # === [D] Cross-Attention Inter-Modality ===
+        # "Imagem assiste ao texto"
+        # image_cross_att, _ = self.image_cross_attention(
+        #     query=image_features_att,
+        #     key=text_features_att,
+        #     value=text_features_att
+        # )
+        # # "Texto assiste à imagem"
+        # text_cross_att, _ = self.text_cross_attention(
+        #     query=text_features_att,
+        #     key=image_features_att,
+        #     value=image_features_att
+        # )
+
         image_features_att, _ = self.image_self_attention(
             image_features, image_features, image_features
         )
         text_features_att, _ = self.text_self_attention(
             text_features, text_features, text_features
         )
+        
+        # image_features_att = self.image_residual(image_features_att, image_features_att, text_features_att)  # Residual Connection
 
-        # === [D] Cross-Attention Inter-Modality ===
+        text_features_att, _ = self.text_self_attention(
+            text_features, text_features, text_features
+        )
+        
+        # text_features_att = self.text_residual(text_features_att, text_features_att, image_features_att)  # Residual Connection
+
+        # === [E] Cross-Attention Inter-Modality ===
         # "Imagem assiste ao texto"
         image_cross_att, _ = self.image_cross_attention(
             query=image_features_att,
-            key=text_features_att,
+            key=image_features_att,
             value=text_features_att
         )
         # "Texto assiste à imagem"
         text_cross_att, _ = self.text_cross_attention(
             query=text_features_att,
-            key=image_features_att,
+            key=text_features_att,
             value=image_features_att
         )
 
-        # === [E] Pooling das atenções finais 
+        # # === [E] Pooling das atenções finais 
         image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
         text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+
 
         image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
@@ -239,7 +274,6 @@ class MultimodalModel(nn.Module):
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
 
         elif self.attention_mecanism == "concatenation":
-            # 
             if self.cnn_model_name=="google/vit-base-patch16-224":
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
