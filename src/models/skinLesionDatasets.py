@@ -40,7 +40,7 @@ class SkinLesionDataset(Dataset):
         return image, metadata, label
 
     def load_transforms(self):
-        if self.image_encoder=="vit-base-patch16-224":
+        if ((self.image_encoder=="google/vit-base-patch16-224") or (self.image_encoder=="openai/clip-vit-base-patch16")):
             # Transforma imagens para o formato necessário para treinamento
             transform = transforms.Compose([
                 transforms.Resize((224, 224)),

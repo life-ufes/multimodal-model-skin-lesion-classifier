@@ -33,10 +33,10 @@ class MultimodalModel(nn.Module):
             unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor
         )
         
-        # Se for ViT, teremos ViTFeatureExtractor
-        if self.cnn_model_name == "vit-base-patch16-224":
+        # # Se for ViT, teremos ViTFeatureExtractor
+        if (self.cnn_model_name =="google/vit-base-patch16-224" or self.cnn_model_name=="openai/clip-vit-base-patch16"):
             self.feature_extractor = ViTFeatureExtractor.from_pretrained(
-                f"google/{self.cnn_model_name}"
+                f"{self.cnn_model_name}"
             )
         # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
@@ -130,12 +130,19 @@ class MultimodalModel(nn.Module):
                        ou tensor se "one-hot-encoder".
         """
 
-        # === [A] Extrator de Imagem ===
-        if self.cnn_model_name == ("vit-base-patch16-224"):
-            inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
+        # === [A] Image Feature Extraction ===
+        if self.cnn_model_name in ["google/vit-base-patch16-224", "openai/clip-vit-base-patch16"]:
+            # Use the feature extractor (e.g., CLIPProcessor) to preprocess the image
+            inputs = self.feature_extractor(images=image, return_tensors="pt")
+            
+            # Move input tensors to the correct device
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
+            # Forward pass through the vision encoder
             outputs = self.image_encoder(**inputs)
-            # outputs.last_hidden_state => (batch, seq_len_img, hidden_dim)
-            image_features = outputs.last_hidden_state
+            
+            # Extract feature representations
+            image_features = outputs.last_hidden_state  # (batch, seq_len_img, hidden_dim)
         else:
             # CNN -> (batch, cnn_dim_output)
             image_features = self.image_encoder(image).to(self.device)
@@ -218,7 +225,7 @@ class MultimodalModel(nn.Module):
 
         elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
-            if self.cnn_model_name=="vit-base-patch16-224":
+            if self.cnn_model_name=="google/vit-base-patch16-224":
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
                 projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
@@ -233,7 +240,7 @@ class MultimodalModel(nn.Module):
 
         elif self.attention_mecanism == "concatenation":
             # 
-            if self.cnn_model_name=="vit-base-patch16-224":
+            if self.cnn_model_name=="google/vit-base-patch16-224":
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
                 projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)

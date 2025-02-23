@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-from transformers import ViTModel, CLIPModel, AutoModel
+from transformers import ViTModel, ViTImageProcessor, ViTFeatureExtractor, CLIPProcessor, CLIPModel, AutoModel
 
 class loadModels():
     @staticmethod
@@ -69,14 +69,29 @@ class loadModels():
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
                     nn.Linear(cnn_dim_output, cnn_dim_output)  # Manter a dimensão
                 )
-            elif cnn_model_name == "vit-base-patch16-224":
+            elif cnn_model_name == "google/vit-base-patch16-224":
                 # Carregar o modelo ViT pré-treinado
-                image_encoder = ViTModel.from_pretrained(f"google/{cnn_model_name}")
+                image_encoder = ViTModel.from_pretrained(f"{cnn_model_name}")
                 cnn_dim_output = image_encoder.config.hidden_size  # Ajustando a saída conforme o ViT
 
+                # Freeze weights if necessary
+                if not unfreeze_weights:
+                    for param in image_encoder.parameters():
+                        param.requires_grad = unfreeze_weights
+
             elif cnn_model_name == "openai/clip-vit-base-patch16":
-                image_encoder = CLIPModel.from_pretrained(cnn_model_name)
-                cnn_dim_output = image_encoder.config.vision_config.hidden_size  # Correção
+                # Load the CLIP model and extract the vision encoder
+                clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+                image_encoder = clip_model.vision_model  # Extract only the vision encoder
+
+                # Get the output dimension of the vision model
+                cnn_dim_output = clip_model.config.vision_config.hidden_size
+
+                # Freeze weights if necessary
+                if not unfreeze_weights:
+                    for param in image_encoder.parameters():
+                        param.requires_grad = False
+
 
             else:
                 raise ValueError("CNN não implementada.")
