@@ -206,8 +206,8 @@ if __name__ == "__main__":
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
-    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250215_085303/model.pth" # "unfrozen-weights" 
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_074145/model.pth"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_083801/model.pth" # "unfrozen-weights"
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250215_075350/model.pth" # "frozen-weights"
     # Define column names for metadata processing
     column_names = [
         "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
@@ -217,20 +217,21 @@ if __name__ == "__main__":
     ]
 
     wanted_image_list = [
-        {"class":"BCC", "image":"PAT_46_881_939.png", "age": "55", "orig_metadata": "PAT_46,881,False,False,POMERANIA,POMERANIA,55,False,FEMALE,True,True,True,True,3.0,NECK,6.0,5.0,BCC,True,True,False,True,True,True,PAT_46_881_939.png,True"}, 
-        {"class":"ACK", "image":"PAT_705_4015_413.png", "age": "58", "orig_metadata": "PAT_705,4015,False,True,GERMANY,GERMANY,58,True,FEMALE,True,True,True,True,1.0,FOREARM,9.0,7.0,ACK,False,True,False,False,False,False,PAT_705_4015_413.png,False"}, 
-        {"class":"SCC", "image":"PAT_380_1540_959.png", "age": "60", "orig_metadata": "PAT_380,1540,False,False,NETHERLANDS,GERMANY,60,True,MALE,False,True,True,True,2.0,NOSE,3.0,3.0,SCC,True,False,False,False,False,False,PAT_380_1540_959.png,True"},
-        {"class":"SEK", "image":"PAT_107_160_609.png", "age": "82", "orig_metadata": "PAT_107,160,False,False,POMERANIA,POMERANIA,82,False,FEMALE,False,False,False,False,1.0,CHEST,9.0,8.0,SEK,False,True,False,False,False,True,PAT_107_160_609.png,True"}, 
-        {"class":"NEV", "image":"PAT_958_1812_62.png", "age": "66", "orig_metadata": "PAT_958,1812,False,False,POMERANIA,POMERANIA,66,False,FEMALE,False,False,True,True,3.0,SCALP,17.0,15.0,NEV,True,UNK,False,UNK,False,False,PAT_958_1812_62.png,True"}, 
-        {"class":"MEL", "image":"PAT_680_1289_182.png", "age": "78", "orig_metadata": "PAT_680,1289,True,False,PORTUGAL,ITALY,78,False,MALE,True,True,True,True,2.0,BACK,10.0,10.0,MEL,False,True,False,True,False,True,PAT_680_1289_182.png,True"}
+        {"class":"BCC", "image":"PAT_46_881_939.png", "age": "55", "fitspatrick":"3.0", "orig_metadata": "PAT_46,881,False,False,POMERANIA,POMERANIA,55,False,FEMALE,True,True,True,True,3.0,NECK,6.0,5.0,BCC,True,True,False,True,True,True,PAT_46_881_939.png,True"}, 
+        {"class":"ACK", "image":"PAT_236_361_180.png", "age": "55", "fitspatrick":"3.0", "orig_metadata": "PAT_236,361,False,True,POMERANIA,POMERANIA,55,True,MALE,True,True,False,False,3.0,CHEST,6.0,5.0,ACK,True,False,False,False,False,True,PAT_236_361_180.png,True"}, 
+        {"class":"SCC", "image":"PAT_380_1540_959.png", "age": "60", "fitspatrick":"2.0", "orig_metadata": "PAT_380,1540,False,False,NETHERLANDS,GERMANY,60,True,MALE,False,True,True,True,2.0,NOSE,3.0,3.0,SCC,True,False,False,False,False,False,PAT_380_1540_959.png,True"},
+        {"class":"SEK", "image":"PAT_107_160_609.png", "age": "82", "fitspatrick":"1.0", "orig_metadata": "PAT_107,160,False,False,POMERANIA,POMERANIA,82,False,FEMALE,False,False,False,False,1.0,CHEST,9.0,8.0,SEK,False,True,False,False,False,True,PAT_107_160_609.png,True"}, 
+        {"class":"NEV", "image":"PAT_958_1812_62.png", "age": "66", "fitspatrick":"3.0", "orig_metadata": "PAT_958,1812,False,False,POMERANIA,POMERANIA,66,False,FEMALE,False,False,True,True,3.0,SCALP,17.0,15.0,NEV,True,UNK,False,UNK,False,False,PAT_958_1812_62.png,True"}, 
+        {"class":"MEL", "image":"PAT_680_1289_182.png", "age": "78", "fitspatrick":"2.0", "orig_metadata": "PAT_680,1289,True,False,PORTUGAL,ITALY,78,False,MALE,True,True,True,True,2.0,BACK,10.0,10.0,MEL,False,True,False,True,False,True,PAT_680_1289_182.png,True"}
     ]
         # Create the subplots (6 images, each with 6 variations)
-    fig, axes = plt.subplots(len(wanted_image_list), 12, figsize=(100, len(wanted_image_list) * 2))
+    fig, axes = plt.subplots(len(wanted_image_list), 13, figsize=(100, len(wanted_image_list) * 2))
 
     for i, item in enumerate(wanted_image_list):
         image_class = item["class"]
         image_name = item["image"]
         image_age = item["age"]
+        image_fitspatrick = item["fitspatrick"]
         image_orig_metadata = item["orig_metadata"]
 
         # Load and preprocess image
@@ -273,6 +274,9 @@ if __name__ == "__main__":
 
         text_hurt = f",881,,,,,,,,,,,,,,,,{image_class},,,True,,,,{image_name},"
         heatmap_resized_hurt = generated_heatmap_image(text_hurt, image_pil, device, model_path)
+
+        text_fitz = f",881,,,,,,,,,,,,{image_fitspatrick},,,,{image_class},,,,,,,{image_name},"
+        heatmap_resized_fitz = generated_heatmap_image(text_fitz, image_pil, device, model_path)
 
         # Plot the original image and heatmaps for each variation
         axes[i, 0].imshow(image_pil)
@@ -334,5 +338,11 @@ if __name__ == "__main__":
         axes[i, 11].imshow(heatmap_resized_hurt, cmap='jet', alpha=0.4)
         axes[i, 11].set_title("Hurt", fontsize=10)
         axes[i, 11].axis('off')
+
+        axes[i, 12].imshow(image_pil)
+        axes[i, 12].imshow(heatmap_resized_fitz, cmap='jet', alpha=0.4)
+        axes[i, 12].set_title("Fitspatrick", fontsize=10)
+        axes[i, 12].axis('off')
+
     plt.tight_layout()
     plt.show()

@@ -4,7 +4,8 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from transformers import ViTFeatureExtractor
-from residualBlock import ResidualBlock
+# from residualBlock import ResidualBlock
+from residualBlockADeepBasedMultimodal import ResidualBlock 
 from loadImageModelClassifier import loadModels
 
 class MultimodalModel(nn.Module):
@@ -134,25 +135,10 @@ class MultimodalModel(nn.Module):
         text_metadata: dicionário c/ 'input_ids', 'attention_mask' (BERT/Bart)
                        ou tensor se "one-hot-encoder".
         """
-
-        # === [A] Image Feature Extraction ===
-        if self.cnn_model_name in ["google/vit-base-patch16-224", "openai/clip-vit-base-patch16"]:
-            # Use the feature extractor (e.g., CLIPProcessor) to preprocess the image
-            inputs = self.feature_extractor(images=image, return_tensors="pt")
-            
-            # Move input tensors to the correct device
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            
-            # Forward pass through the vision encoder
-            outputs = self.image_encoder(**inputs)
-            
-            # Extract feature representations
-            image_features = outputs.last_hidden_state  # (batch, seq_len_img, hidden_dim)
-        else:
-            # CNN -> (batch, cnn_dim_output)
-            image_features = self.image_encoder(image).to(self.device)
-            # Dá forma (batch, 1, cnn_dim_output)
-            image_features = image_features.unsqueeze(1)
+        # CNN -> (batch, cnn_dim_output)
+        image_features = self.image_encoder(image).to(self.device)
+        # Dá forma (batch, 1, cnn_dim_output)
+        image_features = image_features.unsqueeze(1)
 
         # Projeção p/ espaço comum
         b_i, s_i, d_i = image_features.shape
@@ -163,30 +149,9 @@ class MultimodalModel(nn.Module):
         image_features = image_features.permute(1, 0, 2)
 
         # === [B] Extrator de Texto ===
-        if self.text_model_name == "one-hot-encoder":
-            text_features = self.text_fc(text_metadata)  # (batch, 512)
-            text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
-        else:
-            # Ajustar input_ids e attention_mask p/ shape [batch, seq_len]
-            input_ids = text_metadata["input_ids"]
-            attention_mask = text_metadata["attention_mask"]
-
-            if len(input_ids.shape) == 3:  # por ex. (batch, 1, seq_len)
-                input_ids = input_ids.squeeze(1)
-            if len(attention_mask.shape) == 3:
-                attention_mask = attention_mask.squeeze(1)
-
-            encoder_output = self.text_encoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask
-            )
-            text_features = encoder_output.last_hidden_state  # (batch, seq_len_text, 768)
-
-            b_t, s_t, d_t = text_features.shape
-            text_features = text_features.view(b_t*s_t, d_t)
-            text_features = self.text_fc(text_features)  # ex.: (batch*seq_t, 512)
-            text_features = text_features.view(b_t, s_t, -1)
-
+        text_features = self.text_fc(text_metadata)  # (batch, 512)
+        text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
+    
         # Projeção para espaço comum
         b_tt, s_tt, d_tt = text_features.shape
         text_features = text_features.view(b_tt*s_tt, d_tt)
@@ -222,36 +187,38 @@ class MultimodalModel(nn.Module):
         text_features_att, _ = self.text_self_attention(
             text_features, text_features, text_features
         )
-        
-        image_features_att = self.image_residual(image_features_att, image_features_att, text_features_att)  # Residual Connection
+        # === Uso do bloco 
+        image_features_att = self.image_residual(image_features_att, text_features_att, text_features_att)  # Residual Connection
 
         text_features_att, _ = self.text_self_attention(
             text_features, text_features, text_features
         )
         
-        text_features_att = self.text_residual(text_features_att, text_features_att, image_features_att)  # Residual Connection
+        text_features_att = self.text_residual(text_features_att, image_features_att, image_features_att)  # Residual Connection
 
-        # === [E] Cross-Attention Inter-Modality ===
-        # "Imagem assiste ao texto"
-        image_cross_att, _ = self.image_cross_attention(
-            query=image_features_att,
-            key=image_features_att,
-            value=text_features_att
-        )
-        # "Texto assiste à imagem"
-        text_cross_att, _ = self.text_cross_attention(
-            query=text_features_att,
-            key=text_features_att,
-            value=image_features_att
-        )
+        # # === [E] Cross-Attention Inter-Modality ===
+        # # "Imagem assiste ao texto"
+        # image_cross_att, _ = self.image_cross_attention(
+        #     query=image_features_att,
+        #     key=image_features_att,
+        #     value=text_features_att
+        # )
+        # # "Texto assiste à imagem"
+        # text_cross_att, _ = self.text_cross_attention(
+        #     query=text_features_att,
+        #     key=text_features_att,
+        #     value=image_features_att
+        # )
 
         # # === [E] Pooling das atenções finais 
-        image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-        text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+        # image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
+        # text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
 
+        image_features_att = image_features_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
+        text_features_att = text_features_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
 
-        image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
-        text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
+        image_pooled = image_features_att.mean(dim=1)  # (batch, common_dim)
+        text_pooled = text_features_att.mean(dim=1)    # (batch, common_dim)
         
         if self.attention_mecanism=="no-metadata":
             combined_features = projected_image_features
@@ -259,11 +226,11 @@ class MultimodalModel(nn.Module):
             return output
 
         elif self.attention_mecanism == "weighted":
-            # # === [F] Gating: quanto usar de 'peso' para cada modal
-            if self.cnn_model_name=="google/vit-base-patch16-224":
-                # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
-                projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
-                projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
+            # # # === [F] Gating: quanto usar de 'peso' para cada modal
+            # if self.cnn_model_name=="google/vit-base-patch16-224":
+            #     # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
+            #     projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
+            #     projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
 
             alpha_img = torch.sigmoid(self.img_gate(projected_image_features))  # (batch, common_dim)
             alpha_txt = torch.sigmoid(self.txt_gate(projected_text_features))   # (batch, common_dim)
@@ -274,10 +241,10 @@ class MultimodalModel(nn.Module):
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
 
         elif self.attention_mecanism == "concatenation":
-            if self.cnn_model_name=="google/vit-base-patch16-224":
-                # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
-                projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
-                projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
+            # if self.cnn_model_name=="google/vit-base-patch16-224":
+            #     # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
+            #     projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
+            #     projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
             
             # Apenas concatena as features projetadas
             combined_features = torch.cat([projected_image_features, projected_text_features], dim=1)

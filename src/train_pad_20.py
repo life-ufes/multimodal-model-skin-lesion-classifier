@@ -4,6 +4,7 @@ from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
 from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning
+from models import multimodalIntraInterModalPaperADeepLearningBased
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import KFold, train_test_split, StratifiedKFold
@@ -21,6 +22,8 @@ def compute_class_weights(labels):
     class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
 
+from tqdm import tqdm
+
 def train_process(num_epochs, 
                   num_heads, 
                   fold_num, 
@@ -35,7 +38,7 @@ def train_process(num_epochs,
                   text_model_encoder, 
                   attention_mecanism, 
                   results_folder_path):
-    
+
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
 
@@ -63,7 +66,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20-MODEL-86-FEATURES-OF-METADATA-BEST-MODEL-ARCHITECTURE-WITH STRATIFIED"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20 - RESIDUAL BLOCK USAGE"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -88,7 +91,9 @@ def train_process(num_epochs,
             model.train()
             running_loss = 0.0
 
-            for batch_index, (image, metadata, label) in enumerate(train_loader):
+            # Adicionando barra de progresso para o loop de batches
+            for batch_index, (image, metadata, label) in enumerate(
+                    tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
                 image, metadata, label = (
                     image.to(device),
                     metadata.to(device),
@@ -104,7 +109,6 @@ def train_process(num_epochs,
                 running_loss += loss.item()
             
             train_loss = running_loss / len(train_loader)
-            print("===" * 40)
             print(f"\nTraining: Epoch {epoch_index}, Loss: {train_loss:.4f}")
 
             # -----------------------------
@@ -188,6 +192,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
+
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path):
     all_metrics = []
 
@@ -214,7 +219,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        model = multimodalIntraInterModalPaperADeepLearningBased.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
 
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
@@ -257,18 +262,18 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 4
+    batch_size = 64
     k_folds=5
     common_dim=512
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
-    dataset_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
-    results_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/PAD-UFES-20"
+    dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
+    results_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/original-architecture/frozen-weights"
     unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    list_of_attention_mecanism = ["concatenation"] # ["weighted-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["vgg16"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224"]
+    list_of_models = ["resnet-50"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

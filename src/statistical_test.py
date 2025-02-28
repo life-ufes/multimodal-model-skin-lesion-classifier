@@ -41,8 +41,8 @@ if __name__ == "__main__":
     list_all_models_metrics = []
     list_all_models_metrics_all_lists = []
     method_names = []
-    base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/2/"
-    list_of_attention_mecanism = ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/residual-block/frozen-weights/2"
+    list_of_attention_mecanism = ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention", "no-metadata"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
         list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]

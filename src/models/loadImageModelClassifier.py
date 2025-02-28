@@ -90,7 +90,7 @@ class loadModels():
                 # Freeze weights if necessary
                 if not unfreeze_weights:
                     for param in image_encoder.parameters():
-                        param.requires_grad = False
+                        param.requires_grad = unfreeze_weights
 
 
             else:

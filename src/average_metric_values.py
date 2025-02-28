@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     list_of_attention_mecanism = ["no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     
-    base_folder_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/512"
+    base_folder_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/frozen-weights/2"
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
         list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]

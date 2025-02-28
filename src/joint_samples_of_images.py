@@ -13,18 +13,28 @@ def load_image(image_name_folder_path: str):
         return None
 
 def main():
-    image_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20/images"
+    image_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/ISIC2019/ISIC_2019_Training_Input/ISIC_2019_Training_Input"
+    # wanted_image_list = [
+    #     {"class":"BCC", "image":"PAT_46_881_939.png"}, 
+    #     {"class":"ACK", "image":"PAT_705_4015_413.png"}, 
+    #     {"class":"SCC", "image":"PAT_380_1540_959.png"},
+    #     {"class":"SEK", "image":"PAT_107_160_609.png"}, 
+    #     {"class":"NEV", "image":"PAT_793_1512_327.png"}, 
+    #     {"class":"MEL", "image":"PAT_680_1289_182.png"}
+    # ]
     wanted_image_list = [
-        {"class":"BCC", "image":"PAT_46_881_939.png"}, 
-        {"class":"ACK", "image":"PAT_705_4015_413.png"}, 
-        {"class":"SCC", "image":"PAT_380_1540_959.png"},
-        {"class":"SEK", "image":"PAT_107_160_609.png"}, 
-        {"class":"NEV", "image":"PAT_793_1512_327.png"}, 
-        {"class":"MEL", "image":"PAT_680_1289_182.png"}
+        {"class":"NV", "image":"ISIC_0000000.jpg"}, 
+        {"class":"MEL", "image":"ISIC_0000002.jpg"}, 
+        {"class":"BKL", "image":"ISIC_0010491.jpg"},
+        {"class":"VASC", "image":"ISIC_0024370.jpg"}, 
+        {"class":"SCC", "image":"ISIC_0024372.jpg"}, 
+        {"class":"BCC", "image": "ISIC_0024403.jpg"},
+        {"class":"AK", "image": "ISIC_0024468.jpg"},
+        {"class":"DF", "image":"ISIC_0024386.jpg"}
     ]
-    
+
     # Create a figure for the plot
-    f, axarr = plt.subplots(nrows=1, ncols=6, figsize=(12, 8))  # Adjust the grid size to match the number of images
+    f, axarr = plt.subplots(nrows=2, ncols=4, figsize=(12, 8))  # Adjust the grid size to match the number of images
     axarr = axarr.ravel()  # Flatten the array of axes for easy indexing
 
     for i, item in enumerate(wanted_image_list):
