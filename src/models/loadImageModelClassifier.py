@@ -76,7 +76,7 @@ class loadModels():
                 )
             elif cnn_model_name == "google/vit-base-patch16-224":
                 # Carregar o modelo ViT pré-treinado
-                image_encoder = ViTModel.from_pretrained(f"{cnn_model_name}")
+                image_encoder = ViTModel.from_pretrained(f"google/{cnn_model_name}")
                 cnn_dim_output = image_encoder.config.hidden_size  # Ajustando a saída conforme o ViT
                 # Congelar os pesos
                 for param in image_encoder.parameters():
@@ -85,7 +85,7 @@ class loadModels():
 
             elif cnn_model_name == "openai/clip-vit-base-patch16":
                 # Load the CLIP model and extract the vision encoder
-                clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+                clip_model = CLIPModel.from_pretrained(f"{cnn_model_name}")
                 image_encoder = clip_model.vision_model  # Extract only the vision encoder
 
                 # Get the output dimension of the vision model
@@ -95,6 +95,19 @@ class loadModels():
                 if not unfreeze_weights:
                     for param in image_encoder.parameters():
                         param.requires_grad = unfreeze_weights
+
+            elif cnn_model_name == "dinov2_vits14":  # Escolha a variante correta
+                # Carregar o modelo DINOv2 usando torch.hub
+                image_encoder = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
+
+                # Ajustar a saída do modelo
+                cnn_dim_output = image_encoder.embed_dim  # O DINOv2 não usa config.hidden_size como o ViT
+
+                # Congelar os pesos se necessário
+                for param in image_encoder.parameters():
+                    param.requires_grad = unfreeze_weights
+
+            
             else:
                 raise ValueError("CNN não implementada.")
             return image_encoder, cnn_dim_output

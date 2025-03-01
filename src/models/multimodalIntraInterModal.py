@@ -33,7 +33,7 @@ class MultimodalModel(nn.Module):
         )
 
         # Se for ViT, teremos ViTFeatureExtractor
-        if (self.cnn_model_name =="google/vit-base-patch16-224" or self.cnn_model_name=="openai/clip-vit-base-patch16"):
+        if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
             self.feature_extractor = ViTFeatureExtractor.from_pretrained(
                 f"{self.cnn_model_name}"
             )
@@ -130,7 +130,7 @@ class MultimodalModel(nn.Module):
         ou tensor se "one-hot-encoder".
         """
         # === [A] Extrator de Imagem ===
-        if self.cnn_model_name in ["google/vit-base-patch16-224", "openai/clip-vit-base-patch16"]:
+        if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
             inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
             outputs = self.image_encoder(**inputs)
             # outputs.last_hidden_state => (batch, seq_len_img, hidden_dim)
@@ -207,7 +207,7 @@ class MultimodalModel(nn.Module):
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
 
         if self.attention_mecanism=="no-metadata":
-            if (self.cnn_model_name =="google/vit-base-patch16-224" or self.cnn_model_name=="openai/clip-vit-base-patch16"):
+            if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
             combined_features = projected_image_features
@@ -215,7 +215,7 @@ class MultimodalModel(nn.Module):
             return output
         elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
-            if (self.cnn_model_name =="google/vit-base-patch16-224" or self.cnn_model_name=="openai/clip-vit-base-patch16"):
+            if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
                 projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
@@ -227,7 +227,7 @@ class MultimodalModel(nn.Module):
             text_pooled_gated = alpha_txt * projected_text_features
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
         elif self.attention_mecanism == "concatenation":
-            if (self.cnn_model_name =="google/vit-base-patch16-224" or self.cnn_model_name=="openai/clip-vit-base-patch16"):
+            if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
                 projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
