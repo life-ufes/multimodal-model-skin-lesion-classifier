@@ -15,14 +15,13 @@ import pandas as pd
 from torch.utils.data import DataLoader, Subset
 # Importações do MLflow
 import mlflow
+from tqdm import tqdm
 
 def compute_class_weights(labels):
     class_counts = Counter(labels)
     total_samples = len(labels)
     class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
-
-from tqdm import tqdm
 
 def train_process(num_epochs, 
                   num_heads, 
@@ -219,7 +218,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModalPaperADeepLearningBased.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
 
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
@@ -268,12 +267,12 @@ if __name__ == "__main__":
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
-    dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
-    results_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/original-architecture/frozen-weights"
+    dataset_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
+    results_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/testes"
     unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["concatenation"] # ["weighted-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["resnet-50"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224"]
+    list_of_models = ["openai/clip-vit-base-patch16"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

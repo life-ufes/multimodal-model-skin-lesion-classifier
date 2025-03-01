@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-from transformers import ViTModel, ViTImageProcessor, ViTFeatureExtractor, CLIPProcessor, CLIPModel, AutoModel
-
+from transformers import ViTModel, CLIPModel, CLIPProcessor, AutoModel
 class loadModels():
     @staticmethod
     def loadModelImageEncoder(cnn_model_name, common_dim, unfreeze_weights=False):
@@ -17,14 +16,17 @@ class loadModels():
                     nn.Linear(16 * 56 * 56, common_dim)
                 )
                 cnn_dim_output = common_dim
+
             elif cnn_model_name == "resnet-50":
                 image_encoder = models.resnet50(pretrained=True)
                 cnn_dim_output = 2048
+
                 # Congelar os pesos da ResNet-50
                 for param in image_encoder.parameters():
                     param.requires_grad = unfreeze_weights
                 # Substituir a camada final por uma identidade
                 image_encoder.fc = nn.Identity()
+
             elif cnn_model_name == "resnet-18":
                 image_encoder = models.resnet18(pretrained=True)
                 cnn_dim_output = 512
@@ -39,11 +41,13 @@ class loadModels():
                 cnn_dim_output = 4096
                 for param in image_encoder.parameters():
                     param.requires_grad = unfreeze_weights
+
                 # Ajustar a saída para manter a dimensão esperada (4096)
                 image_encoder.classifier = nn.Sequential(
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
                     nn.Linear(4096, 4096)  # Garantir que a saída permanece 4096
                 )
+
             elif cnn_model_name == "densenet169":
                 image_encoder = models.densenet169(pretrained=True)
                 cnn_dim_output = 1664
@@ -64,6 +68,7 @@ class loadModels():
                 # Congelar os pesos
                 for param in image_encoder.parameters():
                     param.requires_grad = unfreeze_weights
+
                 # Ajustar a saída para manter a dimensão esperada (1280)
                 image_encoder.classifier = nn.Sequential(
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
@@ -73,11 +78,10 @@ class loadModels():
                 # Carregar o modelo ViT pré-treinado
                 image_encoder = ViTModel.from_pretrained(f"{cnn_model_name}")
                 cnn_dim_output = image_encoder.config.hidden_size  # Ajustando a saída conforme o ViT
+                # Congelar os pesos
+                for param in image_encoder.parameters():
+                    param.requires_grad = unfreeze_weights
 
-                # Freeze weights if necessary
-                if not unfreeze_weights:
-                    for param in image_encoder.parameters():
-                        param.requires_grad = unfreeze_weights
 
             elif cnn_model_name == "openai/clip-vit-base-patch16":
                 # Load the CLIP model and extract the vision encoder
@@ -91,8 +95,6 @@ class loadModels():
                 if not unfreeze_weights:
                     for param in image_encoder.parameters():
                         param.requires_grad = unfreeze_weights
-
-
             else:
                 raise ValueError("CNN não implementada.")
             return image_encoder, cnn_dim_output
@@ -106,6 +108,7 @@ class loadModels():
         # Congelar os pesos
         for param in bert_model.parameters():
             param.requires_grad = False
+
         # Saída do modelo
         text_encoder_dim_output = 768  # Atualizado para o padrão do BERT
         return bert_model, text_encoder_dim_output
