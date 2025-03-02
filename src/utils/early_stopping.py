@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import os
 
 class EarlyStopping:
     """
@@ -82,11 +83,13 @@ class EarlyStopping:
         Saves the best model checkpoint if save_to_disk=True. Also prints 
         a message if verbose=True.
         """
+        # Caso não exista, a pasta será criada
+        os.makedirs(self.path, exist_ok=True)
         if self.save_to_disk:
-            torch.save(model.state_dict(), self.path)
+            torch.save(model.state_dict(), self.path+'best_model.pt')
+            print(f"Saving best model...")
         if self.verbose:
-            print(f"Validation loss decreased to {val_loss:.6f}. "
-                  f"Saving best model...")
+            print(f"Validation loss decreased to {val_loss:.6f}.")
 
     def load_best_weights(self, model):
         """

@@ -51,14 +51,23 @@ def train_process(num_epochs,
     )
     model.to(device)
 
+    # Save the final (or best) model
+    model_save_path = os.path.join(
+        results_folder_path, 
+        f"model_{model_name}_with_{text_model_encoder}_{common_dim}_with_best_architecture"
+    )
+
+    os.makedirs(model_save_path, exist_ok=True)
+    print(model_save_path)
+
     # Instantiate EarlyStopping
     # Make sure EarlyStopping stores model.state_dict(), not the entire model.
     early_stopping = EarlyStopping(
         patience=5, 
         delta=0.01, 
         verbose=True,
-        path='best_model.pt',   # Where to save the best weights (optional)
-        save_to_disk=False       # If True, saves best weights to 'best_model.pt'
+        path=str(model_save_path+f'/{str(fold_num)}/best-model/'),   # Where to save the best weights (optional)
+        save_to_disk=True       # If True, saves best weights to 'best_model.pt'
     )
 
     initial_time = time.time()
@@ -171,11 +180,6 @@ def train_process(num_epochs,
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
 
-    # Save the final (or best) model
-    model_save_path = os.path.join(
-        results_folder_path, 
-        f"model_{model_name}_with_{text_model_encoder}_{common_dim}_with_best_architecture"
-    )
     save_model_and_metrics(
         model, 
         metrics, 
@@ -218,7 +222,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        model = multimodalIntraInterModalPaperADeepLearningBased.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
 
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
@@ -267,11 +271,11 @@ if __name__ == "__main__":
     text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
-    dataset_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
-    results_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/testes"
+    dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
+    results_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/PaperADeepLearningBased/frozen-weights"
     unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
-    # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["no-metadata"] # ["weighted-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+     # Para todas os tipos de estratégias a serem usadas
+    list_of_attention_mecanism = ["concatenation"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
     list_of_models = ["dinov2_vits14"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
     # Treina todos modelos que podem ser usados no modelo multi-modal

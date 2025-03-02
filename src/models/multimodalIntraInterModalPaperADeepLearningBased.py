@@ -4,8 +4,8 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from transformers import ViTFeatureExtractor
-# from residualBlock import ResidualBlock
-from residualBlockADeepBasedMultimodal import ResidualBlock 
+from residualBlock import ResidualBlock
+# from residualBlockADeepBasedMultimodal import ResidualBlock 
 from loadImageModelClassifier import loadModels
 
 class MultimodalModel(nn.Module):
@@ -188,13 +188,13 @@ class MultimodalModel(nn.Module):
             text_features, text_features, text_features
         )
         # === Uso do bloco 
-        image_features_att = self.image_residual(image_features_att, text_features_att, text_features_att)  # Residual Connection
+        image_features_att = self.image_residual(image_features_att, text_features_att, image_features_att)  # Residual Connection
 
         text_features_att, _ = self.text_self_attention(
             text_features, text_features, text_features
         )
         
-        text_features_att = self.text_residual(text_features_att, image_features_att, image_features_att)  # Residual Connection
+        text_features_att = self.text_residual(text_features_att, image_features_att, text_features_att)  # Residual Connection
 
         # # === [E] Cross-Attention Inter-Modality ===
         # # "Imagem assiste ao texto"

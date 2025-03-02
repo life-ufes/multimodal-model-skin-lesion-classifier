@@ -91,6 +91,19 @@ if __name__ == "__main__":
     list_all_models_metrics_all_lists=[]
     list_of_used_algs.append("our-model")
     list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+
+    ## Add dos dados do do trabalho 'A deep learning based multimodal ....'
+    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/original-architecture/frozen-weights/2/concatenation/model_resnet-50_with_one-hot-encoder_512_with_best_architecture"
+    # Load dataset (though not used directly here)
+    file_content = load_dataset(file_folder_path)
+    # Carregar os dados do modelo multimodal - PAD-UFES-20
+    
+    # Get metric values for the specified metrics
+    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
+    list_of_used_algs.append("Fully-CrossAttention")
+    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+
+    
     for alg in ["no-metadata", "concat", "metanet", "metablock"]:
         file_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results/PAD-20/{alg}"
         # Concat, Metablock, MetaNet

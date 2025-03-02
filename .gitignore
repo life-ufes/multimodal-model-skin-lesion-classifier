@@ -43,3 +43,5 @@ processed_data_one_hot_CLINICAL
 /src/tests/results
 src/tests/resultsstatistics_tests_results.csv
 src/src
+/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests
+src/tests/__pycache__/stats.cpython-312.pyc
