@@ -222,8 +222,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModalPaperADeepLearningBased.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
-
+        # model = multimodalIntraModalWithBert.MultimodalModel(num_classes=num_classes, device=device, cnn_model_name=model_name, text_model_name=text_model_encoder)
+        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
@@ -236,15 +236,22 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
         for model_name in list_of_models:
             for num_heads in list_num_heads:
                 try:
-                    dataset = skinLesionDatasets.SkinLesionDataset(
-                    metadata_file=f"{dataset_folder_path}/metadata.csv",
-                    img_dir=f"{dataset_folder_path}/images",
-                    bert_model_name=text_model_encoder,
-                    image_encoder=model_name,
-                    drop_nan=False,
-                    random_undersampling=False
-                    )
-                    num_metadata_features = dataset.features.shape[1]
+                    if text_model_encoder=='one-hot-encoder':
+                        dataset = skinLesionDatasets.SkinLesionDataset(
+                        metadata_file=f"{dataset_folder_path}/metadata.csv",
+                        img_dir=f"{dataset_folder_path}/images",
+                        bert_model_name=text_model_encoder,
+                        image_encoder=model_name,
+                        drop_nan=False)
+                    else:
+                        dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
+                        metadata_file=f"{dataset_folder_path}/metadata_with_sentences.csv",
+                        img_dir=f"{dataset_folder_path}/images",
+                        bert_model_name=text_model_encoder,
+                        image_encoder=model_name,
+                        drop_nan=False)
+
+                    num_metadata_features = dataset.features.shape[1] if text_model_encoder== 'one-hot-encoder' else 512
                     print(f"Número de features do metadados: {num_metadata_features}\n")
                     num_classes = len(dataset.metadata['diagnostic'].unique())
 
@@ -268,15 +275,15 @@ if __name__ == "__main__":
     batch_size = 64
     k_folds=5
     common_dim=512
-    text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
+    text_model_encoder = 'bert-base-uncased' # 'one-hot-encoder' # 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
-    dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
-    results_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/PaperADeepLearningBased/frozen-weights"
+    dataset_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
+    results_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/testes"
     unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
      # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["concatenation"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["dinov2_vits14"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
+    list_of_models = ["mobilenet-v2"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

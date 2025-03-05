@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-from transformers import ViTModel, CLIPModel, CLIPProcessor, AutoModel
+from transformers import ViTModel, CLIPModel, CLIPProcessor, AutoModel, BertModel
 class loadModels():
     @staticmethod
     def loadModelImageEncoder(cnn_model_name, common_dim, unfreeze_weights=False):
@@ -117,11 +117,10 @@ class loadModels():
 
     @staticmethod
     def loadTextModelEncoder(text_model_encoder):
-        bert_model = AutoModel.from_pretrained(text_model_encoder)
-        # Congelar os pesos
-        for param in bert_model.parameters():
+        # Definir encoder de texto (BERT)
+        text_encoder = BertModel.from_pretrained(text_model_encoder)
+        for param in text_encoder.parameters():
             param.requires_grad = False
 
-        # Saída do modelo
-        text_encoder_dim_output = 768  # Atualizado para o padrão do BERT
-        return bert_model, text_encoder_dim_output
+        bert_output_dim = text_encoder.config.hidden_size
+        return text_encoder, bert_output_dim

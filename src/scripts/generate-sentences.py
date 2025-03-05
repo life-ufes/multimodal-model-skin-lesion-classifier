@@ -75,7 +75,7 @@ if __name__ == "__main__":
     if file_content is not None:
         for _, row in file_content.iterrows():
             data = preprocess_patient_data(row, columns_names)
-            print("="*180)
+            print("=#=#"*10)
             print("Dados processados:", data)
             sentence = convert_to_sentence(data, model_name, device)
             print("Generated Sentence:", sentence)

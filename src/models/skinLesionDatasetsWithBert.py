@@ -7,12 +7,13 @@ from torchvision import transforms
 import torch
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', image_encoder="resnet-18"):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', image_encoder="resnet-18", random_undersampling=False):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
         self.image_encoder = image_encoder
+        self.random_undersampling=random_undersampling
         self.targets = None
         self.transform = self.load_transforms()
         self.tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
@@ -37,12 +38,9 @@ class SkinLesionDataset(Dataset):
             image = self.transform(image)
 
         # Processar texto dos metadados
-        textual_data = self.metadata.iloc[idx].drop(
-            ['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'], errors='ignore'
-        )
-        text = ' '.join(map(str, textual_data.values))
+        textual_data = self.metadata.iloc[idx]['sentence']
         tokenized_text = self.tokenizer(
-            text,
+            textual_data,
             padding='max_length',
             truncation=True,
             return_tensors="pt",
