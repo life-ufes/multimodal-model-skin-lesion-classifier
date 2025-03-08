@@ -43,8 +43,8 @@ class MultimodalModel(nn.Module):
         # -------------------------
         # 2) Text Encoder
         # -------------------------
-        if self.text_model_name == "one-hot-encoder":
-            # Metadados / one-hot -> FC
+        if (self.text_model_name == "one-hot-encoder"):
+         # Metadados / one-hot -> FC
             self.text_fc = nn.Sequential(
                 nn.Linear(vocab_size, 256),
                 nn.ReLU(),
@@ -60,7 +60,7 @@ class MultimodalModel(nn.Module):
             )
             # Projeta 768 (ou 1024) -> 512
             self.text_fc = nn.Sequential(
-                nn.Linear(768, self.text_encoder_dim_output),
+                nn.Linear(85, self.text_encoder_dim_output),
                 nn.ReLU(),
                 nn.Dropout(0.3)
             )
@@ -93,6 +93,29 @@ class MultimodalModel(nn.Module):
             num_heads=self.num_heads,
             batch_first=False
         )
+
+        self.image_transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=common_dim, 
+                nhead=num_heads, 
+                dim_feedforward=4 * common_dim,  
+                dropout=0.1, 
+                batch_first=False
+            ), 
+            num_layers=num_heads  # Empilha múltiplas camadas
+        )
+
+        self.text_transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=common_dim, 
+                nhead=num_heads, 
+                dim_feedforward=4 * common_dim,  
+                dropout=0.1, 
+                batch_first=False
+            ), 
+            num_layers=num_heads
+        )
+
         # -------------------------
         # 4) Gating Mechanisms
         # -------------------------
@@ -147,16 +170,15 @@ class MultimodalModel(nn.Module):
         # -> (seq_len_img, batch, common_dim)
         image_features = image_features.permute(1, 0, 2)
         # === [B] Extrator de Texto ===
-        if self.text_model_name == "one-hot-encoder":
-            text_features = self.text_fc(text_metadata)  # (batch, 512)
-            text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
-    
-            # Projeção para espaço comum
+        if (self.text_model_name == "one-hot-encoder" or self.text_model_name=="tab-transformer"):
+            text_features = self.text_fc(text_metadata)  # Espera transformar de 85 -> 256 -> 512 -> text_encoder_dim_output
+            text_features = text_features.unsqueeze(1)
             b_tt, s_tt, d_tt = text_features.shape
             text_features = text_features.view(b_tt*s_tt, d_tt)
             projected_text_features = self.text_projector(text_features)
             text_features = projected_text_features.view(b_tt, s_tt, -1)
             text_features = text_features.permute(1, 0, 2)
+
     
         else:
             # Processar o texto com BERT
@@ -174,23 +196,14 @@ class MultimodalModel(nn.Module):
 
             # Agora a permute funciona se você precisar de [seq_len, batch, common_dim]
             text_features = text_features.permute(0, 1, 2)  # Para ajuste ao formato esperado
-        
-        # print(f"Image feature shape {image_features.shape}\n")
-        # print(f"Textual feature shape {text_features.shape}\n")
 
         # Atenção cruzada
         image_features = image_features.squeeze(0)  
         text_features = text_features.squeeze(0) 
 
 
-        # === [C] Self-Attention Intra-Modality ===
-        image_features_att, _ = self.image_self_attention(
-            image_features, image_features, image_features
-        )
-
-        text_features_att, _ = self.text_self_attention(
-            text_features, text_features, text_features
-        )
+        image_features_att = self.image_transformer(image_features)
+        text_features_att = self.text_transformer(text_features)
 
         # === [D] Cross-Attention Inter-Modality ===
         # "Imagem assiste ao texto"

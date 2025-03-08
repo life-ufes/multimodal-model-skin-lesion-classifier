@@ -59,7 +59,7 @@ def write_dataset_with_sentences(file_folder_path, dataframe):
     dataframe.to_csv(file_path, index=False, encoding="utf-8", quotechar='"', sep=",")
 
 if __name__ == "__main__":
-    file_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
+    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
     
     # Carregar dataset original
     columns_names, file_content = load_dataset(os.path.join(file_folder_path, "metadata.csv"))

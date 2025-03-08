@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from torchvision import models
+from TabTransformer import TabTransformer
 from transformers import ViTModel, CLIPModel, CLIPProcessor, AutoModel, BertModel
 class loadModels():
     @staticmethod
@@ -117,10 +119,24 @@ class loadModels():
 
     @staticmethod
     def loadTextModelEncoder(text_model_encoder):
-        # Definir encoder de texto (BERT)
-        text_encoder = BertModel.from_pretrained(text_model_encoder)
-        for param in text_encoder.parameters():
-            param.requires_grad = False
+        if text_model_encoder == "bert-base-uncased":
+            # Definir encoder de texto (BERT)
+            text_encoder = BertModel.from_pretrained(text_model_encoder)
+            for param in text_encoder.parameters():
+                param.requires_grad = False
 
-        bert_output_dim = text_encoder.config.hidden_size
-        return text_encoder, bert_output_dim
+            bert_output_dim = text_encoder.config.hidden_size
+            return text_encoder, bert_output_dim
+
+        elif text_model_encoder == "tab-transformer":
+            # Defina as cardinalidades reais para suas colunas categóricas
+            # Exemplo: se você tiver 4 colunas com 10, 15, 20 e 25 categorias:
+            categorical_indices = list(range(82))  # Vetor [0, 1, 2, ..., 81]
+            text_encoder = TabTransformer(
+                categorical_cardinalities=categorical_indices,  # Cardinalidades das features categóricas
+                num_continuous=4,  # Número de colunas contínuas
+                output_dim=85   # Ajustando a dimensão de saída para 512
+            )
+            return text_encoder, 85
+        else:
+            return None, None

@@ -59,7 +59,7 @@ Do not include any extra commentary.
 
 # Uso:
 if __name__ == "__main__":
-    file_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
+    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
     model_name = "Qwen/Qwen2.5-0.5B"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
