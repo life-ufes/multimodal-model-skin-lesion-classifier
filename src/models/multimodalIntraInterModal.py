@@ -55,12 +55,12 @@ class MultimodalModel(nn.Module):
 
         else:
             # Carrega BERT, Bart, etc., congelado
-            self.text_encoder, self.text_encoder_dim_output = loadModels.loadTextModelEncoder(
+            self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
                 text_model_name
             )
             # Projeta 768 (ou 1024) -> 512
             self.text_fc = nn.Sequential(
-                nn.Linear(768, self.text_encoder_dim_output),
+                nn.Linear(vocab_size, self.text_encoder_dim_output),
                 nn.ReLU(),
                 nn.Dropout(0.3)
             )
@@ -147,7 +147,7 @@ class MultimodalModel(nn.Module):
         # -> (seq_len_img, batch, common_dim)
         image_features = image_features.permute(1, 0, 2)
         # === [B] Extrator de Texto ===
-        if self.text_model_name == "one-hot-encoder":
+        if (self.text_model_name == "one-hot-encoder" or self.text_model_name=="tab-transformer"):
             text_features = self.text_fc(text_metadata)  # (batch, 512)
             text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
     

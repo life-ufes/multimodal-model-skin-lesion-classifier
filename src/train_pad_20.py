@@ -236,7 +236,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
         for model_name in list_of_models:
             for num_heads in list_num_heads:
                 try:
-                    if text_model_encoder=='one-hot-encoder':
+                    if (text_model_encoder=='one-hot-encoder' or text_model_encoder=="tab-transformer"):
                         dataset = skinLesionDatasets.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata.csv",
                         img_dir=f"{dataset_folder_path}/images",
@@ -272,18 +272,18 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 64
+    batch_size = 16
     k_folds=5
     common_dim=512
-    text_model_encoder = 'bert-base-uncased' # 'one-hot-encoder' # 
+    text_model_encoder = 'tab-transformer' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
     dataset_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
     results_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/testes"
-    unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
+    unfreeze_weights = True # Caso queira descongelar os pesos da CNN desejada
      # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["concatenation"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["mobilenet-v2"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
+    list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
