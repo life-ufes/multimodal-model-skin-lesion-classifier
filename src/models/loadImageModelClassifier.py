@@ -126,17 +126,20 @@ class loadModels():
                 param.requires_grad = False
 
             bert_output_dim = text_encoder.config.hidden_size
-            return text_encoder, bert_output_dim
+            vocab_size = 768
+            return text_encoder, bert_output_dim, vocab_size
 
         elif text_model_encoder == "tab-transformer":
             # Defina as cardinalidades reais para suas colunas categóricas
             # Exemplo: se você tiver 4 colunas com 10, 15, 20 e 25 categorias:
             categorical_indices = list(range(82))  # Vetor [0, 1, 2, ..., 81]
+            vocab_size=85
+            text_encoder_model_output=85
             text_encoder = TabTransformer(
                 categorical_cardinalities=categorical_indices,  # Cardinalidades das features categóricas
                 num_continuous=4,  # Número de colunas contínuas
-                output_dim=85   # Ajustando a dimensão de saída para 512
+                output_dim=vocab_size   # Ajustando a dimensão de saída para 512
             )
-            return text_encoder, 85
+            return text_encoder, text_encoder_model_output, vocab_size
         else:
             return None, None

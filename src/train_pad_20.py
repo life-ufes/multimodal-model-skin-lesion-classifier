@@ -277,12 +277,12 @@ if __name__ == "__main__":
     common_dim=512
     text_model_encoder = "tab-transformer" # 'bert-base-uncased' # 'one-hot-encoder' # 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    list_num_heads=[2]
+    list_num_heads=[1]
     dataset_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20"
     results_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/multiple-layers-attention/{text_model_encoder}/unfrozen-weights"
     unfreeze_weights = True # Caso queira descongelar os pesos da CNN desejada
      # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["concatenation", "no-metadata", "weighted"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention"] #, "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention","concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
     list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
     # Treina todos modelos que podem ser usados no modelo multi-modal

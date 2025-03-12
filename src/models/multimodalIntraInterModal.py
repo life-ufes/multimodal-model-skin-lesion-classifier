@@ -55,12 +55,12 @@ class MultimodalModel(nn.Module):
 
         else:
             # Carrega BERT, Bart, etc., congelado
-            self.text_encoder, self.text_encoder_dim_output = loadModels.loadTextModelEncoder(
+            self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
                 text_model_name
             )
             # Projeta 768 (ou 1024) -> 512
             self.text_fc = nn.Sequential(
-                nn.Linear(85, self.text_encoder_dim_output),
+                nn.Linear(vocab_size, self.text_encoder_dim_output),
                 nn.ReLU(),
                 nn.Dropout(0.3)
             )
