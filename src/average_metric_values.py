@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     list_of_attention_mecanism = ["no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     
-    base_folder_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/original-architecture/unfrozen-weights/2"
+    base_folder_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/new_paper_study_residual_block_influence/gated-altered-residual-block/one-hot-encoder/with_residual_block_and_no_crossattention/unfrozen_weights/2"
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
         list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
@@ -33,19 +33,15 @@ if __name__ == "__main__":
             try:
                 dataset = get_dataset_content(dataset_path=dataset_path)
                 
-                # Define the columns you want to analyze (excluding non-numeric columns)
                 numeric_columns = [
                     "accuracy", "balanced_accuracy", "f1_score", "precision", "recall", "auc",
                     "train_loss", "val_loss", "train process time", "epochs"
                 ]
                 
-                # Ensure that only existing columns are selected
                 numeric_columns = [col for col in numeric_columns if col in dataset.columns]
                 
-                # Convert the selected columns to numeric, coercing errors to NaN
                 dataset[numeric_columns] = dataset[numeric_columns].apply(pd.to_numeric, errors='coerce')
                 
-                # Calculate the mean and standard deviation for the numeric columns
                 mean_values = dataset[numeric_columns].mean()
                 std_values = dataset[numeric_columns].std()
                 

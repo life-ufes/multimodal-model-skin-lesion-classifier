@@ -132,8 +132,8 @@ class loadModels():
             # Defina as cardinalidades reais para suas colunas categóricas
             # Exemplo: se você tiver 4 colunas com 10, 15, 20 e 25 categorias:
             categorical_indices = list(range(82))  # Vetor [0, 1, 2, ..., 81]
-            vocab_size=86 # 85
-            text_encoder_model_output=86 # 85
+            vocab_size=85
+            text_encoder_model_output=85 # 85
             text_encoder = TabTransformer(
                 categorical_cardinalities=categorical_indices,  # Cardinalidades das features categóricas
                 num_continuous=4,  # Número de colunas contínuas

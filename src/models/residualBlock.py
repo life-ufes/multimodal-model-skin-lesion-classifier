@@ -13,6 +13,6 @@ class ResidualBlock(nn.Module):
         residual = q
         attn_output, _ = self.attn(q, k, v)
         attn_output = self.dropout(attn_output)
-        attn_output = self.tanh(attn_output)
+        # attn_output = self.tanh(attn_output)
         out = self.norm(attn_output + residual)
         return out
