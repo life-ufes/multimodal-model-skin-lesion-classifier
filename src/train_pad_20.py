@@ -275,15 +275,15 @@ if __name__ == "__main__":
     batch_size = 16
     k_folds=5
     common_dim=512
-    text_model_encoder = 'tab-transformer' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
+    text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
-    dataset_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/PAD-UFES-20"
-    results_folder_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/testes"
+    dataset_folder_path="./data/PAD-UFES-20"
+    results_folder_path = "./src/results/testes"
     unfreeze_weights = True # Caso queira descongelar os pesos da CNN desejada
      # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["concatenation"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
+    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
