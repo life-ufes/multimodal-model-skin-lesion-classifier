@@ -21,10 +21,10 @@ if __name__ == "__main__":
 
     list_of_attention_mecanism = ["no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
     
-    base_folder_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/new_paper_study_residual_block_influence/gated-altered-residual-block/one-hot-encoder/with_residual_block_and_no_crossattention/unfrozen_weights/2"
+    base_folder_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/unfrozen_weights/2"
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
         
         for model_name in list_of_models:
             dataset_folder_path = f"{base_folder_path}/{attention_mecanism}/model_{model_name}_with_one-hot-encoder_512_with_best_architecture"
