@@ -128,17 +128,25 @@ class MultimodalModel(nn.Module):
         text_metadata: dicionário c/ 'input_ids', 'attention_mask' (BERT/Bart)
         ou tensor se "one-hot-encoder".
         """
-        # === [A] Extrator de Imagem ===
-        if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
-            inputs = self.feature_extractor(images=image, return_tensors="pt").to(self.device)
+        # === [A] Image Feature Extraction ===
+        if self.cnn_model_name in ["google/vit-base-patch16-224", "openai/clip-vit-base-patch16"]:
+            # Use the feature extractor (e.g., CLIPProcessor) to preprocess the image
+            inputs = self.feature_extractor(images=image, return_tensors="pt")
+            
+            # Move input tensors to the correct device
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
+            # Forward pass through the vision encoder
             outputs = self.image_encoder(**inputs)
-            # outputs.last_hidden_state => (batch, seq_len_img, hidden_dim)
-            image_features = outputs.last_hidden_state
+            
+            # Extract feature representations
+            image_features = outputs.last_hidden_state  # (batch, seq_len_img, hidden_dim)
         else:
             # CNN -> (batch, cnn_dim_output)
             image_features = self.image_encoder(image).to(self.device)
             # Dá forma (batch, 1, cnn_dim_output)
             image_features = image_features.unsqueeze(1)
+
         # Projeção p/ espaço comum
         b_i, s_i, d_i = image_features.shape
         image_features = image_features.view(b_i*s_i, d_i)
@@ -146,48 +154,43 @@ class MultimodalModel(nn.Module):
         image_features = projected_image_features.view(b_i, s_i, -1)
         # -> (seq_len_img, batch, common_dim)
         image_features = image_features.permute(1, 0, 2)
+
         # === [B] Extrator de Texto ===
-        if (self.text_model_name == "one-hot-encoder" or self.text_model_name=="tab-transformer"):
+        if self.text_model_name == "one-hot-encoder":
             text_features = self.text_fc(text_metadata)  # (batch, 512)
             text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
-    
-            # Projeção para espaço comum
-            b_tt, s_tt, d_tt = text_features.shape
-            text_features = text_features.view(b_tt*s_tt, d_tt)
-            projected_text_features = self.text_projector(text_features)
-            text_features = projected_text_features.view(b_tt, s_tt, -1)
-            text_features = text_features.permute(1, 0, 2)
-    
         else:
-            # Processar o texto com BERT
-            bert_output = self.text_encoder(
-                input_ids=text_metadata['input_ids'].squeeze(1),
-                attention_mask=text_metadata['attention_mask'].squeeze(1)
+            # Ajustar input_ids e attention_mask p/ shape [batch, seq_len]
+            input_ids = text_metadata["input_ids"]
+            attention_mask = text_metadata["attention_mask"]
+
+            if len(input_ids.shape) == 3:  # por ex. (batch, 1, seq_len)
+                input_ids = input_ids.squeeze(1)
+            if len(attention_mask.shape) == 3:
+                attention_mask = attention_mask.squeeze(1)
+
+            encoder_output = self.text_encoder(
+                input_ids=input_ids,
+                attention_mask=attention_mask
             )
+            text_features = encoder_output.last_hidden_state  # (batch, seq_len_text, 768)
 
-            text_features = bert_output.last_hidden_state[:, 0, :]  # Vetor [CLS] (primeiro token) para classificação
-            text_features = self.text_fc(text_features)  # Projeção para 512
-            projected_text_features = self.text_projector(text_features)  # Projeção para dimensão comum
+            b_t, s_t, d_t = text_features.shape
+            text_features = text_features.view(b_t*s_t, d_t)
+            text_features = self.text_fc(text_features)  # ex.: (batch*seq_t, 512)
+            text_features = text_features.view(b_t, s_t, -1)
 
-            # Adicionar uma dimensão de sequência antes de aplicar permute
-            text_features = projected_text_features.unsqueeze(0)  # Adiciona uma dimensão extra, deixando o formato [1, batch, common_dim]
-
-            # Agora a permute funciona se você precisar de [seq_len, batch, common_dim]
-            text_features = text_features.permute(0, 1, 2)  # Para ajuste ao formato esperado
-        
-        # print(f"Image feature shape {image_features.shape}\n")
-        # print(f"Textual feature shape {text_features.shape}\n")
-
-        # Atenção cruzada
-        image_features = image_features.squeeze(0)  
-        text_features = text_features.squeeze(0) 
-
+        # Projeção para espaço comum
+        b_tt, s_tt, d_tt = text_features.shape
+        text_features = text_features.view(b_tt*s_tt, d_tt)
+        projected_text_features = self.text_projector(text_features)
+        text_features = projected_text_features.view(b_tt, s_tt, -1)
+        text_features = text_features.permute(1, 0, 2)
 
         # === [C] Self-Attention Intra-Modality ===
         image_features_att, _ = self.image_self_attention(
             image_features, image_features, image_features
         )
-
         text_features_att, _ = self.text_self_attention(
             text_features, text_features, text_features
         )
@@ -196,18 +199,17 @@ class MultimodalModel(nn.Module):
         # "Imagem assiste ao texto"
         image_cross_att, _ = self.image_cross_attention(
             query=image_features_att,
-            key=text_features_att,
+            key=image_features_att,
             value=text_features_att
         )
         # "Texto assiste à imagem"
         text_cross_att, _ = self.text_cross_attention(
             query=text_features_att,
-            key=image_features_att,
+            key=text_features_att,
             value=image_features_att
         )
+
         # === [E] Pooling das atenções finais 
-        image_cross_att = image_cross_att.unsqueeze(0)  
-        text_cross_att = text_cross_att.unsqueeze(0) 
         image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
         text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
 

@@ -67,7 +67,7 @@ def train_process(num_epochs,
         delta=0.01, 
         verbose=True,
         path=str(model_save_path+f'/{str(fold_num)}/best-model/'),   # Where to save the best weights (optional)
-        save_to_disk=True       # If True, saves best weights to 'best_model.pt'
+        save_to_disk=False       # If True, saves best weights to 'best_model.pt'
     )
 
     initial_time = time.time()
@@ -279,11 +279,11 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
     dataset_folder_path="./data/PAD-UFES-20"
-    results_folder_path = "./src/results/testes/unfrozen_weights"
-    unfreeze_weights = True # Caso queira descongelar os pesos da CNN desejada
-     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["concatenation"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "no-metadata", "weighted"]
+    unfreeze_weights = True  # Caso queira descongelar os pesos da CNN desejada
+    results_folder_path = f"./src/results/testes/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    # Para todas os tipos de estratégias a serem usadas
+    list_of_attention_mecanism = ["weighted-after-crossattention", "cross-weights-after-crossattention", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["vit_huge_patch14_clip_224.laion2b_ft_in12k_in1k"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
+    list_of_models = ["nextvit_small.bd_ssld_6m_in1k"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "google/vit-base-patch16-224", "openai/clip-vit-base-patch16", "dinov2_vits14"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
