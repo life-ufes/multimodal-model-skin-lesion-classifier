@@ -5,6 +5,7 @@ from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
 from models import multimodalIntraModalWithBert, multimodalModels, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning
 from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDatasetsISIC2019
+from models import multimodalIntraInterModalWithResidualBlocks
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import KFold, train_test_split, StratifiedKFold
@@ -15,6 +16,7 @@ import pandas as pd
 from torch.utils.data import DataLoader, Subset
 # Importações do MLflow
 import mlflow
+from tqdm import tqdm
 
 def compute_class_weights(labels):
     class_counts = Counter(labels)
@@ -36,7 +38,7 @@ def train_process(num_epochs,
                   text_model_encoder, 
                   attention_mecanism, 
                   results_folder_path):
-    
+
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
 
@@ -50,21 +52,30 @@ def train_process(num_epochs,
     )
     model.to(device)
 
+    # Save the final (or best) model
+    model_save_path = os.path.join(
+        results_folder_path, 
+        f"model_{model_name}_with_{text_model_encoder}_{common_dim}_with_best_architecture"
+    )
+
+    os.makedirs(model_save_path, exist_ok=True)
+    print(model_save_path)
+
     # Instantiate EarlyStopping
     # Make sure EarlyStopping stores model.state_dict(), not the entire model.
     early_stopping = EarlyStopping(
         patience=5, 
         delta=0.01, 
         verbose=True,
-        path='best_model.pt',   # Where to save the best weights (optional)
-        save_to_disk=True       # If True, saves best weights to 'best_model.pt'
+        path=str(model_save_path+f'/{str(fold_num)}/best-model/'),   # Where to save the best weights (optional)
+        save_to_disk=False       # If True, saves best weights to 'best_model.pt'
     )
 
     initial_time = time.time()
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20- MODEL-STRATIFIED K-FOLD - ISIC 2019"
+    experiment_name = "EXPERIMENTOS-PAD-UFES20 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -89,7 +100,9 @@ def train_process(num_epochs,
             model.train()
             running_loss = 0.0
 
-            for batch_index, (image, metadata, label) in enumerate(train_loader):
+            # Adicionando barra de progresso para o loop de batches
+            for batch_index, (image, metadata, label) in enumerate(
+                    tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
                 image, metadata, label = (
                     image.to(device),
                     metadata.to(device),
@@ -105,7 +118,6 @@ def train_process(num_epochs,
                 running_loss += loss.item()
             
             train_loss = running_loss / len(train_loader)
-            print("===" * 40)
             print(f"\nTraining: Epoch {epoch_index}, Loss: {train_loss:.4f}")
 
             # -----------------------------
@@ -169,11 +181,6 @@ def train_process(num_epochs,
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
 
-    # Save the final (or best) model
-    model_save_path = os.path.join(
-        results_folder_path, 
-        f"model_{model_name}_with_{text_model_encoder}_{common_dim}_with_best_architecture"
-    )
     save_model_and_metrics(
         model, 
         metrics, 
@@ -189,7 +196,9 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, attention_mecanism, results_folder_path):
+
+
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path):
     all_metrics = []
 
     # Obter os rótulos para validação estratificada (se necessário)
@@ -215,8 +224,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, attention_mecanism=attention_mecanism)
-
+        # model = multimodalIntraModalWithBert.MultimodalModel(num_classes=num_classes, device=device, cnn_model_name=model_name, text_model_name=text_model_encoder)
+        # model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        model = multimodalIntraInterModalWithResidualBlocks.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
@@ -224,49 +234,55 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         )
 
 
-def run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads):
-    # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["weighted-after-crossattention"]# ["cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
-        # Testar com todos os modelos
-        list_of_models = ["densenet169"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
-        
         for model_name in list_of_models:
-            try:
-                dataset = skinLesionDatasetsISIC2019.SkinLesionDataset(
-                metadata_file=f"{dataset_folder_path}/training_full_metadata.csv",
-                img_dir=f"{dataset_folder_path}/ISIC_2019_Training_Input/ISIC_2019_Training_Input",
-                bert_model_name=text_model_encoder,
-                image_encoder=model_name,
-                drop_nan=False,
-                random_undersampling=False
-                )
-                num_metadata_features = dataset.features.shape[1]
-                print(f"Número de features do metadados: {num_metadata_features}\n")
-                num_classes = len(dataset.metadata['category'].unique())
-                
-                pipeline(dataset, 
-                    num_metadata_features=num_metadata_features, 
-                    num_epochs=num_epochs, batch_size=batch_size, 
-                    device=device, k_folds=k_folds, num_classes=num_classes, 
-                    model_name=model_name, common_dim=common_dim, 
-                    text_model_encoder=text_model_encoder,
-                    num_heads=num_heads,
-                    attention_mecanism=attention_mecanism, 
-                    results_folder_path=f"./src/results/ISIC2019/stratifiedkfold/{num_heads}/{attention_mecanism}"
-                )
-            except Exception as e:
-                print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
-                continue
+            for num_heads in list_num_heads:
+                try:
+                    dataset = skinLesionDatasetsISIC2019.SkinLesionDataset(
+                    metadata_file=f"{dataset_folder_path}/training_full_metadata.csv",
+                    img_dir=f"{dataset_folder_path}/ISIC_2019_Training_Input/ISIC_2019_Training_Input",
+                    bert_model_name=text_model_encoder,
+                    image_encoder=model_name,
+                    drop_nan=False,
+                    random_undersampling=False
+                    )
+
+                    num_metadata_features = dataset.features.shape[1] if text_model_encoder== 'one-hot-encoder' else 512
+                    print(f"Número de features do metadados: {num_metadata_features}\n")
+                    num_classes = len(dataset.metadata['category'].unique())
+
+                    pipeline(dataset, 
+                        num_metadata_features=num_metadata_features, 
+                        num_epochs=num_epochs, batch_size=batch_size, 
+                        device=device, k_folds=k_folds, num_classes=num_classes, 
+                        model_name=model_name, common_dim=common_dim, 
+                        text_model_encoder=text_model_encoder,
+                        num_heads=num_heads,
+                        unfreeze_weights=unfreeze_weights,
+                        attention_mecanism=attention_mecanism, 
+                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
+                    )
+                except Exception as e:
+                    print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
+                    continue
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 128
+    batch_size = 16
     k_folds=5
     common_dim=512
-    text_model_encoder= "one-hot-encoder" # 'one-hot-encoder'
+    text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_heads=2
-    dataset_folder_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/datasets/ISIC-2019"
+    list_num_heads=[2]
+    dataset_folder_name="PAD-UFES-20"
+    dataset_folder_path=f"./data/{dataset_folder_name}"
+    unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
+    results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    # Para todas os tipos de estratégias a serem usadas
+    list_of_attention_mecanism = ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    # Testar com todos os modelos
+    list_of_models = ["caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(dataset_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, device, num_heads)    
+    run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

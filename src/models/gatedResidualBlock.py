@@ -16,8 +16,6 @@ class GatedAlteredResidualBlock(nn.Module):
     
     def forward(self, q, k, v):
         # Pré-normalização da query
-        # q_norm = self.norm1(q)
-        # Cálculo da atenção
         attn_output, _ = self.attn(q, k, v)
         attn_output = self.dropout1(attn_output)
         # Geração do gating a partir da query original
