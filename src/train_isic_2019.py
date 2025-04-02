@@ -75,7 +75,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES20 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK"
+    experiment_name = "EXPERIMENTOS-ISIC-2019 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -215,8 +215,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         val_subset = Subset(dataset, val_idx)
 
         # Criar DataLoaders
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=10)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=10)
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=15)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=15)
 
         # Calcular pesos das classes com base no conjunto de treino
         train_labels = [labels[i] for i in train_idx]
@@ -224,9 +224,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        # model = multimodalIntraModalWithBert.MultimodalModel(num_classes=num_classes, device=device, cnn_model_name=model_name, text_model_name=text_model_encoder)
-        # model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
-        model = multimodalIntraInterModalWithResidualBlocks.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
@@ -276,13 +274,13 @@ if __name__ == "__main__":
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     list_num_heads=[2]
-    dataset_folder_name="PAD-UFES-20"
+    dataset_folder_name="ISIC-2019"
     dataset_folder_path=f"./data/{dataset_folder_name}"
-    unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
+    unfreeze_weights = True # Caso queira descongelar os pesos da CNN desejada
     results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["nextvit_small.bd_ssld_6m_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

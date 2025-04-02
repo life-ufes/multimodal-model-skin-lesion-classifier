@@ -213,18 +213,16 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         val_subset = Subset(dataset, val_idx)
 
         # Criar DataLoaders
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=10)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=10)
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=15)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=15)
 
         # Calcular pesos das classes com base no conjunto de treino
         train_labels = [labels[i] for i in train_idx]
         class_weights = compute_class_weights(train_labels).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
-        # Criar o modelo
-        # model = multimodalIntraModalWithBert.MultimodalModel(num_classes=num_classes, device=device, cnn_model_name=model_name, text_model_name=text_model_encoder)
+        # Criar o modelo i
         model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
-        # model = multimodalIntraInterModalWithResidualBlocks.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
