@@ -188,6 +188,52 @@ class loadModels():
                 for param in image_encoder.parameters():
                     param.requires_grad = unfreeze_weights
             
+            elif cnn_model_name == "mvitv2_small.fb_in1k":
+                image_encoder = timm.create_model(cnn_model_name, pretrained=True)
+
+                # Ajusta o input_size padrão para 224x224
+                image_encoder.default_cfg['input_size'] = (3, 224, 224)
+
+                # Remove a última camada de classificação
+                image_encoder.reset_classifier(0)
+
+                # A dimensão de saída agora é a do penúltimo bloco (features)
+                cnn_dim_output = image_encoder.num_features  # ou usar diretamente com forward_features()
+
+                # Congelar ou descongelar pesos
+                for param in image_encoder.parameters():
+                    param.requires_grad = unfreeze_weights
+            elif cnn_model_name == "coat_lite_small.in1k":
+                image_encoder = timm.create_model(cnn_model_name, pretrained=True)
+
+                # Ajusta o input_size padrão para 224x224
+                image_encoder.default_cfg['input_size'] = (3, 224, 224)
+
+                # Remove a última camada de classificação
+                image_encoder.reset_classifier(0)
+
+                # A dimensão de saída agora é a do penúltimo bloco (features)
+                cnn_dim_output = image_encoder.num_features  # ou usar diretamente com forward_features()
+
+                # Congelar ou descongelar pesos
+                for param in image_encoder.parameters():
+                    param.requires_grad = unfreeze_weights
+            elif cnn_model_name == "davit_tiny.msft_in1k":
+                image_encoder = timm.create_model(cnn_model_name, pretrained=True)
+
+                # Ajusta o input_size padrão para 224x224
+                image_encoder.default_cfg['input_size'] = (3, 224, 224)
+
+                # Remove a última camada de classificação
+                image_encoder.reset_classifier(0)
+
+                # A dimensão de saída agora é a do penúltimo bloco (features)
+                cnn_dim_output = image_encoder.num_features  # ou usar diretamente com forward_features()
+
+                # Congelar ou descongelar pesos
+                for param in image_encoder.parameters():
+                    param.requires_grad = unfreeze_weights
+            
             else:
                 raise ValueError("CNN não implementada.")
             return image_encoder, cnn_dim_output
