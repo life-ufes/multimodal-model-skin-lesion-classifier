@@ -2,9 +2,7 @@ import torch
 import torch.nn as nn
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
-import models.focalLoss as focalLoss
-from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning, multimodalIntraInterModalWithResidualBlocks
-from models import multimodalIntraInterModalPaperADeepLearningBased
+from models import skinLesionDatasets, skinLesionDatasetsWithBert, multimodalIntraInterModal, multimodalMDNet, multimodalIntraInterModalPaperADeepLearningBased
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import KFold, train_test_split, StratifiedKFold
@@ -223,6 +221,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
         # Criar o modelo i
         model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        # model = multimodalIntraInterModalPaperADeepLearningBased.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        # model = multimodalMDNet.MDNet(meta_dim=num_metadata_features, num_classes=num_classes, cnn_model_name=model_name, text_model_name=text_model_encoder, device=device, unfreeze_weights=unfreeze_weights) 
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
@@ -280,7 +280,7 @@ if __name__ == "__main__":
     dataset_folder_name="PAD-UFES-20"
     dataset_folder_path=f"./data/{dataset_folder_name}"
     unfreeze_weights = False # Caso queira descongelar os pesos da CNN desejada
-    results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    results_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos

@@ -46,13 +46,12 @@ def load_models_metrics(file_folder_path, wanted_metric_list):
         if os.path.exists(csv_file):  # Verifica se o arquivo CSV existe
             data = load_dataset(csv_file)
             for metric_name in wanted_metric_list:
-                # Verifica se a coluna 'bacc' existe antes de acessá-la
                 if metric_name in data.columns:
                     # Exclui as duas últimas linhas
-                    aux=data[metric_name].iloc[:-2].values
+                    aux = data[metric_name].iloc[:-2].values
                     list_of_values_wanted_metric.append(aux)
-            else:
-                print(f"{metric_name} não encontrada no arquivo {csv_file}\n")
+                else:
+                    print(f"{metric_name} não encontrada no arquivo {csv_file}\n")
         else:
             print(f"Arquivo CSV não encontrado: {csv_file}\n")
     else:
@@ -60,47 +59,54 @@ def load_models_metrics(file_folder_path, wanted_metric_list):
         
     return np.array(list_of_values_wanted_metric).ravel()
 
+
 def save_statistics_tests(test_results:str, file_folder_path: str):
     '''
         Função para salvar os resultados dos testes estatísticos
     '''
     try:
         dataframe = pd.DataFrame(data=test_results)
-        dataframe.to_csv(file_folder_path+f"statistics_tests_results.csv")
+        dataframe.to_csv(file_folder_path+f"_statistics_tests_results.csv")
     except Exception as e:
         print(f"Erro salvar os dados. Erro: {e}\n")
 
 if __name__ == "__main__":
     # Onde os dados do teste serão salvos
     base_file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results"
-
+    wanted_metric_list = ['accuracy','balanced_accuracy','f1_score','recall','auc']
     # Path to the folder containing the results
     file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
-    
     # Variáveis a serem selecionadas
-    wanted_metric_list = ['accuracy','balanced_accuracy','f1_score','recall','auc']
-
     # Load dataset (though not used directly here)
-    file_content = load_dataset(file_folder_path)
+    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
     # Carregar os dados do modelo multimodal - PAD-UFES-20
-    
     # Get metric values for the specified metrics
     aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
-
     list_of_used_algs = []
     list_all_models_metrics_all_lists=[]
     list_of_used_algs.append("our-model")
     list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+    
+    # MD-Net results
+    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/MD-Net/PAD-UFES-20/frozen_weights/0/md-net/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
+    # Variáveis a serem selecionadas
+    # Load dataset (though not used directly here)
+    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
+    # Carregar os dados do modelo multimodal - PAD-UFES-20
+    # Get metric values for the specified metrics
+    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
+    list_of_used_algs.append("md-net")
+    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
 
-    ## Add dos dados do do trabalho 'A deep learning based multimodal ....'
-    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/original-architecture/frozen-weights/2/concatenation/model_resnet-50_with_one-hot-encoder_512_with_best_architecture"
+    # ## Add dos dados do do trabalho 'A deep learning based multimodal ....'
+    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/PAD-UFES-20/frozen_weights/2/concatenation/model_resnet-50_with_one-hot-encoder_512_with_best_architecture"
     # Load dataset (though not used directly here)
     file_content = load_dataset(file_folder_path)
     # Carregar os dados do modelo multimodal - PAD-UFES-20
     
     # Get metric values for the specified metrics
     aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
-    list_of_used_algs.append("Fully-CrossAttention")
+    list_of_used_algs.append("a-deep-learning-based-multimodal")
     list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
 
     
