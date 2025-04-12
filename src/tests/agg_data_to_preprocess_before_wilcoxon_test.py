@@ -74,8 +74,9 @@ if __name__ == "__main__":
     # Onde os dados do teste serão salvos
     base_file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results"
     wanted_metric_list = ['accuracy','balanced_accuracy','f1_score','recall','auc']
-    # Path to the folder containing the results
-    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
+    
+    
+    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/PAD-UFES-20/unfrozen_weights/2/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture"
     # Variáveis a serem selecionadas
     # Load dataset (though not used directly here)
     file_content = load_dataset(file_folder_path+"/model_metrics.csv")
@@ -84,7 +85,20 @@ if __name__ == "__main__":
     aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
     list_of_used_algs = []
     list_all_models_metrics_all_lists=[]
-    list_of_used_algs.append("our-model")
+    list_of_used_algs.append("our-method")
+    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+    
+    # Path to the folder containing the results
+    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
+    # Variáveis a serem selecionadas
+    # Load dataset (though not used directly here)
+    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
+    # Carregar os dados do modelo multimodal - PAD-UFES-20
+    # Get metric values for the specified metrics
+    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
+    # list_of_used_algs = []
+    # list_all_models_metrics_all_lists=[]
+    list_of_used_algs.append("gated-cross-attention")
     list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
     
     # MD-Net results
@@ -101,15 +115,23 @@ if __name__ == "__main__":
     # ## Add dos dados do do trabalho 'A deep learning based multimodal ....'
     file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/PAD-UFES-20/frozen_weights/2/concatenation/model_resnet-50_with_one-hot-encoder_512_with_best_architecture"
     # Load dataset (though not used directly here)
-    file_content = load_dataset(file_folder_path)
+    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
     # Carregar os dados do modelo multimodal - PAD-UFES-20
-    
     # Get metric values for the specified metrics
     aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
     list_of_used_algs.append("a-deep-learning-based-multimodal")
     list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
 
-    
+    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results/PAD-20/lighterm"
+    # Load dataset (though not used directly here)
+    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
+    # Carregar os dados do modelo multimodal - PAD-UFES-20
+    # Get metric values for the specified metrics
+    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
+    list_of_used_algs.append("lightwer")
+    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+
+
     for alg in ["no-metadata", "concat", "metanet", "metablock"]:
         file_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results/PAD-20/{alg}"
         # Concat, Metablock, MetaNet
@@ -117,9 +139,7 @@ if __name__ == "__main__":
         wanted_metric_list = ['acc', 'bacc', 'weighted avg f1-score', 'weighted avg recall', 'auc']
         all_models_metrics=load_models_metrics(file_folder_path=file_folder_path, wanted_metric_list=wanted_metric_list)
         list_all_models_metrics_all_lists.append(all_models_metrics)
-    
-    print(list_of_used_algs)
-    print(list_all_models_metrics_all_lists)
+
 
     out=stats.statistical_test(data=list_all_models_metrics_all_lists, alg_names=list_of_used_algs)
     # Salvar os resultados
