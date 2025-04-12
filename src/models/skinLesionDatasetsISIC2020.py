@@ -29,7 +29,7 @@ class SkinLesionDataset(Dataset):
 
     def __getitem__(self, idx):
         # Carregar a imagem
-        img_path = f"{self.img_dir}/{self.metadata.iloc[idx]['image']}.jpg"
+        img_path = f"{self.img_dir}/{self.metadata.iloc[idx]['image_name']}.jpg"
         image = Image.open(img_path).convert("RGB")
         if self.transform:
             image = self.transform(image)
