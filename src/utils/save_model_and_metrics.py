@@ -7,171 +7,136 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_labels, all_predictions, targets, data_val="val"):
-    """
-    Salva o modelo, as métricas, a matriz de confusão e a curva ROC em uma pasta específica.
+def ensure_numpy(arr, name="array"):
+    """Converte a entrada em um array NumPy se for uma lista."""
+    if isinstance(arr, list):
+        arr = np.array(arr)
+        print(f"Conversão de {name} de lista para array NumPy realizada.")
+    return arr
 
-    Args:
-        model: O modelo treinado (torch.nn.Module).
-        metrics: Dicionário contendo as métricas de avaliação.
-        model_name: Nome do modelo.
-        base_dir: Diretório base onde as pastas serão criadas.
-        fold_num: Número do fold (para validação cruzada).
-        all_labels: Labels verdadeiros.
-        all_predictions: Predições do modelo (probabilidades ou logits).
-        targets: Lista de rótulos para exibição na matriz de confusão.
-        data_val: Tipo de dados ('val' ou 'test').
-    """
-    # Converter all_predictions para um array NumPy se for uma lista
-    if isinstance(all_predictions, list):
-        all_predictions = np.array(all_predictions)
-        print("Conversão de all_predictions de lista para array NumPy realizada.")
-
-    # Garantir que all_labels também esteja como array NumPy
-    if isinstance(all_labels, list):
-        all_labels = np.array(all_labels)
-        print("Conversão de all_labels de lista para array NumPy realizada.")
-
-    # Criar o diretório base se não existir
+def create_folder(base_dir, model_name, fold_num):
+    """Cria e retorna o caminho da pasta para salvar os resultados com um timestamp único."""
     os.makedirs(base_dir, exist_ok=True)
-
-    # Gerar o nome único da pasta usando o nome do modelo e o timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     folder_name = f"{model_name}_fold_{fold_num}_{timestamp}"
     folder_path = os.path.join(base_dir, folder_name)
-
-    # Criar a pasta para o modelo
     os.makedirs(folder_path, exist_ok=True)
+    return folder_path
 
-    # Salvar o modelo treinado
-    model_path = os.path.join(folder_path, "model.pth")
-    torch.save(model.state_dict(), model_path)
-    print(f"Modelo salvo em: {model_path}")
-
-    # Salvar as métricas
-    metrics_file = os.path.join(base_dir, "model_metrics.csv")
-    file_exists = os.path.isfile(metrics_file)
-    with open(metrics_file, mode='a', newline='') as file:
+def save_csv(metrics, csv_file):
+    """Salva/Anexa as métricas em um arquivo CSV."""
+    file_exists = os.path.isfile(csv_file)
+    with open(csv_file, mode='a', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=metrics.keys())
         if not file_exists:
             writer.writeheader()
         writer.writerow(metrics)
-    print(f"Métricas salvas em: {metrics_file}")
+    print(f"Métricas salvas em: {csv_file}")
 
-    # Calcular matriz de confusão
+def plot_and_save_figure(fig, save_path):
+    """Salva a figura e fecha-a para liberar memória."""
+    fig.savefig(save_path)
+    plt.close(fig)
+    print(f"Figura salva em: {save_path}")
+
+def plot_confusion_matrix(all_labels, all_predictions, targets, folder_path, data_val="val", test_folder=None):
+    """Calcula e salva a matriz de confusão."""
+    # As predições estão em logits ou probabilidades, aplicar argmax para obter rótulos
     predicted_labels = np.argmax(all_predictions, axis=1)
     cm = confusion_matrix(all_labels, predicted_labels, normalize='true')
-
-    # Salvar a matriz de confusão como gráfico
-    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=targets)
-    cm_display.plot(cmap=plt.cm.Blues)
-
-    # Determinar o caminho para salvar a matriz de confusão
-    if data_val == "test":
-        test_folder = os.path.join(base_dir, "test_results")
-        os.makedirs(test_folder, exist_ok=True)
+    
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=targets)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    disp.plot(ax=ax, cmap=plt.cm.Blues)
+    
+    if data_val == "test" and test_folder is not None:
         cm_path = os.path.join(test_folder, "Confusion_matrix.png")
     else:
         cm_path = os.path.join(folder_path, "Confusion_matrix.png")
+    plot_and_save_figure(fig, cm_path)
 
-    # Salvar a figura localmente
-    plt.savefig(cm_path)
-    plt.close()  # Fecha a figura para liberar memória
-    print(f"Matriz de confusão salva em: {cm_path}")
-
-    # --- Início da Geração e Salvamento da Curva ROC ---
-
-    # Determinar o número de classes
-    if len(all_predictions.shape) > 1:
-        num_classes = all_predictions.shape[1]
-    else:
-        num_classes = 1  # Não suportado
-
-    # Classificação Binária
+def plot_roc_curve(all_labels, all_predictions, num_classes, targets, folder_path, data_val="val", test_folder=None):
+    """Gera e salva a curva ROC para classificação binária ou multiclasse."""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
     if num_classes == 2:
-        # Garantir que as predições são probabilidades da classe positiva
-        if all_predictions.shape[1] == 2:
-            y_scores = all_predictions[:, 1]
-        else:
-            # Aplicar sigmoid se necessário
-            y_scores = torch.sigmoid(torch.tensor(all_predictions)).numpy()
-
-        # Calcular a curva ROC
-        fpr, tpr, thresholds = roc_curve(all_labels, y_scores)
+        # Para classificação binária: usa a probabilidade da classe positiva
+        y_scores = all_predictions[:, 1] if all_predictions.shape[1] == 2 else torch.sigmoid(torch.tensor(all_predictions)).numpy()
+        fpr, tpr, _ = roc_curve(all_labels, y_scores)
         roc_auc = auc(fpr, tpr)
-
-        # Plotar a curva ROC
-        plt.figure(figsize=(8, 6))
-        plt.plot(fpr, tpr, color='darkorange',
-                 lw=2, label=f'Curva ROC (AUC = {roc_auc:.2f})')
-        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Classificador Aleatório')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('Taxa de Falsos Positivos (FPR)', fontsize=14)
-        plt.ylabel('Taxa de Verdadeiros Positivos (TPR)', fontsize=14)
-        plt.title('Curva ROC - Classificação Binária', fontsize=16)
-        plt.legend(loc="lower right", fontsize=12)
-        plt.grid(alpha=0.3)
-
-        # Determinar o caminho para salvar a curva ROC
-        if data_val == "test":
-            roc_path = os.path.join(test_folder, "ROC_curve.png")
-        else:
-            roc_path = os.path.join(folder_path, "ROC_curve.png")
-
-        # Salvar a figura localmente
-        plt.savefig(roc_path)
-        plt.close()
-        print(f"Curva ROC salva em: {roc_path}")
-
-    # Classificação Multiclasse
-    elif num_classes > 2:
-        # Binarizar os rótulos para multiclasse
+        ax.plot(fpr, tpr, color='darkorange', lw=2, label=f'Curva ROC (AUC = {roc_auc:.6f})')
+        ax.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Classificador Aleatório')
+        ax.set_title('Curva ROC - Classificação Binária', fontsize=16)
+    else:
+        # Para multiclasse: binariza os rótulos e gera curva ROC para cada classe
         all_labels_binarized = label_binarize(all_labels, classes=range(num_classes))
-        # Verificar se as predições são probabilidades
-        if all_predictions.shape[1] == num_classes:
-            y_scores = all_predictions
-        else:
-            # Aplicar softmax se necessário
-            y_scores = torch.softmax(torch.tensor(all_predictions), dim=1).numpy()
-
-        # Calcular a curva ROC para cada classe
-        fpr = dict()
-        tpr = dict()
-        roc_auc = dict()
-        for i in range(num_classes):
-            fpr[i], tpr[i], _ = roc_curve(all_labels_binarized[:, i], y_scores[:, i])
-            roc_auc[i] = auc(fpr[i], tpr[i])
-
-        # Plotar todas as curvas ROC
-        plt.figure(figsize=(8, 6))
+        y_scores = all_predictions if all_predictions.shape[1] == num_classes else torch.softmax(torch.tensor(all_predictions), dim=1).numpy()
         colors = ['blue', 'green', 'orange', 'purple', 'cyan', 'magenta']
         for i in range(num_classes):
-            plt.plot(fpr[i], tpr[i], color=colors[i % len(colors)],
-                     lw=2, label=f'Classe {targets[i]} (AUC = {roc_auc[i]:0.2f})')
-        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Classificador Aleatório')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('Taxa de Falsos Positivos (FPR)', fontsize=14)
-        plt.ylabel('Taxa de Verdadeiros Positivos (TPR)', fontsize=14)
-        plt.title('Curva ROC - Classificação Multiclasse', fontsize=16)
-        plt.legend(loc="lower right", fontsize=12)
-        plt.grid(alpha=0.3)
+            fpr, tpr, _ = roc_curve(all_labels_binarized[:, i], y_scores[:, i])
+            roc_auc = auc(fpr, tpr)
+            ax.plot(fpr, tpr, color=colors[i % len(colors)], lw=2, label=f'Classe {targets[i]} (AUC = {roc_auc:0.2f})')
+        ax.set_title('Curva ROC - Classificação Multiclasse', fontsize=16)
+        ax.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Classificador Aleatório')
+    
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel('Taxa de Falsos Positivos (FPR)', fontsize=14)
+    ax.set_ylabel('Taxa de Verdadeiros Positivos (TPR)', fontsize=14)
+    ax.legend(loc="lower right", fontsize=12)
+    ax.grid(alpha=0.3)
+    
+    # Define caminho para salvar
+    roc_path = os.path.join(test_folder if data_val=="test" and test_folder is not None else folder_path, "ROC_curve.png")
+    plot_and_save_figure(fig, roc_path)
 
-        # Determinar o caminho para salvar a curva ROC
-        if data_val == "test":
-            roc_path = os.path.join(test_folder, "ROC_curve.png")
-        else:
-            roc_path = os.path.join(folder_path, "ROC_curve.png")
+def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_labels, all_predictions, targets, data_val="val"):
+    """
+    Salva o modelo, as métricas, a matriz de confusão e a curva ROC em uma pasta específica.
+    
+    Args:
+        model: Modelo treinado (torch.nn.Module).
+        metrics: Dicionário com as métricas de avaliação.
+        model_name: Nome do modelo.
+        base_dir: Diretório base para salvar os resultados.
+        fold_num: Número do fold (para validação cruzada).
+        all_labels: Rótulos verdadeiros.
+        all_predictions: Predições do modelo (probabilidades ou logits).
+        targets: Lista de rótulos para exibição na matriz de confusão.
+        data_val: Tipo de dados ('val' ou 'test').
+    """
+    # Converte listas para array NumPy se necessário
+    all_predictions = ensure_numpy(all_predictions, "all_predictions")
+    all_labels = ensure_numpy(all_labels, "all_labels")
 
-        # Salvar a figura localmente
-        plt.savefig(roc_path)
-        plt.close()
-        print(f"Curva ROC salva em: {roc_path}")
+    # Cria a pasta de resultados
+    folder_path = create_folder(base_dir, model_name, fold_num)
 
+    # Salva o modelo
+    model_path = os.path.join(folder_path, "model.pth")
+    torch.save(model.state_dict(), model_path)
+    print(f"Modelo salvo em: {model_path}")
+
+    # Salva as métricas em um CSV no diretório base
+    metrics_file = os.path.join(base_dir, "model_metrics.csv")
+    save_csv(metrics, metrics_file)
+
+    # Se for dados de teste, cria pasta separada
+    test_folder = None
+    if data_val == "test":
+        test_folder = os.path.join(base_dir, "test_results")
+        os.makedirs(test_folder, exist_ok=True)
+
+    # Plota e salva a matriz de confusão
+    plot_confusion_matrix(all_labels, all_predictions, targets, folder_path, data_val, test_folder)
+
+    # Determina o número de classes
+    num_classes = all_predictions.shape[1] if len(all_predictions.shape) > 1 else 1
+
+    # Plota e salva a curva ROC (para binária ou multiclasse)
+    if num_classes >= 1:
+        plot_roc_curve(all_labels, all_predictions, num_classes, targets, folder_path, data_val, test_folder)
     else:
         print("Número de classes não suportado para a geração da curva ROC.")
-
-    # --- Fim da Geração e Salvamento da Curva ROC ---
 
     return folder_path
