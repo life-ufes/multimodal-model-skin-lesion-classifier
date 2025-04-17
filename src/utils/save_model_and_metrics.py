@@ -7,21 +7,23 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_labels, all_predictions, targets, data_val="val"):
+def save_model_and_metrics(model,
+                           metrics,
+                           model_name,
+                           base_dir,
+                           fold_num,
+                           all_labels,
+                           all_predictions,
+                           targets,
+                           data_val="val"):
     """
-    Salva o modelo, as métricas, a matriz de confusão e a curva ROC em uma pasta específica.
+    Salva modelo, métricas, matriz de confusão e curva ROC em 400 dpi,
+    tratando corretamente shapes 1-D, (n,1), (n,2) e multiclasses.
+    """
+    # --- Preparação
+    all_labels      = np.array(all_labels)
+    all_predictions = np.array(all_predictions)
 
-    Args:
-        model: O modelo treinado (torch.nn.Module).
-        metrics: Dicionário contendo as métricas de avaliação.
-        model_name: Nome do modelo.
-        base_dir: Diretório base onde as pastas serão criadas.
-        fold_num: Número do fold (para validação cruzada).
-        all_labels: Labels verdadeiros.
-        all_predictions: Predições do modelo (probabilidades ou logits).
-        targets: Lista de rótulos para exibição na matriz de confusão.
-        data_val: Tipo de dados ('val' ou 'test').
-    """
         # Gerar o nome único da pasta usando o nome do modelo e o timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     folder_name = f"{model_name}_fold_{fold_num}_{timestamp}"
@@ -45,49 +47,86 @@ def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_l
         writer.writerow(metrics)
     print(f"Métricas salvas em: {metrics_file}")
 
-    # Matriz de confusão
-    cm = confusion_matrix(all_labels, np.argmax(all_predictions, axis=1))
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=targets)
-    fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
-    disp.plot(ax=ax_cm, cmap=plt.cm.Blues, values_format="d")
-    plt.title("Matriz de Confusão")
-    fig_cm.savefig(os.path.join(folder_path, "confusion_matrix.png"), dpi=400)
-    plt.close(fig_cm)
-
-    # Curva ROC
-    y_true = label_binarize(all_labels, classes=range(len(targets)))
-    if all_predictions.shape[1] == 1:
-        # Caso binário
-        fpr, tpr, _ = roc_curve(y_true, all_predictions)
-        roc_auc = auc(fpr, tpr)
-        plt.figure()
-        plt.plot(fpr, tpr, color='darkorange', lw=2, label=f"ROC curve (area = {roc_auc:.2f})")
-        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.title("Curva ROC")
-        plt.legend(loc="lower right")
-        plt.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
-        plt.close()
+    # --- Predições discretas para Confusion Matrix ---
+    # 1-D ou 1-coluna: threshold 0.5 binário
+    if all_predictions.ndim == 1 or all_predictions.shape[1] == 1:
+        preds = (all_predictions.flatten() > 0.5).astype(int)
     else:
-        # Multiclasse
-        fpr = dict()
-        tpr = dict()
-        roc_auc = dict()
-        for i in range(len(targets)):
-            fpr[i], tpr[i], _ = roc_curve(y_true[:, i], all_predictions[:, i])
+        # qualquer outra shape (n,≥2): argmax
+        preds = np.argmax(all_predictions, axis=1)
+
+    # Matriz de Confusão
+    cm   = confusion_matrix(all_labels, preds, normalize="true")
+    disp = ConfusionMatrixDisplay(cm, display_labels=targets)
+    fig, ax = plt.subplots(figsize=(8,6))
+    disp.plot(ax=ax, cmap=plt.cm.Blues, values_format=".4f")
+    ax.set_title("Confusion Matrix")
+    fig.savefig(os.path.join(folder_path, "confusion_matrix.png"), dpi=400)
+    plt.close(fig)
+
+    # --- Curva ROC ---
+    # Define se é binário puro, binário com duas colunas ou multiclasses
+    if all_predictions.ndim == 1 or all_predictions.shape[1] == 1:
+        # Caso A: 1-D ou (n,1)
+        y_true   = all_labels
+        y_scores = all_predictions.flatten()
+
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        roc_auc     = auc(fpr, tpr)
+
+        fig, ax = plt.subplots(figsize=(8,6))
+        ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.4f}")
+        ax.plot([0,1],[0,1], lw=2, linestyle="--", label="Random")
+        ax.set_xlim(0,1); ax.set_ylim(0,1.05)
+        ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate")
+        ax.set_title("ROC Curve")
+        ax.legend(loc="lower right")
+        fig.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
+        plt.close(fig)
+
+    elif all_predictions.shape[1] == 2:
+        # Caso B: (n,2) → pega coluna 1 como score
+        y_true   = all_labels
+        y_scores = all_predictions[:,1]
+
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        roc_auc     = auc(fpr, tpr)
+
+        fig, ax = plt.subplots(figsize=(8,6))
+        ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.4f}")
+        ax.plot([0,1],[0,1], lw=2, linestyle="--", label="Random")
+        ax.set_xlim(0,1); ax.set_ylim(0,1.05)
+        ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate")
+        ax.set_title("ROC Curve")
+        ax.legend(loc="lower right")
+        fig.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
+        plt.close(fig)
+
+    else:
+        # Caso C: multiclasses (>2 colunas)
+        n_classes = all_predictions.shape[1]
+        y_true_bin = label_binarize(all_labels, classes=range(n_classes))
+
+        # Garantir probabilidades
+        if not np.allclose(all_predictions.sum(axis=1), 1.0):
+            y_scores = torch.softmax(torch.tensor(all_predictions), dim=1).numpy()
+        else:
+            y_scores = all_predictions
+
+        fpr = {}; tpr = {}; roc_auc = {}
+        for i in range(n_classes):
+            fpr[i], tpr[i], _ = roc_curve(y_true_bin[:,i], y_scores[:,i])
             roc_auc[i] = auc(fpr[i], tpr[i])
 
-        # Plot
-        fig_roc = plt.figure()
-        for i in range(len(targets)):
-            plt.plot(fpr[i], tpr[i], lw=2, label=f"{targets[i]} (area = {roc_auc[i]:.2f})")
-        plt.plot([0, 1], [0, 1], 'k--', lw=2)
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.title("Curva ROC Multiclasse")
-        plt.legend(loc="lower right")
-        plt.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
-        plt.close(fig_roc)
+        fig, ax = plt.subplots(figsize=(8,6))
+        for i, label in enumerate(targets):
+            ax.plot(fpr[i], tpr[i], lw=2, label=f"{label} (AUC={roc_auc[i]:.2f})")
+        ax.plot([0,1],[0,1], lw=2, linestyle="--", label="Random")
+        ax.set_xlim(0,1); ax.set_ylim(0,1.05)
+        ax.set_xlabel("FPR"); ax.set_ylabel("TPR")
+        ax.set_title("ROC Curve")
+        ax.legend(loc="lower right")
+        fig.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
+        plt.close(fig)
+
+    return folder_path
