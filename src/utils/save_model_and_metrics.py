@@ -22,22 +22,28 @@ def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_l
         targets: Lista de rótulos para exibição na matriz de confusão.
         data_val: Tipo de dados ('val' ou 'test').
     """
-    # Criar diretório com timestamp
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    save_path = os.path.join(base_dir, f"{model_name}_fold{fold_num}_{data_val}_{timestamp}")
-    os.makedirs(save_path, exist_ok=True)
+        # Gerar o nome único da pasta usando o nome do modelo e o timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{model_name}_fold_{fold_num}_{timestamp}"
+    folder_path = os.path.join(base_dir, folder_name)
 
-    # Salvar modelo
-    model_file = os.path.join(save_path, "model.pth")
-    torch.save(model.state_dict(), model_file)
+    # Criar a pasta para o modelo
+    os.makedirs(folder_path, exist_ok=True)
 
-    # Salvar métricas em CSV
-    metrics_file = os.path.join(save_path, "metrics.csv")
-    with open(metrics_file, mode='w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["Metric", "Value"])
-        for key, value in metrics.items():
-            writer.writerow([key, value])
+    # Salvar o modelo treinado
+    model_path = os.path.join(folder_path, "model.pth")
+    torch.save(model.state_dict(), model_path)
+    print(f"Modelo salvo em: {model_path}")
+
+    # Salvar as métricas
+    metrics_file = os.path.join(base_dir, "model_metrics.csv")
+    file_exists = os.path.isfile(metrics_file)
+    with open(metrics_file, mode='a', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=metrics.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(metrics)
+    print(f"Métricas salvas em: {metrics_file}")
 
     # Matriz de confusão
     cm = confusion_matrix(all_labels, np.argmax(all_predictions, axis=1))
@@ -45,7 +51,7 @@ def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_l
     fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
     disp.plot(ax=ax_cm, cmap=plt.cm.Blues, values_format="d")
     plt.title("Matriz de Confusão")
-    fig_cm.savefig(os.path.join(save_path, "confusion_matrix.png"), dpi=400)
+    fig_cm.savefig(os.path.join(folder_path, "confusion_matrix.png"), dpi=400)
     plt.close(fig_cm)
 
     # Curva ROC
@@ -61,7 +67,7 @@ def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_l
         plt.ylabel("True Positive Rate")
         plt.title("Curva ROC")
         plt.legend(loc="lower right")
-        plt.savefig(os.path.join(save_path, "roc_curve.png"), dpi=400)
+        plt.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
         plt.close()
     else:
         # Multiclasse
@@ -83,5 +89,5 @@ def save_model_and_metrics(model, metrics, model_name, base_dir, fold_num, all_l
         plt.ylabel("True Positive Rate")
         plt.title("Curva ROC Multiclasse")
         plt.legend(loc="lower right")
-        plt.savefig(os.path.join(save_path, "roc_curve.png"), dpi=400)
+        plt.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
         plt.close(fig_roc)
