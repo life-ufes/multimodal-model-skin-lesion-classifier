@@ -2,50 +2,69 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from transformers import BertModel
+from loadImageModelClassifier import loadModels
 
 
 class MultimodalModel(nn.Module):
-    def __init__(self, num_classes, device, cnn_model_name, text_model_name):
+    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85, unfreeze_weights=False, attention_mecanism="combined", n=2):
         super(MultimodalModel, self).__init__()
+        # Dimensões do modelo
+        self.common_dim = common_dim
+        self.text_encoder_dim_output = 512
+        self.cnn_dim_output = 512
         self.device = device
-        
-        # Definir encoder de imagem
-        if cnn_model_name == "resnet-50":
-            self.cnn = models.resnet50(pretrained=True)
-            cnn_output_dim = 2048
-        elif cnn_model_name == "resnet-18":
-            self.cnn = models.resnet18(pretrained=True)
-            cnn_output_dim = 512
-        else:
-            raise ValueError("Modelo de CNN não suportado.")
-        
-        # Congelar parâmetros da CNN
-        for param in self.cnn.parameters():
-            param.requires_grad = False
-        self.cnn.fc = nn.Identity()  # Remover camada de classificação
+        self.cnn_model_name = cnn_model_name
+        self.text_model_name = text_model_name
+        self.attention_mecanism = attention_mecanism
+        self.num_heads = num_heads  # para MultiheadAttention
+        self.n = n 
+        self.num_classes = num_classes
+        self.unfreeze_weights_of_visual_feat_extractor = unfreeze_weights
+        # -------------------------
+        # 1) Image Encoder
+        # -------------------------
+        self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
+            self.cnn_model_name,
+            self.common_dim,
+            unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor
+        )
+        # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
+        self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
         
         # Definir encoder de texto (BERT)
-        self.text_encoder = BertModel.from_pretrained(text_model_name)
-        for param in self.text_encoder.parameters():
-            param.requires_grad = False
-
-        bert_output_dim = self.text_encoder.config.hidden_size
+        # Carrega BERT, Bart, etc., congelado
+        self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
+            text_model_name)
+        # Projeta 768 (ou 1024) -> 512
+        self.text_fc = nn.Sequential(
+            nn.Linear(vocab_size, self.text_encoder_dim_output),
+            nn.ReLU(),
+            nn.Dropout(0.3))
         
-        # Camadas de atenção intra-modular
-        self.visual_attention = nn.MultiheadAttention(embed_dim=cnn_output_dim, num_heads=4)
-        self.text_attention = nn.MultiheadAttention(embed_dim=bert_output_dim, num_heads=4)
-        
-        # Camada de fusão e classificação
-        self.fc = nn.Linear(cnn_output_dim + bert_output_dim, num_classes)
+         # Projeção final p/ espaço comum
+        self.text_projector = nn.Linear(self.text_encoder_dim_output, self.common_dim)
+        # Camada de Fusão Final
+        # -------------------------
+        self.fc_fusion = self.fc_mlp_module(n=self.n)
+    def fc_mlp_module(self, n=1):
+        fc_fusion = nn.Sequential(
+            nn.Linear(self.common_dim * n, self.common_dim),
+            nn.BatchNorm1d(self.common_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(self.common_dim, self.common_dim // 2),
+            nn.BatchNorm1d(self.common_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(self.common_dim // 2, self.num_classes),
+            nn.Softmax(dim=1)
+        )
+        return fc_fusion
     
     def forward(self, image, metadata):
         # Extração de características visuais
-        image_features = self.cnn(image)  # Saída da CNN
-
-        # Atenção intra-modular para características visuais
-        image_features = image_features.unsqueeze(0)  # Adicionar dimensão de sequência
-        image_attention_output, _ = self.visual_attention(image_features, image_features, image_features)
-        image_attention_output = image_attention_output.squeeze(0)  # Remover dimensão de sequência
+        image_features = self.image_encoder(image).to(self.device)  # Saída da CNN
+        projected_image_features = self.image_projector(image_features)
 
         # Ajustar o formato de input_ids e attention_mask
         input_ids = metadata['input_ids'].squeeze(1)
@@ -54,16 +73,13 @@ class MultimodalModel(nn.Module):
         # Extração de características textuais
         text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
         text_features = text_outputs.last_hidden_state[:, 0, :]  # Usar token [CLS]
+        # Projeção para espaço comum
 
-        # Atenção intra-modular para características textuais
-        text_features = text_features.unsqueeze(0)  # Adicionar dimensão de sequência
-        text_attention_output, _ = self.text_attention(text_features, text_features, text_features)
-        text_attention_output = text_attention_output.squeeze(0)  # Remover dimensão de sequência
-
+        projected_text_features = self.text_projector(text_features)
         # Combinação das saídas
-        combined_features = torch.cat((image_attention_output, text_attention_output), dim=-1)
+        combined_features = torch.cat((projected_image_features, projected_text_features), dim=-1)
 
         # Classificação final
-        outputs = self.fc(combined_features)
+        outputs = self.fc_fusion(combined_features)
 
         return outputs
