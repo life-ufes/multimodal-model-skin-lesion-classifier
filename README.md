@@ -1,7 +1,9 @@
 ```markdown
-# Multimodal Model - Skin Lesion Classifier
+# Multimodal Model - Skin Lesion Classifier Framework
 
-This repository contains a multimodal model for classifying skin lesions. The model integrates an image feature extractor (e.g., **VGG16**, **ResNet18**, **ResNet50**, **DenseNet169**, among others) with clinical data to form a powerful multimodal architecture.
+![Multimodal Model for Skin Lesion Recognition](./images/multimodal_model_representation.png)
+
+This repository contains a multimodal model for classifying skin lesions. The model integrates an image feature extractor (e.g., **VGG16**, **ResNet18**, **ResNet50**, **DenseNet169**, among others) with clinical data to form a powerful multimodal architecture. Also, on the latest updates, many transformers based on models have been included.
 
 ## 1. Preparing the Dataset
 
@@ -9,6 +11,8 @@ This repository contains a multimodal model for classifying skin lesions. The mo
 2. Extract the files and move them to the `data/` directory of this project.
 
 > **Note:** Ensure the folder structure is correct for the training script to properly recognize the files.
+
+* This framework supports ISIC-2019, ISIC-2020, PAD-UFES-20 and PAD-UFES20-Extended datasets.
 
 ## 2. Setting Up the Environment
 
@@ -29,20 +33,31 @@ This repository contains a multimodal model for classifying skin lesions. The mo
 
 ## 3. Training the Model
 
-1. Choose the image feature extractor (such as **VGG16**, **ResNet18**, **ResNet50**, **DenseNet169**, etc.) in the training script.
-2. Run the following command:  
-   ```bash
-   python3 src/train.py
-   ```
-3. Monitor the training process and metrics via **MLFlow** (if configured in the script).
+![Illustration of Multimodal Model - Using image and metadata](./images/multimodal_model_representation_representation.png)
 
-## 3.1 Training a model using ISIC 2019 dataset
+
+1. Choose the image feature extractor (such as **VGG16**, **ResNet18**, **ResNet50**, **DenseNet169**, etc.) in the training script.
+2. Choose your metadata information preprocessor. It can be 'one-hot-encoder', "tab-transformer" or "bert-base-uncased". 
+
+3. Run the following command:  
+   ```bash
+   python3 src/train_pad_20.py
+
+   ```
+4. Monitor the training process and metrics via **MLFlow** (if configured in the script).
+
+## 4.1 Training a model using ISIC 2019 dataset
 
 1. Change the dataset folder path diretory on 'preprocess_isic_2019.py' script and then run it to create the "metadata.csv" equivalent to this dataset.
 
 2. Then, with the metadata.csv created, run the 'train_isic_2019.py' script to train the defined model.
 
-## 4. Plotting the Model
+## 4.2 Create your own mulmodalmodal model
+
+You can create yor own models. Take the created model scripts as examples on the folder 'src/models'. Then, you import it to your 'src/train_pad_20.py' script.
+
+
+## 5. Plotting the Model
 
 1. Set the path to the model you want to visualize in the script.
 2. Run the plot script:  
@@ -51,7 +66,7 @@ This repository contains a multimodal model for classifying skin lesions. The mo
    ```
 3. A plot or interactive graph of the model will be generated, depending on your configuration.
 
-## 5. Exporting the Model to ONNX Format
+## 6. Exporting the Model to ONNX Format
 
 1. In the `src/export_model_onnx.py` script, update the `model_path` variable to the desired model path.
 2. Then, execute:  
@@ -62,7 +77,7 @@ This repository contains a multimodal model for classifying skin lesions. The mo
 
 > **Warning:** Do not alter the model architecture before exporting it. If changes are necessary, ensure you know the original architecture used for training, as any modifications might prevent proper conversion.
 
-## 6. Visualizing the Converted Model
+## 7. Visualizing the Converted Model
 
 To inspect the ONNX file structure, use [Netron](https://netron.app/):  
 ```bash
@@ -70,7 +85,7 @@ netron multimodal_model.onnx
 ```
 This will launch a graphical interface to explore the model’s layers.
 
-## 7. Visualizing the MLFlow UI
+## 8. Visualizing the MLFlow UI
 
 To track training metrics, model versions, and saved artifacts, run:  
 ```bash
