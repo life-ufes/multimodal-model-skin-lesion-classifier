@@ -1,4 +1,3 @@
-```markdown
 # Multimodal Model - Skin Lesion Classifier Framework
 
 ![Multimodal Model for Skin Lesion Recognition](./images/multimodal_model_representation.png)
