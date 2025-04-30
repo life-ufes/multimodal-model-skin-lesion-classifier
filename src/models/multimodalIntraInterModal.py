@@ -57,7 +57,7 @@ class MultimodalModel(nn.Module):
         else:
             # Carrega BERT, Bart, etc., congelado
             self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
-                text_model_name
+                text_model_encoder = text_model_name, unfreeze_weights = self.unfreeze_weights_of_visual_feat_extractor
             )
             # Projeta 768 (ou 1024) -> 512
             self.text_fc = nn.Sequential(
@@ -157,37 +157,43 @@ class MultimodalModel(nn.Module):
         image_features = image_features.permute(1, 0, 2)
 
         # === [B] Extrator de Texto ===
-        if self.text_model_name == "one-hot-encoder":
+        if self.text_model_name in ["one-hot-encoder", "tab-transformer"]:
             text_features = self.text_fc(text_metadata)  # (batch, 512)
             text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
+
+            # Projeção para espaço comum
+            b_tt, s_tt, d_tt = text_features.shape
+            text_features = text_features.view(b_tt*s_tt, d_tt)
+            projected_text_features = self.text_projector(text_features)
+            text_features = projected_text_features.view(b_tt, s_tt, -1)
+            text_features = text_features.permute(1, 0, 2)
+
+        elif (self.text_model_name in ["gpt2", "bert-base-uncased"]):
+            # Ajustar o formato de input_ids e attention_mask
+            input_ids = text_metadata['input_ids'].squeeze(1)
+            attention_mask = text_metadata['attention_mask'].squeeze(1)
+
+            # Extração de características textuais
+            if "gpt2" in self.text_model_name.lower():
+                text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
+                # A saída do GPT-2
+                text_features = text_outputs.last_hidden_state[:, -1, :]  # Último token da sequência
+                # Alternativamente, se você quiser usar a média de todos os tokens:
+                # text_features = text_outputs.last_hidden_state.mean(dim=1)
+            else:
+                text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
+                text_features = text_outputs.last_hidden_state[:, 0, :]  # Usar token [CLS] para BERT
+
+            # Movendo para o dispositivo correto
+            text_features = text_features.to(self.device)
+            text_features = text_features.unsqueeze(1)
+            text_features = text_features.permute(1, 0, 2)
+            # Projeção para espaço comum
+            projected_text_features = self.text_projector(text_features)
+            text_features = projected_text_features
         else:
-            # Ajustar input_ids e attention_mask p/ shape [batch, seq_len]
-            input_ids = text_metadata["input_ids"]
-            attention_mask = text_metadata["attention_mask"]
-
-            if len(input_ids.shape) == 3:  # por ex. (batch, 1, seq_len)
-                input_ids = input_ids.squeeze(1)
-            if len(attention_mask.shape) == 3:
-                attention_mask = attention_mask.squeeze(1)
-
-            encoder_output = self.text_encoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask
-            )
-            text_features = encoder_output.last_hidden_state  # (batch, seq_len_text, 768)
-
-            b_t, s_t, d_t = text_features.shape
-            text_features = text_features.view(b_t*s_t, d_t)
-            text_features = self.text_fc(text_features)  # ex.: (batch*seq_t, 512)
-            text_features = text_features.view(b_t, s_t, -1)
-
-        # Projeção para espaço comum
-        b_tt, s_tt, d_tt = text_features.shape
-        text_features = text_features.view(b_tt*s_tt, d_tt)
-        projected_text_features = self.text_projector(text_features)
-        text_features = projected_text_features.view(b_tt, s_tt, -1)
-        text_features = text_features.permute(1, 0, 2)
-
+            raise ValueError("Encoder de texto não implementado!\n")
+        
         # === [C] Self-Attention Intra-Modality ===
         image_features_att, _ = self.image_self_attention(
             image_features, image_features, image_features

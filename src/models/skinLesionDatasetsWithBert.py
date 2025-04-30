@@ -13,10 +13,18 @@ class SkinLesionDataset(Dataset):
         self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
         self.image_encoder = image_encoder
-        self.random_undersampling=random_undersampling
+        self.random_undersampling = random_undersampling
         self.targets = None
         self.transform = self.load_transforms()
+        
+        # Carregar e configurar o tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
+        
+        # Se não houver pad_token, defina o eos_token como pad_token
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.padding_side = "right"  # Opcional, ajusta se necessário
+        
         # Carregar e processar metadados
         self.metadata = self.load_metadata()
 
@@ -39,21 +47,23 @@ class SkinLesionDataset(Dataset):
 
         # Processar texto dos metadados
         textual_data = self.metadata.iloc[idx]['sentence']
+        
+        # Tokenização do texto (garantindo que o modelo do GPT-2 ou BERT seja tratado corretamente)
         tokenized_text = self.tokenizer(
             textual_data,
-            padding='max_length',
-            truncation=True,
-            return_tensors="pt",
-            max_length=512
+            padding='max_length',         # Preenche até o tamanho máximo
+            truncation=True,              # Trunca se exceder o limite
+            max_length=256,               # Define o tamanho máximo da sequência
+            return_tensors="pt"
         )
-
+        
         # Rótulo
         label = torch.tensor(self.labels[idx], dtype=torch.long)
 
         return image, tokenized_text, label
 
     def load_transforms(self):
-        if self.image_encoder=="vit-base-patch16-224":
+        if self.image_encoder == "vit-base-patch16-224":
             # Transforma imagens para o formato necessário para treinamento
             transform = transforms.Compose([
                 transforms.Resize((224, 224)),
@@ -93,12 +103,11 @@ class SkinLesionDataset(Dataset):
             indices, test_size=test_size, random_state=random_state, shuffle=True
         )
 
-        # Criar Subconjuntos
-        train_dataset = torch.utils.data.Subset(self, train_indices)
-        val_dataset = torch.utils.data.Subset(self, val_test_indices)
-
         # Criar DataLoaders
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
+        val_test_sampler = torch.utils.data.SubsetRandomSampler(val_test_indices)
 
-        return train_loader, val_loader
+        train_loader = DataLoader(self, batch_size=batch_size, sampler=train_sampler)
+        val_test_loader = DataLoader(self, batch_size=batch_size, sampler=val_test_sampler)
+
+        return train_loader, val_test_loader

@@ -29,20 +29,31 @@ class MultimodalModel(nn.Module):
             unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor
         )
         # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
-        self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
+        # self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
         
         # Definir encoder de texto (BERT)
         # Carrega BERT, Bart, etc., congelado
         self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
-            text_model_name)
+            text_model_name=self.text_model_name, unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor)
         # Projeta 768 (ou 1024) -> 512
         self.text_fc = nn.Sequential(
             nn.Linear(vocab_size, self.text_encoder_dim_output),
             nn.ReLU(),
             nn.Dropout(0.3))
         
-         # Projeção final p/ espaço comum
-        self.text_projector = nn.Linear(self.text_encoder_dim_output, self.common_dim)
+        # Projeção final p/ espaço comum
+        # self.text_projector = nn.Linear(self.text_encoder_dim_output, self.common_dim)
+        self.text_projector = nn.Sequential(
+            nn.Linear(self.text_encoder_dim_output, common_dim),
+            nn.ReLU(),
+            nn.Linear(common_dim, common_dim)
+        )
+        self.image_projector = nn.Sequential(
+            nn.Linear(self.cnn_dim_output, common_dim),
+            nn.ReLU(),
+            nn.Linear(common_dim, common_dim)
+        )
+
         # Camada de Fusão Final
         # -------------------------
         self.fc_fusion = self.fc_mlp_module(n=self.n)
@@ -71,11 +82,22 @@ class MultimodalModel(nn.Module):
         attention_mask = metadata['attention_mask'].squeeze(1)
 
         # Extração de características textuais
-        text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
-        text_features = text_outputs.last_hidden_state[:, 0, :]  # Usar token [CLS]
-        # Projeção para espaço comum
+        if "gpt2" in self.text_model_name.lower():
+            text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
+            # A saída do GPT-2
+            text_features = text_outputs.last_hidden_state[:, -1, :]  # Último token da sequência
+            # Alternativamente, se você quiser usar a média de todos os tokens:
+            # text_features = text_outputs.last_hidden_state.mean(dim=1)
+        else:
+            text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
+            text_features = text_outputs.last_hidden_state[:, 0, :]  # Usar token [CLS] para BERT
 
+        # Movendo para o dispositivo correto
+        text_features = text_features.to(self.device)
+
+        # Projeção para espaço comum
         projected_text_features = self.text_projector(text_features)
+
         # Combinação das saídas
         combined_features = torch.cat((projected_image_features, projected_text_features), dim=-1)
 
@@ -83,3 +105,4 @@ class MultimodalModel(nn.Module):
         outputs = self.fc_fusion(combined_features)
 
         return outputs
+

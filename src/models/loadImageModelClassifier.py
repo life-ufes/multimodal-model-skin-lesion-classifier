@@ -242,16 +242,26 @@ class loadModels():
             print(f"Erro ao tentar carregar o modelo!. Erro: {e}\n")
 
     @staticmethod
-    def loadTextModelEncoder(text_model_encoder):
+    def loadTextModelEncoder(text_model_encoder:str, unfreeze_weights: bool=False):
         if text_model_encoder == "bert-base-uncased":
             # Definir encoder de texto (BERT)
-            text_encoder = BertModel.from_pretrained(text_model_encoder)
+            text_encoder = AutoModel.from_pretrained(text_model_encoder)
             for param in text_encoder.parameters():
-                param.requires_grad = False
+                param.requires_grad = unfreeze_weights
 
             bert_output_dim = text_encoder.config.hidden_size
             vocab_size = 768
             return text_encoder, bert_output_dim, vocab_size
+        
+        # --- GPT-2 ---
+        elif text_model_encoder.startswith("gpt2"):
+            text_encoder = AutoModel.from_pretrained(text_model_encoder)
+            # Congela todos os pesos do GPT-2
+            for param in text_encoder.parameters():
+                param.requires_grad = unfreeze_weights
+            output_dim = text_encoder.config.hidden_size
+            vocab_size = output_dim
+            return text_encoder, output_dim, vocab_size
 
         elif text_model_encoder == "tab-transformer":
             # Defina as cardinalidades reais para suas colunas categóricas
