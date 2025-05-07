@@ -34,7 +34,7 @@ class MultimodalModel(nn.Module):
         # Definir encoder de texto (BERT)
         # Carrega BERT, Bart, etc., congelado
         self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
-            text_model_name=self.text_model_name, unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor)
+            text_model_encoder=self.text_model_name, unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor)
         # Projeta 768 (ou 1024) -> 512
         self.text_fc = nn.Sequential(
             nn.Linear(vocab_size, self.text_encoder_dim_output),

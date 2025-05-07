@@ -236,6 +236,9 @@ class MultimodalModel(nn.Module):
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
                 projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
+
+            projected_image_features = projected_image_features.squeeze(0)
+            projected_text_features = projected_text_features.squeeze(0)
             alpha_img = torch.sigmoid(self.img_gate(projected_image_features))  # (batch, common_dim)
             alpha_txt = torch.sigmoid(self.txt_gate(projected_text_features))   # (batch, common_dim)
 
@@ -248,8 +251,8 @@ class MultimodalModel(nn.Module):
                 # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
                 projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
-            # Apenas concatena as features projetadas
-            combined_features = torch.cat([projected_image_features, projected_text_features], dim=1)
+            # # Apenas concatena as features projetadas
+            combined_features = torch.cat((projected_image_features.squeeze(0), projected_text_features.squeeze(0)), dim=-1)
         elif self.attention_mecanism == "weighted-after-crossattention":
             # # === [F] Gating: quanto usar de cada modal?
             #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
