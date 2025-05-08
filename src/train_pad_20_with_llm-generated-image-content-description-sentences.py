@@ -152,6 +152,7 @@ def train_process(num_epochs,
         model, 
         metrics, 
         model_name, 
+        False,
         model_save_path, 
         fold_num, 
         all_labels, 
@@ -252,7 +253,7 @@ if __name__ == "__main__":
     dataset_folder_path = f"./data/{dataset_folder_name}"
     unfreeze_weights = True
     for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
-        for llm_model_name_sequence_generator in ["llava:34b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
+        for llm_model_name_sequence_generator in ["gemma3:27b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
             results_folder_path = f"./src/results/testes/generated-senteces-by-llm-with-image-content-description/{dataset_folder_name}/textual-encoder-{text_model_encoder}/{llm_model_name_sequence_generator}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
             
             # Para todas os tipos de estratégias a serem usadas

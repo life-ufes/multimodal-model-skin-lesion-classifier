@@ -8,14 +8,15 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve,
 from sklearn.preprocessing import label_binarize
 
 def save_model_and_metrics(model,
-                           metrics,
-                           model_name,
-                           base_dir,
-                           fold_num,
+                           metrics:dict,
+                           model_name:str,
+                           save_to_disk:bool,
+                           base_dir:str,
+                           fold_num:int,
                            all_labels,
                            all_predictions,
                            targets,
-                           data_val="val"):
+                           data_val:str="val"):
     """
     Salva modelo, métricas, matriz de confusão e curva ROC em 400 dpi,
     tratando corretamente shapes 1-D, (n,1), (n,2) e multiclasses.
@@ -32,10 +33,11 @@ def save_model_and_metrics(model,
     # Criar a pasta para o modelo
     os.makedirs(folder_path, exist_ok=True)
 
-    # Salvar o modelo treinado
-    model_path = os.path.join(folder_path, "model.pth")
-    torch.save(model.state_dict(), model_path)
-    print(f"Modelo salvo em: {model_path}")
+    if save_to_disk is True:
+        # Salvar o modelo treinado
+        model_path = os.path.join(folder_path, "model.pth")
+        torch.save(model.state_dict(), model_path)
+        print(f"Modelo salvo em: {model_path}")
 
     # Salvar as métricas
     metrics_file = os.path.join(base_dir, "model_metrics.csv")
