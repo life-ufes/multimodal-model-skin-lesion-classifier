@@ -201,7 +201,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device:str, llm_model_name:str, vllm_model_name:str, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -215,7 +215,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         drop_nan=False)
                     elif (text_model_encoder in ['gpt2', 'bert-base-uncased']):
                         dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
-                        metadata_file=f"{dataset_folder_path}/metadata_with_sentences_of_image-description_{llm_model_name_sequence_generator}.csv",
+                        metadata_file=f"{dataset_folder_path}/vllms-and-llms-sentences/metadata_with_sentences_of_patient_description_and_image-description_llm-{llm_model_name}_vllm-{vllm_model_name}.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
@@ -244,7 +244,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 16
+    batch_size = 32
     k_folds = 5
     common_dim = 512
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -254,25 +254,28 @@ if __name__ == "__main__":
     unfreeze_weights = True
     for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
         for llm_model_name_sequence_generator in ["gemma3:27b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
-            results_folder_path = f"./src/results/testes/generated-senteces-by-llm-with-patient-and-image-content-description/{dataset_folder_name}/textual-encoder-{text_model_encoder}/{llm_model_name_sequence_generator}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
-            
-            # Para todas os tipos de estratégias a serem usadas
-            list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
-            # Testar com todos os modelos
-            list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
-            # Treina todos modelos que podem ser usados no modelo multi-modal
-            run_expirements(
-                dataset_folder_path, 
-                results_folder_path,
-                llm_model_name_sequence_generator, 
-                num_epochs, 
-                batch_size, 
-                k_folds, 
-                common_dim, 
-                text_model_encoder, 
-                unfreeze_weights, 
-                device, 
-                list_num_heads, 
-                list_of_attention_mecanism=list_of_attention_mecanism, 
-                list_of_models=list_of_models
-            )
+            for llm_model_name in ["qwen2.5:72b", "phi4", "deepseek-r1:70b", "gemma3:27b", "qwq"]:
+                for vllm_model_name in ["llava:34b"]:
+                    results_folder_path = f"./src/results/testes/generated-senteces-by-llm-with-patient-and-image-content-description/{dataset_folder_name}/textual-encoder-{text_model_encoder}/sentences-generated-by-{llm_model_name_sequence_generator}/llm_{llm_model_name}/vllm_{vllm_model_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+                    # Para todas os tipos de estratégias a serem usadas
+                    list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+                    # Testar com todos os modelos
+                    list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+                    # Treina todos modelos que podem ser usados no modelo multi-modal
+                    run_expirements(
+                        dataset_folder_path, 
+                        results_folder_path,
+                        llm_model_name_sequence_generator, 
+                        num_epochs, 
+                        batch_size, 
+                        k_folds, 
+                        common_dim, 
+                        text_model_encoder, 
+                        unfreeze_weights, 
+                        device,
+                        llm_model_name,
+                        vllm_model_name, 
+                        list_num_heads, 
+                        list_of_attention_mecanism=list_of_attention_mecanism, 
+                        list_of_models=list_of_models
+                    )
