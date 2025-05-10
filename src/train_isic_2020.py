@@ -8,6 +8,8 @@ from models import skinLesionDatasetsISIC2020
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold
+import numpy as np
+from collections import Counter
 import time
 import os
 from torch.utils.data import DataLoader, Subset
@@ -15,11 +17,13 @@ from torch.utils.data import DataLoader, Subset
 import mlflow
 from tqdm import tqdm
 
+
 def compute_class_weights(labels):
     class_counts = Counter(labels)
     total_samples = len(labels)
     class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
     return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
+
 
 def train_process(num_epochs, 
                   num_heads, 
@@ -72,7 +76,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-ISIC-2020 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK"
+    experiment_name = "EXPERIMENTOS-ISIC-2020 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK - MULTICLASS"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -228,9 +232,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             class_weights, common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
 
-
-
-def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, type_of_problem:str, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -241,17 +243,21 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                     bert_model_name=text_model_encoder,
                     image_encoder=model_name,
                     drop_nan=False,
-                    random_undersampling=False
-                    )
+                    random_undersampling=False,
+                    type_of_problem=type_of_problem)
 
                     num_metadata_features = dataset.features.shape[1] if text_model_encoder== 'one-hot-encoder' else 512
                     print(f"Número de features do metadados: {num_metadata_features}\n")
-                    num_classes = len(dataset.metadata['benign_malignant'].unique())
-
+                    if type_of_problem=="binaryclass":
+                        num_classes = len(dataset.metadata['benign_malignant'].unique())
+                    else:
+                        num_classes = len(dataset.metadata['diagnosis'].unique())
+                    
                     pipeline(dataset, 
                         num_metadata_features=num_metadata_features, 
                         num_epochs=num_epochs, batch_size=batch_size, 
-                        device=device, k_folds=k_folds, num_classes=num_classes, 
+                        device=device, k_folds=k_folds, 
+                        num_classes=num_classes, 
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
@@ -265,7 +271,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
 
 if __name__ == "__main__":
     num_epochs = 100
-    batch_size = 16
+    batch_size = 32
     k_folds=5
     common_dim=512
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
@@ -273,11 +279,12 @@ if __name__ == "__main__":
     list_num_heads=[2]
     dataset_folder_name="ISIC-2020"
     dataset_folder_path=f"./data/{dataset_folder_name}"
+    type_of_problem="multiclass" #"binaryclass" #"multiclass"
     unfreeze_weights = True # Caso queira descongelar os pesos da CNN desejada
-    results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{type_of_problem}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
+    run_expirements(dataset_folder_path, results_folder_path, num_epochs, type_of_problem, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
