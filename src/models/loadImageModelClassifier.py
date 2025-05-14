@@ -3,7 +3,11 @@ import torch.nn as nn
 import timm
 from torchvision import models
 from tab_transformer import TabTransformer
-from transformers import ViTModel, CLIPModel, CLIPProcessor, AutoModel, BertModel
+from transformers import ViTModel, CLIPModel, CLIPProcessor, BertModel
+from transformers import AutoModel
+# from model2vec import StaticModel
+
+
 class loadModels():
     @staticmethod
     def loadModelImageEncoder(cnn_model_name, common_dim, unfreeze_weights=False):
@@ -254,7 +258,7 @@ class loadModels():
             return text_encoder, bert_output_dim, vocab_size
         
         # --- GPT-2 ---
-        elif text_model_encoder.startswith("gpt2"):
+        elif text_model_encoder == "gpt2":
             text_encoder = AutoModel.from_pretrained(text_model_encoder)
             # Congela todos os pesos do GPT-2
             for param in text_encoder.parameters():
@@ -262,6 +266,16 @@ class loadModels():
             output_dim = text_encoder.config.hidden_size
             vocab_size = output_dim
             return text_encoder, output_dim, vocab_size
+
+        # --- PubMedBERT (model2vec) ---
+        elif text_model_encoder in ["pubmedbert-base-embeddings-100K", "pubmedbert-base-embeddings-500K", "pubmedbert-base-embeddings-1M","pubmedbert-base-embeddings-2M"]:
+            # 1) Carrega o modelo estático
+            # model = StaticModel.from_pretrained(text_model_encoder)
+            # 2) Não há parâmetros treináveis nesse modelo
+            #    text_encoder não tem .parameters() para congelar
+            # 3) Dimensão de saída do embedding
+            output_dim = 64
+            return None, output_dim, output_dim   
 
         elif text_model_encoder == "tab-transformer":
             # Defina as cardinalidades reais para suas colunas categóricas

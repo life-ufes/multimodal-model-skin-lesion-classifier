@@ -3,8 +3,8 @@ import torch.nn as nn
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
-from models import multimodalIntraInterModal, multimodalIntraModalWithBert
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import multimodalIntraInterModal, multimodalIntraModalWithBert, multimodalIntraModalWithPubMedBert
+from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold
@@ -179,7 +179,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
         
-        if (text_model_encoder in ["gpt2", "bert-base-uncased"]):
+        if (text_model_encoder in ['gpt2', 'bert-base-uncased']):
             model = multimodalIntraModalWithBert.MultimodalModel(
                 num_classes, num_heads, device, 
                 cnn_model_name=model_name, 
@@ -190,7 +190,20 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
-
+        elif (text_model_encoder in [
+            'pubmedbert-base-embeddings-100K','pubmedbert-base-embeddings-500K',
+            'pubmedbert-base-embeddings-1M','pubmedbert-base-embeddings-2M'
+        ]):
+            model = multimodalIntraModalWithPubMedBert.MultimodalModel(
+                num_classes, num_heads, device, 
+                cnn_model_name=model_name, 
+                text_model_name=text_model_encoder, 
+                common_dim=common_dim, 
+                vocab_size=num_metadata_features, 
+                unfreeze_weights=unfreeze_weights, 
+                attention_mecanism=attention_mecanism, 
+                n=1 if attention_mecanism=="no-metadata" else 2
+            )
         else:
             raise ValueError("Encoder de texto não implementado!\n")
 
@@ -215,6 +228,16 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         drop_nan=False)
                     elif (text_model_encoder in ['gpt2', 'bert-base-uncased']):
                         dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
+                        metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
+                        img_dir=f"{dataset_folder_path}/images",
+                        bert_model_name=text_model_encoder,
+                        image_encoder=model_name,
+                        drop_nan=False)
+
+                    elif (text_model_encoder in ['pubmedbert-base-embeddings-100K','pubmedbert-base-embeddings-500K',
+                         'pubmedbert-base-embeddings-1M','pubmedbert-base-embeddings-2M'
+                         ]):
+                        dataset = skinLesionDatasetsWithPubMedEmbeddings.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
@@ -252,14 +275,14 @@ if __name__ == "__main__":
     dataset_folder_name = "PAD-UFES-20"
     dataset_folder_path = f"./data/{dataset_folder_name}"
     unfreeze_weights = True
-    for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
-        for llm_model_name_sequence_generator in ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
+    for text_model_encoder in ['pubmedbert-base-embeddings-2M']: # ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
+        for llm_model_name_sequence_generator in ["deepseek-r1:70b"]:
             results_folder_path = f"./src/results/testes/generated-senteces-by-llm/{dataset_folder_name}/textual-encoder-{text_model_encoder}/{llm_model_name_sequence_generator}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
             
             # Para todas os tipos de estratégias a serem usadas
-            list_of_attention_mecanism = ["crossattention"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+            list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
             # Testar com todos os modelos
-            list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+            list_of_models = ["davit_tiny.msft_in1k"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
             # Treina todos modelos que podem ser usados no modelo multi-modal
             run_expirements(
                 dataset_folder_path, 
