@@ -149,15 +149,15 @@ def train_process(num_epochs,
     metrics["data_val"] = "val"
 
     save_model_and_metrics(
-        model, 
-        metrics, 
-        model_name, 
-        False,
-        model_save_path, 
-        fold_num, 
-        all_labels, 
-        all_predictions, 
-        targets, 
+        model=model, 
+        metrics=metrics, 
+        model_name=model_name, 
+        save_to_disk=False,
+        base_dir=model_save_path, 
+        fold_num=fold_num, 
+        all_labels=all_labels, 
+        all_predictions=all_predictions, 
+        targets=targets, 
         data_val="val"
     )
     print(f"Model saved at {model_save_path}")
@@ -196,9 +196,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
         # Treino do modelo carregado
         model, model_save_path = train_process(
-            num_epochs, num_heads, fold+1, train_loader, val_loader, 
-            dataset.targets, model, device, class_weights, 
-            common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
+            num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, train_loader=train_loader, val_loader=val_loader, 
+            targets=dataset.targets, model=model, device=device, weightes_per_category=class_weights, 
+            common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
         )
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device:str, llm_model_name:str, vllm_model_name:str, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
         for llm_model_name_sequence_generator in ["gemma3:27b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
             for llm_model_name in ["qwen2.5:72b", "phi4", "deepseek-r1:70b", "gemma3:27b", "qwq"]:
-                for vllm_model_name in ["llava:34b"]:
+                for vllm_model_name in ["qwen2.5:72b"]:
                     results_folder_path = f"./src/results/testes/generated-senteces-by-llm-with-patient-and-image-content-description/{dataset_folder_name}/textual-encoder-{text_model_encoder}/sentences-generated-by-{llm_model_name_sequence_generator}/llm_{llm_model_name}/vllm_{vllm_model_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
                     # Para todas os tipos de estratégias a serem usadas
                     list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]

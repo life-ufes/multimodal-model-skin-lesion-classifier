@@ -15,7 +15,7 @@ def save_model_and_metrics(model,
                            fold_num:int,
                            all_labels,
                            all_predictions,
-                           targets,
+                           targets: list,
                            data_val:str="val"):
     """
     Salva modelo, métricas, matriz de confusão e curva ROC em 400 dpi,
