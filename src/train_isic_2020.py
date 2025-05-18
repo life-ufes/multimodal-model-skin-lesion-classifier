@@ -181,8 +181,6 @@ def train_process(num_epochs,
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
-
-
     
     save_model_and_metrics(
         model=model, 

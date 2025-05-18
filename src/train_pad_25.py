@@ -181,14 +181,14 @@ def train_process(num_epochs,
     metrics["data_val"] = "val"
 
     save_model_and_metrics(
-        model, 
-        metrics, 
-        model_name, 
-        model_save_path, 
-        fold_num, 
-        all_labels, 
-        all_predictions, 
-        targets, 
+        model=model, 
+        metrics=metrics, 
+        model_name=model_name, 
+        model_save_path=model_save_path, 
+        fold_num=fold_num, 
+        all_labels=all_labels, 
+        all_predictions=all_predictions, 
+        targets=targets, 
         data_val="val"
     )
     print(f"Model saved at {model_save_path}")

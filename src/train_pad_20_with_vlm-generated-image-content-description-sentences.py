@@ -196,9 +196,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
         # Treino do modelo carregado
         model, model_save_path = train_process(
-            num_epochs, num_heads, fold+1, train_loader, val_loader, 
-            dataset.targets, model, device, class_weights, 
-            common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
+            num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, train_loader=train_loader, val_loader=val_loader, 
+            targets=dataset.targets, model=model, device=device, weightes_per_category=class_weights, 
+            common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
         )
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):

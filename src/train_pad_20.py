@@ -149,14 +149,14 @@ def train_process(num_epochs,
     metrics["data_val"] = "val"
 
     save_model_and_metrics(
-        model, 
-        metrics, 
-        model_name, 
-        model_save_path, 
-        fold_num, 
-        all_labels, 
-        all_predictions, 
-        targets, 
+        model=model, 
+        metrics=metrics, 
+        model_name=model_name, 
+        model_save_path=model_save_path, 
+        fold_num=fold_num, 
+        all_labels=all_labels, 
+        all_predictions=all_predictions, 
+        targets=targets, 
         data_val="val"
     )
     print(f"Model saved at {model_save_path}")
@@ -251,7 +251,7 @@ if __name__ == "__main__":
     list_num_heads = [2]
     dataset_folder_name = "PAD-UFES-20"
     dataset_folder_path = f"./data/{dataset_folder_name}"
-    unfreeze_weights = True
+    unfreeze_weights = False
     llm_model_name_sequence_generator=None
     results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     
