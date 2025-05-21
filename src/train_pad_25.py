@@ -198,7 +198,7 @@ def train_process(num_epochs,
 
 
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
     all_metrics = []
 
     # Obter os rótulos para validação estratificada (se necessário)
@@ -215,8 +215,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         val_subset = Subset(dataset, val_idx)
 
         # Criar DataLoaders
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=15)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=15)
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
 
         # Calcular pesos das classes com base no conjunto de treino
         train_labels = [labels[i] for i in train_idx]

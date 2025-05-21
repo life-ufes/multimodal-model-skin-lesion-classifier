@@ -153,7 +153,7 @@ def train_process(num_epochs,
         metrics=metrics, 
         model_name=model_name, 
         base_dir=model_save_path,
-        save_to_disk=False, 
+        save_to_disk=True, 
         fold_num=fold_num, 
         all_labels=all_labels, 
         all_predictions=all_predictions, 
@@ -164,7 +164,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
     labels = [dataset.labels[i] for i in range(len(dataset))]
     stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
 
@@ -172,8 +172,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Fold {fold+1}/{k_folds}")
         train_subset = Subset(dataset, train_idx)
         val_subset = Subset(dataset, val_idx)
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=15)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=15)
+        # Criar DataLoaders
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
 
         train_labels = [labels[i] for i in train_idx]
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
@@ -236,7 +237,8 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         num_heads=num_heads,
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
-                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
+                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
+                        num_workers=5, persistent_workers=True
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -249,17 +251,17 @@ if __name__ == "__main__":
     common_dim = 512
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    list_num_heads = [2]
+    list_num_heads = [8]
     dataset_folder_name = "PAD-UFES-20"
     dataset_folder_path = f"./data/{dataset_folder_name}"
-    unfreeze_weights = False
+    unfreeze_weights = True
     llm_model_name_sequence_generator=None
     results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path, 

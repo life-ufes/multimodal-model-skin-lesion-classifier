@@ -20,8 +20,9 @@ if __name__ == "__main__":
     all_results = []
 
     list_of_attention_mecanism = ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
-    
-    base_folder_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/PAD-UFES-25/unfrozen_weights/8"
+    dataset_name="PAD-UFES-20"
+    num_heads=8
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/{dataset_name}/unfrozen_weights/{num_heads}"
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
         list_of_models = ["mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
