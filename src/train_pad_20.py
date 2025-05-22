@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
+from utils import load_local_variables
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, multimodalIntraModalWithBert
 from models import skinLesionDatasets, skinLesionDatasetsWithBert
@@ -245,19 +246,23 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                     continue
 
 if __name__ == "__main__":
-    num_epochs = 100
-    batch_size = 32
-    k_folds = 5
-    common_dim = 512
-    text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    list_num_heads = [8]
-    dataset_folder_name = "PAD-UFES-20"
-    dataset_folder_path = f"./data/{dataset_folder_name}"
-    unfreeze_weights = True
-    llm_model_name_sequence_generator=None
-    results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    # Carrega os dados localmente
+    local_variables=load_local_variables.get_env_variables()
+    num_epochs = local_variables["num_epochs"]
+    batch_size = local_variables["batch_size"]
+    k_folds = local_variables["k_folds"]
+    common_dim = local_variables["common_dim"]
     
+    list_num_heads = local_variables["list_num_heads"]
+    dataset_folder_name = local_variables["dataset_folder_name"]
+    dataset_folder_path = local_variables["dataset_folder_path"]
+    unfreeze_weights = bool(local_variables["unfreeze_weights"])
+    llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
+    results_folder_path = local_variables["results_folder_path"]
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    # Métricas para o experimento
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos

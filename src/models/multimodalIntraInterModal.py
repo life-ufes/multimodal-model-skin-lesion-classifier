@@ -206,13 +206,13 @@ class MultimodalModel(nn.Module):
         # "Imagem assiste ao texto"
         image_cross_att, _ = self.image_cross_attention(
             query=image_features_att,
-            key=image_features_att,
+            key=text_features_att,
             value=text_features_att
         )
         # "Texto assiste à imagem"
         text_cross_att, _ = self.text_cross_attention(
             query=text_features_att,
-            key=text_features_att,
+            key=image_features_att,
             value=image_features_att
         )
 
@@ -318,7 +318,7 @@ class MultimodalModel(nn.Module):
             )
             # "Texto assiste à imagem"
             text_cross_att, _ = self.text_cross_attention(
-                query=image_features_residual_before_cross_attention,
+                query=text_features_residual_before_cross_attention,
                 key=image_features_residual_before_cross_attention,
                 value=image_features_residual_before_cross_attention
             )
@@ -354,7 +354,7 @@ class MultimodalModel(nn.Module):
             text_cross_att, _ = self.text_cross_attention(
                 query=image_features_residual_before_cross_attention,
                 key=image_features_residual_before_cross_attention,
-                value=image_features_residual_before_cross_attention
+                value=text_features_residual_before_cross_attention
             )
 
             # === Self-Attention Intra-Modality after cross-attention ===
