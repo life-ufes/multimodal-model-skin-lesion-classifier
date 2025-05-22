@@ -30,6 +30,26 @@ This repository contains a multimodal model for classifying skin lesions. The mo
    > ```
    Otherwise, install the libraries manually as mentioned in the documentation.
 
+# Configuration
+
+Go to the 'conf' folder and create a .env file with the following variables:
+
+`
+NUM_EPOCHS: Quantity of epochs to train the models.
+BATCH_SIZE: Batch size.
+K_FOLDS: Quantity of folds to be created.
+LIST_NUM_HEADS: List with the quantity of 'heads' to be used oon the models train process.
+COMMON_DIM: Vector size to be used as the projected vector on the visual and the textual feature vectors.
+DATASET_FOLDER_NAME: Name of the dataset folder
+DATASET_FOLDER_PATH: Folder path of the dataset
+UNFREEZE_WEIGHTS: Flag to indicating the freezing state of the weights
+LLM_MODEL_NAME_SEQUENCE_GENERATOR: Name of the LLM generator model when trainning with sentences.
+RESULTS_FOLDER_PATH: Folder path to indicate where the results will be saved in the end of the trainning process.
+`
+
+You can use the '.env-test' file as base to write your own '.env' file.
+
+
 ## 3. Training the Model
 
 ![Illustration of Multimodal Model - Using image and metadata](./images/multimodal_model_representation_representation.png)
