@@ -47,3 +47,8 @@ src/src
 src/tests/__pycache__/stats.cpython-312.pyc
 src/tests/results_statistics_tests_results.csv
 conf/.env
+
+src/__pycache__
+src/scripts/benchmark/models/__pycache__
+src/scripts/benchmark/utils/__pycache__
+gradcam_PAD-UFES-20.png

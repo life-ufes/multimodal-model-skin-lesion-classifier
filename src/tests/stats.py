@@ -40,7 +40,7 @@ def statistical_test(data, alg_names, pv_friedman=0.05, pv_wilcoxon=0.05, verbos
     if pv_friedman is not None:
         out += f'\n- Performing the Friedman\'s test with pv_ref = {pv_friedman} ...'
         s, pv = friedmanchisquare(*[data[i, :] for i in range(data.shape[0])])
-        out += '- p_value = ' + str(np.round(pv, 18)) + '\n'
+        out += '- p_value = ' + str(np.round(pv, 6)) + '\n'
 
         if pv > pv_friedman:
             out += '- There is no need to perform pairwise comparison because pv > pv_friedman'
@@ -55,7 +55,7 @@ def statistical_test(data, alg_names, pv_friedman=0.05, pv_wilcoxon=0.05, verbos
         for c in combs:
             s, pv = wilcoxon(data[c[0], :], data[c[1], :])
             out += '-- Comparing ' + alg_names[c[0]] + ' - ' + alg_names[
-                c[1]] + ': p_value = ' + str(np.round(pv, 18))
+                c[1]] + ': p_value = ' + str(np.round(pv, 9))
             if pv < pv_wilcoxon:
                 out += ' | They are statistically different!'
             else:
