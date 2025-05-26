@@ -121,7 +121,7 @@ To create a statistical test just  change the models' results that you want to t
 
 You can obtain the GradCAM++ heatmap based on the wanted model and the chosen inputs. Just change the models' folder path, backbone, and the inputs in the script `src/scripts/benchmark/interpretability/gradcam_plusplus.py`. Then just run the command in the terminal: `python3 src/scripts/benchmark/interpretability/gradcam_plusplus.py` 
 
-![Illustration of GradCAM++ - Using image and metadata](./images/images/gradcam_PAD-UFES-20.png)
+![Illustration of GradCAM++ - Using image and metadata](./images/gradcam_pad_ufes_20.png)
 
 ### Contact
 
