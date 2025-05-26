@@ -278,7 +278,7 @@ if __name__ == "__main__":
     
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = "ISIC-2019" # local_variables["dataset_folder_name"]
-    dataset_folder_path=f"/data/{dataset_folder_name}" # local_variables["dataset_folder_path"]
+    dataset_folder_path = local_variables["dataset_folder_path"] # f"/data/{dataset_folder_name}" # local_variables["dataset_folder_path"]
     unfreeze_weights = bool(local_variables["unfreeze_weights"]) # Caso queira descongelar os pesos da CNN desejada
 
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
@@ -287,8 +287,8 @@ if __name__ == "__main__":
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["densenet169"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

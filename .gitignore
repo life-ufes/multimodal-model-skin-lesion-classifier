@@ -52,3 +52,11 @@ src/__pycache__
 src/scripts/benchmark/models/__pycache__
 src/scripts/benchmark/utils/__pycache__
 gradcam_PAD-UFES-20.png
+src/scripts/aggreation/results/PAD-20/concat/cv-results.csv
+src/scripts/aggreation/results/PAD-20/lighterm/model_metrics.csv
+src/scripts/aggreation/results/PAD-20/metablock/cv-results.csv
+src/scripts/aggreation/results/PAD-20/metanet/cv-results.csv
+src/scripts/aggreation/results/PAD-20/no-metadata/cv-results.csv
+src/scripts/aggreation/results_statistics_tests_results.csv
+src/scripts/aggreation/__pycache__/stats.cpython-310.pyc
+src/scripts/aggreation/__pycache__/stats.cpython-312.pyc
