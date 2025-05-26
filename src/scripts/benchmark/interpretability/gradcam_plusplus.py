@@ -259,7 +259,8 @@ if __name__ == "__main__":
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_resnet-50_with_one-hot-encoder_512_with_best_architecture/resnet-50_fold_3_20250521_024514/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_resnet-50_with_one-hot-encoder_512_with_best_architecture/resnet-50_fold_3_20250521_024514/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/stratifiedkfold/2/all-weights-unfroozen/for_test/PAD-UFES-20/unfrozen_weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250526_175732/model.pth"
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_3_20250211_093309/model.pth" # "frozen-weights"
     ## ISIC-2019
     # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/ISIC2019/stratifiedkfold/2/all-weights-unfrozen/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250206_225539/model.pth"
@@ -291,10 +292,10 @@ if __name__ == "__main__":
         processed_metadata = one_hot_encoding(metadata)
         processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
         # Load multimodal model
-        model = load_multimodal_model(device=device, model_path=model_path, cnn_model_name="resnet-50", attention_mecanism="att-intramodal+residual+cross-attention-metadados", vocab_size=85, n=2, num_classes=6, num_heads=8)
+        model = load_multimodal_model(device=device, model_path=model_path, cnn_model_name="densenet169", attention_mecanism="att-intramodal+residual+cross-attention-metadados", vocab_size=85, n=2, num_classes=6, num_heads=8)
         
     # Choose target layer for GradCAM++
-    target_layer = model.image_encoder.layer4[-1]  # Adjust as needed
+    target_layer = model.image_encoder.features[-1]  # Adjust as needed
     
     gradcam_pp = GradCAMPlusPlus(model, target_layer, device)
     target_class = -1  # Adjust target class index as needed

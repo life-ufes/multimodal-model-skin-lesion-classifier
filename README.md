@@ -60,16 +60,16 @@ You can use the '.env-test' file as base to write your own '.env' file.
 
 3. Run the following command:  
    ```bash
-   python3 src/train_pad_20.py
+   python3 src/scripts/benchmark/train_isic_2020.py
 
    ```
 4. Monitor the training process and metrics via **MLFlow** (if configured in the script).
 
 ## 4.1 Training a model using ISIC 2019 dataset
 
-1. Change the dataset folder path diretory on 'preprocess_isic_2019.py' script and then run it to create the "metadata.csv" equivalent to this dataset.
+1. Change the dataset folder path diretory on 'src/scripts/data_preprocessing/preprocess_isic_2019.py' script and then run it to create the "metadata.csv" equivalent to this dataset.
 
-2. Then, with the metadata.csv created, run the 'train_isic_2019.py' script to train the defined model.
+2. Then, with the metadata.csv created, run the 'python3 src/scripts/benchmark/train_isic_2019.py' script to train the defined model.
 
 ## 4.2 Create your own mulmodalmodal model
 
@@ -81,13 +81,13 @@ You can create yor own models. Take the created model scripts as examples on the
 1. Set the path to the model you want to visualize in the script.
 2. Run the plot script:  
    ```bash
-   python3 src/plot_model.py
+   python3 src/src/scripts/benchmark/plots/plot_model.py
    ```
 3. A plot or interactive graph of the model will be generated, depending on your configuration.
 
 ## 6. Exporting the Model to ONNX Format
 
-1. In the `src/export_model_onnx.py` script, update the `model_path` variable to the desired model path.
+1. In the `src/scripts/others/export_model_onnx.py` script, update the `model_path` variable to the desired model path.
 2. Then, execute:  
    ```bash
    python3 src/export_model_onnx.py
@@ -112,7 +112,16 @@ mlflow ui
 ```
 The interface will be available at [http://localhost:5000](http://localhost:5000) (default port).
 
+## 9. Statistical tests
+
+To create a statistical test just  change the models' results that you want to test on the script `src/scripts/aggreation/average_metric_values.py`, where there are the list of visual feature extractors and the attention mechanisms of them. Also, change the folder path of variable `base_folder_path`,  where the models' results 
 ---
+
+## 10. Methods based on CAM:
+
+You can obtain the GradCAM++ heatmap based on the wanted model and the chosen inputs. Just change the models' folder path, backbone, and the inputs in the script `src/scripts/benchmark/interpretability/gradcam_plusplus.py`. Then just run the command in the terminal: `python3 src/scripts/benchmark/interpretability/gradcam_plusplus.py` 
+
+![Illustration of GradCAM++ - Using image and metadata](./images/images/gradcam_PAD-UFES-20.png)
 
 ### Contact
 
