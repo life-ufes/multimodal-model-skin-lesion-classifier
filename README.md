@@ -112,10 +112,11 @@ mlflow ui
 ```
 The interface will be available at [http://localhost:5000](http://localhost:5000) (default port).
 
-## 9. Statistical tests
+## 9. Statistical Tests
 
-To create a statistical test just  change the models' results that you want to test on the script `src/scripts/aggreation/average_metric_values.py`, where there are the list of visual feature extractors and the attention mechanisms of them. Also, change the folder path of variable `base_folder_path`,  where the models' results 
----
+To perform a statistical test, edit the script `src/scripts/aggregation/average_metric_values.py`. You should update the list of visual feature extractors and their respective attention mechanisms according to the models you want to compare. 
+
+Also, modify the `base_folder_path` variable to point to the directory containing the results of your models.
 
 ## 10. Methods based on CAM:
 
