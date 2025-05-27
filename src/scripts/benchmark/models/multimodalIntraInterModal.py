@@ -107,6 +107,12 @@ class MultimodalModel(nn.Module):
         # -------------------------
         self.image_residual = GatedAlteredResidualBlock(dim=self.common_dim)
         self.text_residual = GatedAlteredResidualBlock(dim=self.common_dim)
+
+        self.fc_no_mlp_to_visual_cls = nn.Sequential(
+            nn.Linear(self.cnn_dim_output, self.num_classes),
+            nn.Softmax(dim=1)
+        )
+
     def fc_mlp_module(self, n=1):
         fc_fusion = nn.Sequential(
             nn.Linear(self.common_dim * n, self.common_dim),
@@ -129,29 +135,30 @@ class MultimodalModel(nn.Module):
         text_metadata: dicionário c/ 'input_ids', 'attention_mask' (BERT/Bart)
         ou tensor se "one-hot-encoder".
         """
+        image = image.to(self.device)
         # === [A] Image Feature Extraction ===
         if self.cnn_model_name in ["google/vit-base-patch16-224", "openai/clip-vit-base-patch16"]:
             # Use the feature extractor (e.g., CLIPProcessor) to preprocess the image
             inputs = self.feature_extractor(images=image, return_tensors="pt")
             
             # Move input tensors to the correct device
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            inputs = {k: v for k, v in inputs.items()}
             
             # Forward pass through the vision encoder
             outputs = self.image_encoder(**inputs)
             
             # Extract feature representations
-            image_features = outputs.last_hidden_state  # (batch, seq_len_img, hidden_dim)
+            image_features_before = outputs.last_hidden_state  # (batch, seq_len_img, hidden_dim)
         else:
             # CNN -> (batch, cnn_dim_output)
-            image_features = self.image_encoder(image).to(self.device)
+            image_features = self.image_encoder(image) #.to(self.device)
             # Dá forma (batch, 1, cnn_dim_output)
-            image_features = image_features.unsqueeze(1)
+            image_features_before = image_features.unsqueeze(1)
 
         # Projeção p/ espaço comum
-        b_i, s_i, d_i = image_features.shape
-        image_features = image_features.view(b_i*s_i, d_i)
-        projected_image_features = self.image_projector(image_features)
+        b_i, s_i, d_i = image_features_before.shape
+        image_features_before = image_features_before.view(b_i*s_i, d_i)
+        projected_image_features = self.image_projector(image_features_before)
         image_features = projected_image_features.view(b_i, s_i, -1)
         # -> (seq_len_img, batch, common_dim)
         image_features = image_features.permute(1, 0, 2)
@@ -230,6 +237,10 @@ class MultimodalModel(nn.Module):
             combined_features = projected_image_features
             output = self.fc_fusion(combined_features)  # (batch, num_classes)
             return output
+        elif self.attention_mecanism=="no-metadata-without-mlp":
+            output = self.fc_no_mlp_to_visual_cls(image_features_before)
+            return output
+    
         elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
             if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
