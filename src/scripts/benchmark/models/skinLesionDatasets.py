@@ -5,62 +5,85 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from torchvision import transforms
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import torch
 import os
 import pickle
+import cv2
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', random_undersampling=False, image_encoder="resnet-18"):
-        # Inicializar argumentos
+    def __init__(self, metadata_file, img_dir, size=(224,224), drop_nan=False, 
+                 bert_model_name='bert-base-uncased', random_undersampling=False, 
+                 image_encoder="resnet-18", is_train=True):
+        # Store parameters
         self.metadata_file = metadata_file
-        self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
+        self.size = size
+        self.is_to_drop_nan = drop_nan
+        self.bert_model_name = bert_model_name
+        self.random_undersampling = random_undersampling
         self.image_encoder = image_encoder
+        self.is_train = is_train
+
+        self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.transform = self.load_transforms()
 
-        # Carregar e processar metadados
+        # Load metadata and process
         self.metadata = self.load_metadata()
-
-        # Configuração de One-Hot Encoding para os metadados
         self.features, self.labels, self.targets = self.one_hot_encoding()
+
 
     def __len__(self):
         return len(self.metadata)
 
     def __getitem__(self, idx):
-        # Carregar a imagem
-        img_path = f"{self.img_dir}/{self.metadata.iloc[idx]['img_id']}"
-        image = Image.open(img_path).convert("RGB")
+        img_path = os.path.join(self.img_dir, self.metadata.iloc[idx]['img_id'])
+        image = cv2.imread(img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if self.transform:
-            image = self.transform(image)
+            image = self.transform(image=image)['image']
 
-        # Metadados e rótulo
         metadata = torch.tensor(self.features[idx], dtype=torch.float32)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
         return image, metadata, label
 
+
     def load_transforms(self):
-        if self.image_encoder in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "dinov2_vits14"]:
-            # Transforma imagens para o formato necessário para treinamento
-            transform = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(360),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                # Garantir que os valores estejam no intervalo [0, 1]
-                transforms.Lambda(lambda x: torch.clamp(x, 0.0, 1.0))
+        if self.is_train:
+            drop_prob = np.random.uniform(0.0, 0.05)
+            return A.Compose([
+                A.Affine(scale={"x": (1.0, 2.0), "y": (1.0, 2.0)}, p=0.25),
+                A.Resize(self.size[0], self.size[1]),
+                A.HorizontalFlip(p=0.5),
+                A.VerticalFlip(p=0.2),
+                A.Affine(rotate=(-120, 120), mode=cv2.BORDER_REFLECT, p=0.25),
+                A.GaussianBlur(sigma_limit=(0, 3.0), p=0.25),
+                A.OneOf([
+                    A.PixelDropout(dropout_prob=drop_prob, p=1),
+                    A.CoarseDropout(
+                        num_holes_range=(int(0.00125 * self.size[0] * self.size[1]),
+                                        int(0.00125 * self.size[0] * self.size[1])),
+                        hole_height_range=(4, 4),
+                        hole_width_range=(4, 4),
+                        p=1),
+                ], p=0.1),
+                A.OneOf([
+                    A.OneOrOther(
+                        first=A.MultiplicativeNoise(multiplier=(0.9, 1.1), per_channel=False, elementwise=False, p=1),
+                        second=A.MultiplicativeNoise(multiplier=(0.9, 1.1), per_channel=True, elementwise=False, p=1),
+                        p=0.5),
+                    A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=0, p=1),
+                ], p=0.25),
+                A.Normalize(mean=self.normalization[0], std=self.normalization[1]),
+                ToTensorV2(),
             ])
         else:
-            transform = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(360),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            return A.Compose([
+                A.Resize(self.size[0], self.size[1]),
+                A.Normalize(mean=self.normalization[0], std=self.normalization[1]),
+                ToTensorV2()
             ])
-        return transform
-
 
     def load_metadata(self):
         # Carregar o CSV

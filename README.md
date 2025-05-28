@@ -57,6 +57,41 @@ You can use the '.env-test' file as base to write your own '.env' file.
 
 1. Choose the image feature extractor (such as **VGG16**, **ResNet18**, **ResNet50**, **DenseNet169**, etc.) in the training script.
 2. Choose your metadata information preprocessor. It can be 'one-hot-encoder', "tab-transformer" or "bert-base-uncased". 
+2.1. Choose the wanted methods to combine features. In the multimodal-model you can use multiples types of "attention-mechanism". 
+
+For example: 
+`
+   `Concatenation`: ["concatenation"]
+
+   `MetaBlock`: ["metablock"]
+   
+   `No metadata or No metadata without a MLP usage`: ["no-metada", "no-metadata-without-mlp"]
+   
+   `GFCAM`: ["weighted-after-crossattention"]
+   
+   `Cross-Attention`: ["crossattention"]
+   
+   `Cross-Attention with element-wise (gate)`: ["weighted"]
+   
+   `RG-ATT`: ["att-intramodal+residual+cross-attention-metadados"]
+   
+   `For multiple feature combinations methods`: ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock","att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"]
+`
+
+2.1.2 Choose the visual feature extractor as you want mjust changing the 'list_of_models' with the wanted models:
+For example:
+`
+   `VGG16`: ["vgg16"]
+
+   `Resnet50`:["resnet-50"]
+
+   `Densenet169`: ["densenet169"]
+
+   `Davit`:["davit_tiny.msft_in1k"]
+`
+If you want to use multiples or even all the models: ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+
+Obs.: You can use these features combinations when trainning multiple models types based on different datasets.
 
 3. Run the following command:  
    ```bash

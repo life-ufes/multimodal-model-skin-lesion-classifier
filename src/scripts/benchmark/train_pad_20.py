@@ -171,11 +171,35 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
     for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
         print(f"Fold {fold+1}/{k_folds}")
-        train_subset = Subset(dataset, train_idx)
-        val_subset = Subset(dataset, val_idx)
+        # train_subset = Subset(dataset, train_idx)
+        # val_subset = Subset(dataset, val_idx)
+        train_dataset = type(dataset)(
+            metadata_file=dataset.metadata_file,
+            img_dir=dataset.img_dir,
+            size=dataset.size,
+            drop_nan=dataset.is_to_drop_nan,
+            bert_model_name=dataset.bert_model_name,
+            image_encoder=dataset.image_encoder,
+            is_train=True  # Apply training augmentations
+        )
+        train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
+        train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
+
+        val_dataset = type(dataset)(
+            metadata_file=dataset.metadata_file,
+            img_dir=dataset.img_dir,
+            size=dataset.size,
+            drop_nan=dataset.is_to_drop_nan,
+            bert_model_name=dataset.bert_model_name,
+            image_encoder=dataset.image_encoder,
+            is_train=False  # Apply validation transforms
+        )
+        val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
+        val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
+
         # Criar DataLoaders
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
 
         train_labels = [labels[i] for i in train_idx]
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
@@ -214,14 +238,16 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
-                        drop_nan=False)
+                        drop_nan=False,
+                        size=(224,224))
                     elif (text_model_encoder in ['gpt2', 'bert-base-uncased']):
                         dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
-                        drop_nan=False)
+                        drop_nan=False,
+                        size=(224,224))
                     else:
                         raise ValueError("Encoder de texto não implementado!\n")
                     
@@ -264,9 +290,9 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["no-metadata-without-mlp"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["densenet169"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path, 

@@ -114,6 +114,7 @@ class MultimodalModel(nn.Module):
             nn.Softmax(dim=1)
         )
 
+        # Bloco do Metablock, caso queira usar
         self.meta_block = MetaBlock(V=self.cnn_dim_output, U=self.text_encoder_dim_output)
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
@@ -244,7 +245,7 @@ class MultimodalModel(nn.Module):
             return output
         elif self.attention_mecanism=="no-metadata-without-mlp":
             output = self.fc_no_mlp_to_visual_cls(image_features_before)
-            return self.fc_no_mlp_to_visual_cls(output)
+            return output
         
         elif self.attention_mecanism=="metablock":
             meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, num_channels, H', W']
@@ -252,6 +253,7 @@ class MultimodalModel(nn.Module):
             pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
             pooled_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
             return self.fc_no_mlp_to_visual_cls(pooled_features)
+        
         elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
             if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
