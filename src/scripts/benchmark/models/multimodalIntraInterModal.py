@@ -8,6 +8,7 @@ from transformers import ViTFeatureExtractor
 # from residualBlockADeepBasedMultimodal import ResidualBlock
 from gatedResidualBlock import GatedAlteredResidualBlock
 from loadImageModelClassifier import loadModels
+from metablock import MetaBlock
 
 class MultimodalModel(nn.Module):
     def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85, unfreeze_weights=False, attention_mecanism="combined", n=2):
@@ -113,6 +114,9 @@ class MultimodalModel(nn.Module):
             nn.Softmax(dim=1)
         )
 
+        self.meta_block = MetaBlock(V=self.cnn_dim_output, U=self.text_encoder_dim_output)
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+
     def fc_mlp_module(self, n=1):
         fc_fusion = nn.Sequential(
             nn.Linear(self.common_dim * n, self.common_dim),
@@ -170,8 +174,8 @@ class MultimodalModel(nn.Module):
 
             # Projeção para espaço comum
             b_tt, s_tt, d_tt = text_features.shape
-            text_features = text_features.view(b_tt*s_tt, d_tt)
-            projected_text_features = self.text_projector(text_features)
+            before_project_text_features = text_features.view(b_tt*s_tt, d_tt)
+            projected_text_features = self.text_projector(before_project_text_features)
             text_features = projected_text_features.view(b_tt, s_tt, -1)
             text_features = text_features.permute(1, 0, 2)
 
@@ -194,9 +198,9 @@ class MultimodalModel(nn.Module):
             # Movendo para o dispositivo correto
             text_features = text_features.to(self.device)
             text_features = text_features.unsqueeze(1)
-            text_features = text_features.permute(1, 0, 2)
+            before_project_text_features = text_features.permute(1, 0, 2)
             # Projeção para espaço comum
-            projected_text_features = self.text_projector(text_features)
+            projected_text_features = self.text_projector(before_project_text_features)
             text_features = projected_text_features
         else:
             raise ValueError("Encoder de texto não implementado!\n")
@@ -236,11 +240,18 @@ class MultimodalModel(nn.Module):
                 projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
             combined_features = projected_image_features
             output = self.fc_fusion(combined_features)  # (batch, num_classes)
+
             return output
         elif self.attention_mecanism=="no-metadata-without-mlp":
             output = self.fc_no_mlp_to_visual_cls(image_features_before)
-            return output
-    
+            return self.fc_no_mlp_to_visual_cls(output)
+        
+        elif self.attention_mecanism=="metablock":
+            meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, num_channels, H', W']
+            # Pooling global e classificação
+            pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
+            pooled_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
+            return self.fc_no_mlp_to_visual_cls(pooled_features)
         elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
             if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
