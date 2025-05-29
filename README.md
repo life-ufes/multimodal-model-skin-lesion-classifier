@@ -34,18 +34,16 @@ This repository contains a multimodal model for classifying skin lesions. The mo
 
 Go to the 'conf' folder and create a .env file with the following variables:
 
-`
-NUM_EPOCHS: Quantity of epochs to train the models.
-BATCH_SIZE: Batch size.
-K_FOLDS: Quantity of folds to be created.
-LIST_NUM_HEADS: List with the quantity of 'heads' to be used oon the models train process.
-COMMON_DIM: Vector size to be used as the projected vector on the visual and the textual feature vectors.
-DATASET_FOLDER_NAME: Name of the dataset folder
-DATASET_FOLDER_PATH: Folder path of the dataset
-UNFREEZE_WEIGHTS: Flag to indicating the freezing state of the weights
-LLM_MODEL_NAME_SEQUENCE_GENERATOR: Name of the LLM generator model when trainning with sentences.
-RESULTS_FOLDER_PATH: Folder path to indicate where the results will be saved in the end of the trainning process.
-`
+- NUM_EPOCHS: Quantity of epochs to train the models.
+- BATCH_SIZE: Batch size.
+- K_FOLDS: Quantity of folds to be created.
+- LIST_NUM_HEADS: List with the quantity of 'heads' to be used oon the models train process.
+- COMMON_DIM: Vector size to be used as the projected vector on the visual and the textual feature vectors.
+- DATASET_FOLDER_NAME: Name of the dataset folder
+- DATASET_FOLDER_PATH: Folder path of the dataset
+- UNFREEZE_WEIGHTS: Flag to indicating the freezing state of the weights
+- LLM_MODEL_NAME_SEQUENCE_GENERATOR: Name of the LLM generator model when trainning with sentences.
+- RESULTS_FOLDER_PATH: Folder path to indicate where the results will be saved in the end of the trainning process.
 
 You can use the '.env-test' file as base to write your own '.env' file.
 
@@ -57,47 +55,55 @@ You can use the '.env-test' file as base to write your own '.env' file.
 
 1. Choose the image feature extractor (such as **VGG16**, **ResNet18**, **ResNet50**, **DenseNet169**, etc.) in the training script.
 2. Choose your metadata information preprocessor. It can be 'one-hot-encoder', "tab-transformer" or "bert-base-uncased". 
-2.1. Choose the wanted methods to combine features. In the multimodal-model you can use multiples types of "attention-mechanism". 
+2.1. Choosing Feature Combination Methods
 
-For example: 
-`
-   `Concatenation`: ["concatenation"]
+In the multimodal model, you can use multiple types of attention mechanisms or feature combination strategies. These methods help integrate different data modalities (e.g., image and metadata) effectively.
 
-   `MetaBlock`: ["metablock"]
-   
-   `No metadata or No metadata without a MLP usage`: ["no-metada", "no-metadata-without-mlp"]
-   
-   `GFCAM`: ["weighted-after-crossattention"]
-   
-   `Cross-Attention`: ["crossattention"]
-   
-   `Cross-Attention with element-wise (gate)`: ["weighted"]
-   
-   `RG-ATT`: ["att-intramodal+residual+cross-attention-metadados"]
-   
-   `For multiple feature combinations methods`: ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock","att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"]
-`
+Below are the available methods and their corresponding configuration strings:
+- Concatenation: ["concatenation"]
+- MetaBlock: ["metablock"]
+- No Metadata or No Metadata Without MLP: ["no-metadata", "no-metadata-without-mlp"]
+- GFCAM (Weighted After Cross-Attention): ["weighted-after-crossattention"]
+- Cross-Attention: ["crossattention"]
+- Cross-Attention with Element-wise Gate: ["weighted"]
+- RG-ATT (Intra-modal + Residual + Cross-Attention with Metadata): ["att-intramodal+residual+cross-attention-metadados"]
+- Multiple Feature Combination Methods: [
+    "weighted-after-crossattention",
+    "cross-weights-after-crossattention",
+    "crossattention",
+    "concatenation",
+    "no-metadata",
+    "weighted",
+    "metablock",
+    "att-intramodal+residual",
+    "att-intramodal+residual+cross-attention-metadados",
+    "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"
+]
 
-2.1.2 Choose the visual feature extractor as you want mjust changing the 'list_of_models' with the wanted models:
-For example:
-`
-   `VGG16`: ["vgg16"]
+2.1.2 Choosing the Visual Feature Extractor
 
-   `Resnet50`:["resnet-50"]
+You can freely select your preferred visual feature extractor by modifying the list_of_models parameter in the configuration.
 
-   `Densenet169`: ["densenet169"]
+Examples of available models:
 
-   `Davit`:["davit_tiny.msft_in1k"]
-`
-If you want to use multiples or even all the models: ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+- VGG16: ["vgg16"]
+- ResNet-50: ["resnet-50"]
+- DenseNet-169: ["densenet169"]
+- DaViT (Tiny): ["davit_tiny.msft_in1k"]
+
+To use multiple or all available models, you can include them as a list:
+- list_of_models: ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k",
+ "davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k",
+ "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", 
+ "mobilenet-v2", "densenet169", "resnet-50"]
+
+Note: These combinations can be especially useful when training multiple model types across different datasets for enhanced multimodal performance.
 
 Obs.: You can use these features combinations when trainning multiple models types based on different datasets.
 
 3. Run the following command:  
-   ```bash
-   python3 src/scripts/benchmark/train_isic_2020.py
+`python3 src/scripts/benchmark/train_isic_2020.py`
 
-   ```
 4. Monitor the training process and metrics via **MLFlow** (if configured in the script).
 
 ## 4.1 Training a model using ISIC 2019 dataset
@@ -115,18 +121,16 @@ You can create yor own models. Take the created model scripts as examples on the
 
 1. Set the path to the model you want to visualize in the script.
 2. Run the plot script:  
-   ```bash
-   python3 src/src/scripts/benchmark/plots/plot_model.py
-   ```
+`python3 src/src/scripts/benchmark/plots/plot_model.py`
+
 3. A plot or interactive graph of the model will be generated, depending on your configuration.
 
 ## 6. Exporting the Model to ONNX Format
 
 1. In the `src/scripts/others/export_model_onnx.py` script, update the `model_path` variable to the desired model path.
 2. Then, execute:  
-   ```bash
-   python3 src/export_model_onnx.py
-   ```
+`python3 src/others/export_model_onnx.py`
+
 3. This will generate an ONNX file (default: `multimodal_model.onnx`).
 
 > **Warning:** Do not alter the model architecture before exporting it. If changes are necessary, ensure you know the original architecture used for training, as any modifications might prevent proper conversion.
