@@ -95,7 +95,7 @@ def train_process(num_epochs,
             model.train()
             running_loss = 0.0
 
-            for batch_index, (image, metadata, label) in enumerate(
+            for batch_index, ( _, image, metadata, label) in enumerate(
                     tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
                 image, metadata, label = image.to(device), metadata.to(device), label.to(device)
                 optimizer.zero_grad()
@@ -111,7 +111,8 @@ def train_process(num_epochs,
             model.eval()
             val_loss = 0.0
             with torch.no_grad():
-                for image, metadata, label in val_loader:
+                for _ , image, metadata, label in val_loader:
+                    # print(f"Image names: {image_name}\n")
                     image, metadata, label = image.to(device), metadata.to(device), label.to(device)
                     outputs = model(image, metadata)
                     loss = criterion(outputs, label)
@@ -125,7 +126,7 @@ def train_process(num_epochs,
             print(f"Current Learning Rate(s): {current_lr}\n")
 
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model, val_loader, device, fold_num
+                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
@@ -278,7 +279,6 @@ if __name__ == "__main__":
     batch_size = local_variables["batch_size"]
     k_folds = local_variables["k_folds"]
     common_dim = local_variables["common_dim"]
-    
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["no-metadata-without-mlp"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
     list_of_models = ["resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal

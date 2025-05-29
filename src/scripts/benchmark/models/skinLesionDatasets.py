@@ -38,7 +38,8 @@ class SkinLesionDataset(Dataset):
         return len(self.metadata)
 
     def __getitem__(self, idx):
-        img_path = os.path.join(self.img_dir, self.metadata.iloc[idx]['img_id'])
+        image_name = self.metadata.iloc[idx]['img_id']
+        img_path = os.path.join(self.img_dir, image_name)
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if self.transform:
@@ -46,7 +47,7 @@ class SkinLesionDataset(Dataset):
 
         metadata = torch.tensor(self.features[idx], dtype=torch.float32)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
-        return image, metadata, label
+        return image_name, image, metadata, label
 
 
     def load_transforms(self):

@@ -148,7 +148,7 @@ def train_process(num_epochs,
             # Evaluate Metrics
             # -----------------------------
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model, val_loader, device, fold_num
+                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
