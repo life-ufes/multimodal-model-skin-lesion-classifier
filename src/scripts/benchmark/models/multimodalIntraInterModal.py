@@ -34,12 +34,6 @@ class MultimodalModel(nn.Module):
             unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor
         )
 
-        # Se for ViT, teremos ViTFeatureExtractor
-        if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
-            self.feature_extractor = ViTFeatureExtractor.from_pretrained(
-                f"{self.cnn_model_name}"
-            )
-
         # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
         # -------------------------
@@ -142,23 +136,10 @@ class MultimodalModel(nn.Module):
         """
         image = image.to(self.device)
         # === [A] Image Feature Extraction ===
-        if self.cnn_model_name in ["google/vit-base-patch16-224", "openai/clip-vit-base-patch16"]:
-            # Use the feature extractor (e.g., CLIPProcessor) to preprocess the image
-            inputs = self.feature_extractor(images=image, return_tensors="pt")
-            
-            # Move input tensors to the correct device
-            inputs = {k: v for k, v in inputs.items()}
-            
-            # Forward pass through the vision encoder
-            outputs = self.image_encoder(**inputs)
-            
-            # Extract feature representations
-            image_features_before = outputs.last_hidden_state  # (batch, seq_len_img, hidden_dim)
-        else:
-            # CNN -> (batch, cnn_dim_output)
-            image_features = self.image_encoder(image) #.to(self.device)
-            # Dá forma (batch, 1, cnn_dim_output)
-            image_features_before = image_features.unsqueeze(1)
+        # CNN -> (batch, cnn_dim_output)
+        image_features = self.image_encoder(image) #.to(self.device)
+        # Dá forma (batch, 1, cnn_dim_output)
+        image_features_before = image_features.unsqueeze(1)
 
         # Projeção p/ espaço comum
         b_i, s_i, d_i = image_features_before.shape
@@ -236,9 +217,6 @@ class MultimodalModel(nn.Module):
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
 
         if self.attention_mecanism=="no-metadata":
-            if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
-                # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
-                projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
             combined_features = projected_image_features
             output = self.fc_fusion(combined_features)  # (batch, num_classes)
 
@@ -256,11 +234,6 @@ class MultimodalModel(nn.Module):
         
         elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
-            if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
-                # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
-                projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
-                projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
-
             projected_image_features = projected_image_features.squeeze(0)
             projected_text_features = projected_text_features.squeeze(0)
             alpha_img = torch.sigmoid(self.img_gate(projected_image_features))  # (batch, common_dim)
@@ -271,10 +244,6 @@ class MultimodalModel(nn.Module):
             text_pooled_gated = alpha_txt * projected_text_features
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
         elif self.attention_mecanism == "concatenation":
-            if self.cnn_model_name in ["google/vit-base-patch16-224","openai/clip-vit-base-patch16", "facebookresearch/dinov2"]:
-                # Os modelos ViT possuem uma sequência de tokens que precisa ser processada antes de ser projetada
-                projected_image_features = projected_image_features.view(b_i, s_i, -1).mean(dim=1)  # (batch, common_dim)
-                projected_text_features = projected_text_features.view(b_tt, s_tt, -1).mean(dim=1)  # (batch, common_dim)
             # # Apenas concatena as features projetadas
             combined_features = torch.cat((projected_image_features.squeeze(0), projected_text_features.squeeze(0)), dim=-1)
         elif self.attention_mecanism == "weighted-after-crossattention":
