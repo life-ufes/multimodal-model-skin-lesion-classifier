@@ -39,14 +39,22 @@ class SkinLesionDataset(Dataset):
 
     def __getitem__(self, idx):
         image_name = self.metadata.iloc[idx]['img_id']
-        img_path = os.path.join(self.img_dir, image_name)
-        image = cv2.imread(img_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        img_path = os.path.abspath(os.path.join(self.img_dir, image_name))
+
+        try:
+            with Image.open(img_path) as img:
+                image = img.convert("RGB")
+                image = np.array(image)
+        except Exception as e:
+            print(f"[Erro] Não foi possível abrir imagem com PIL: {img_path} — {e}")
+            raise FileNotFoundError(f"Imagem inválida: {img_path}")
+
         if self.transform:
             image = self.transform(image=image)['image']
 
         metadata = torch.tensor(self.features[idx], dtype=torch.float32)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
+
         return image_name, image, metadata, label
 
 
