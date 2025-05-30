@@ -110,7 +110,7 @@ class MultimodalModel(nn.Module):
 
         # Bloco do Metablock, caso queira usar
         self.meta_block = MetaBlock(V=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock"] else self.cnn_dim_output,
-            U=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock"] else self.cnn_dim_output
+            U=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock"] else self.text_encoder_dim_output
         )
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
