@@ -60,3 +60,10 @@ src/scripts/aggreation/results/PAD-20/no-metadata/cv-results.csv
 src/scripts/aggreation/results_statistics_tests_results.csv
 src/scripts/aggreation/__pycache__/stats.cpython-310.pyc
 src/scripts/aggreation/__pycache__/stats.cpython-312.pyc
+bacc_all_common_sizes_grouped.png
+bacc_plots/bacc_plot_common_size_16.png
+bacc_plots/bacc_plot_common_size_32.png
+bacc_plots/bacc_plot_common_size_64.png
+bacc_plots/bacc_plot_common_size_128.png
+bacc_plots/bacc_plot_common_size_256.png
+bacc_plots/bacc_plot_common_size_512.png
