@@ -1,6 +1,11 @@
 import os
 import matplotlib.pyplot as plt
 import cv2
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+import utils
+import utils.load_local_variables as load_local_variables
 
 def load_image(image_name_folder_path: str):
     try:
@@ -12,8 +17,31 @@ def load_image(image_name_folder_path: str):
         print(f"Error loading image {image_name_folder_path}. Error: {e}")
         return None
 
-def main():
-    image_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/ISIC2019/ISIC_2019_Training_Input/ISIC_2019_Training_Input"
+def main(image_folder_path:str, dataset_name:str, wanted_image_list: list):
+    # Create a figure for the plot
+    f, axarr = plt.subplots(nrows=2, ncols=4, figsize=(12, 8))  # Adjust the grid size to match the number of images
+    axarr = axarr.ravel()  # Flatten the array of axes for easy indexing
+
+    for i, item in enumerate(wanted_image_list):
+        image_class = item["class"]
+        image_name = item["image"]
+        img = load_image(os.path.join(image_folder_path, image_name))
+        
+        if img is not None:
+            axarr[i].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for proper display in matplotlib
+            axarr[i].set_title(image_class)
+            axarr[i].axis('off')  # Hide axis for a cleaner image display
+
+    plt.tight_layout()  # To adjust spacing between subplots
+    plt.savefig(f"./images/samples_of_images_of_dataset_{dataset_name}.png")
+    plt.show()
+
+if __name__ == "__main__":
+    # Dados das imagens a serem juntadas
+    local_variables = load_local_variables.get_env_variables()
+    dataset_folder_name = local_variables["dataset_folder_name"]
+    dataset_folder_path = "/data/ISIC-2019/ISIC_2019_Training_Input/ISIC_2019_Training_Input" # local_variables["dataset_folder_path"]
+    
     # wanted_image_list = [
     #     {"class":"BCC", "image":"PAT_46_881_939.png"}, 
     #     {"class":"ACK", "image":"PAT_705_4015_413.png"}, 
@@ -33,22 +61,4 @@ def main():
         {"class":"DF", "image":"ISIC_0024386.jpg"}
     ]
 
-    # Create a figure for the plot
-    f, axarr = plt.subplots(nrows=2, ncols=4, figsize=(12, 8))  # Adjust the grid size to match the number of images
-    axarr = axarr.ravel()  # Flatten the array of axes for easy indexing
-
-    for i, item in enumerate(wanted_image_list):
-        image_class = item["class"]
-        image_name = item["image"]
-        img = load_image(os.path.join(image_folder_path, image_name))
-        
-        if img is not None:
-            axarr[i].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for proper display in matplotlib
-            axarr[i].set_title(image_class)
-            axarr[i].axis('off')  # Hide axis for a cleaner image display
-
-    plt.tight_layout()  # To adjust spacing between subplots
-    plt.show()
-
-if __name__ == "__main__":
-    main()
+    main(dataset_name=dataset_folder_name, image_folder_path=dataset_folder_path, wanted_image_list=wanted_image_list)
