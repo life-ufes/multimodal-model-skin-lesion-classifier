@@ -163,6 +163,30 @@ You can obtain the GradCAM++ heatmap based on the wanted model and the chosen in
 
 ![Illustration of GradCAM++ - Using image and metadata](./images/gradcam_pad_ufes_20.png)
 
-### Contact
+## 11. Merge skin lesion images:
+
+Also, you can create an image containing some samples of your dataset. You just need to indicate which images you want to joint and the dataset folder path in the script `src/scripts/benchmark/plots/joint_samples_of_images.py`. Then, run the command in the terminal:
+
+`python3 src/scripts/benchmark/plots/joint_samples_of_images.py`
+
+The final image is inside the folder `ìmages`. For example:
+
+![Samples of joined images of ISIC-2019](./images/samples_of_images_of_dataset_ISIC-2019.png)
+
+# Citation
+Feel free to cite this framework and the paper:
+
+Title: Multimodal Skin Lesion Analysis with Gated Feature Cross-Attention: Integrating Clinical Images and Metadata
+
+```bibtex
+@unpublished{rocha2025multimodal,
+  author       = {Wyctor F. da Rocha and Pedro H. G. Bouzo and André G. C. Pacheco and Luis A. Souza Jr.},
+  title        = {Multimodal Skin Lesion Analysis with Gated Feature Cross-Attention: Integrating Clinical Images and Metadata},
+  note         = {Manuscript submitted to IEEE Transactions on Medical Imaging},
+  year         = {2025}
+}
+```
+
+# Contact
 
 For questions or suggestions, feel free to open an **issue** or submit a **pull request**. Let us know how you’re using or improving this repository!
