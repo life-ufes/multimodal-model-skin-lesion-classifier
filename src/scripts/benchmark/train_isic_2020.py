@@ -103,7 +103,7 @@ def train_process(num_epochs,
             running_loss = 0.0
 
             # Adicionando barra de progresso para o loop de batches
-            for batch_index, (image, metadata, label) in enumerate(
+            for batch_index, (_, image, metadata, label) in enumerate(
                     tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
                 image, metadata, label = (
                     image.to(device),
@@ -128,7 +128,7 @@ def train_process(num_epochs,
             model.eval()
             val_loss = 0.0
             with torch.no_grad():
-                for image, metadata, label in val_loader:
+                for (_, image, metadata, label) in val_loader:
                     image, metadata, label = (
                         image.to(device),
                         metadata.to(device),
@@ -212,12 +212,38 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Fold {fold+1}/{k_folds}")
 
         # Criar datasets para treino e validação do fold atual
-        train_subset = Subset(dataset, train_idx)
-        val_subset = Subset(dataset, val_idx)
+        # train_subset = Subset(dataset, train_idx)
+        # val_subset = Subset(dataset, val_idx)
+
+        train_dataset = type(dataset)(
+            metadata_file=dataset.metadata_file,
+            img_dir=dataset.img_dir,
+            size=dataset.size,
+            drop_nan=dataset.is_to_drop_nan,
+            bert_model_name=dataset.bert_model_name,
+            image_encoder=dataset.image_encoder
+        )
+        
+
+        val_dataset = type(dataset)(
+            metadata_file=dataset.metadata_file,
+            img_dir=dataset.img_dir,
+            size=dataset.size,
+            drop_nan=dataset.is_to_drop_nan,
+            bert_model_name=dataset.bert_model_name,
+            image_encoder=dataset.image_encoder  # Apply validation transforms
+        )
+        
+        train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
+        train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
+
+        val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
+        val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
+
 
         # Criar DataLoaders
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
 
         # Calcular pesos das classes com base no conjunto de treino
         train_labels = [labels[i] for i in train_idx]
@@ -243,6 +269,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                     image_encoder=model_name,
                     drop_nan=False,
                     random_undersampling=False,
+                    size=(224,224),
                     type_of_problem=type_of_problem)
 
                     num_metadata_features = dataset.features.shape[1] if text_model_encoder== 'one-hot-encoder' else 512

@@ -34,7 +34,7 @@ ax = sns.barplot(
 # Customizações
 plt.title("Balanced Accuracy (BACC) para CNNs agrupadas por dimensão comum")
 plt.ylabel("Balanced Accuracy (BACC)")
-plt.xlabel("Tamanho da Dimensão Comum")
+plt.xlabel("Common size of projected features")
 plt.ylim(0, 1)
 plt.legend(title="Modelo (Mecanismo de Atenção)", bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()

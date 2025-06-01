@@ -172,8 +172,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
     for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
         print(f"Fold {fold+1}/{k_folds}")
-        # train_subset = Subset(dataset, train_idx)
-        # val_subset = Subset(dataset, val_idx)
+
         train_dataset = type(dataset)(
             metadata_file=dataset.metadata_file,
             img_dir=dataset.img_dir,
