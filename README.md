@@ -178,15 +178,6 @@ Feel free to cite this framework and the paper:
 
 Title: Multimodal Skin Lesion Analysis with Gated Feature Cross-Attention: Integrating Clinical Images and Metadata
 
-```bibtex
-@unpublished{rocha2025multimodal,
-  author       = {Wyctor F. da Rocha and Pedro H. G. Bouzo and André G. C. Pacheco and Luis A. Souza Jr.},
-  title        = {Multimodal Skin Lesion Analysis with Gated Feature Cross-Attention: Integrating Clinical Images and Metadata},
-  note         = {Manuscript submitted to IEEE Transactions on Medical Imaging},
-  year         = {2025}
-}
-```
-
 # Contact
 
 For questions or suggestions, feel free to open an **issue** or submit a **pull request**. Let us know how you’re using or improving this repository!
