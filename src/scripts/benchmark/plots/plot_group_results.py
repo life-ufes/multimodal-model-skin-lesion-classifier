@@ -3,41 +3,47 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 
-# Caminho para o arquivo CSV
-csv_file_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimensiond_of_projected_features/PAD-UFES-20/unfrozen_weights/8/all_metric_values.csv"
+def main(csv_file_path, dataset_name):
+    # Carregar CSV
+    df = pd.read_csv(csv_file_path)
 
-# Carregar CSV
-df = pd.read_csv(csv_file_path)
+    # Extrair média do 'balanced_accuracy' (remove ± e pega o primeiro número)
+    df['BACC_mean'] = df['balanced_accuracy'].apply(lambda x: float(re.match(r'([0-9.]+)', x).group(1)))
 
-# Extrair média do 'balanced_accuracy' (remove ± e pega o primeiro número)
-df['BACC_mean'] = df['balanced_accuracy'].apply(lambda x: float(re.match(r'([0-9.]+)', x).group(1)))
+    # Criar um rótulo combinado para diferenciar os modelos com mecanismos de atenção
+    df['Model+Attention'] = df['model_name'] + "\n(" + df['attention_mecanism'] + ")"
 
-# Criar um rótulo combinado para diferenciar os modelos com mecanismos de atenção
-df['Model+Attention'] = df['model_name'] + "\n(" + df['attention_mecanism'] + ")"
+    # Ordenar para manter consistência visual
+    df = df.sort_values(by=['common_size', 'Model+Attention'])
 
-# Ordenar para manter consistência visual
-df = df.sort_values(by=['common_size', 'Model+Attention'])
+    # Configurações do seaborn
+    sns.set(style="whitegrid")
+    plt.figure(figsize=(14, 7))
 
-# Configurações do seaborn
-sns.set(style="whitegrid")
-plt.figure(figsize=(14, 7))
+    # Criar gráfico de barras
+    ax = sns.barplot(
+        data=df,
+        x='common_size',
+        y='BACC_mean',
+        hue='Model+Attention',
+        palette='tab20'
+    )
 
-# Criar gráfico de barras
-ax = sns.barplot(
-    data=df,
-    x='common_size',
-    y='BACC_mean',
-    hue='Model+Attention',
-    palette='tab20'
-)
+    # Customizações
+    plt.title("Balanced Accuracy (BACC) average value grouped by CNN's backbone")
+    plt.ylabel("Balanced Accuracy (BACC)")
+    plt.xlabel("Common size of projected features")
+    plt.ylim(0, 1)
+    plt.legend(title="Attention mechanism)", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
 
-# Customizações
-plt.title("Balanced Accuracy (BACC) para CNNs agrupadas por dimensão comum")
-plt.ylabel("Balanced Accuracy (BACC)")
-plt.xlabel("Common size of projected features")
-plt.ylim(0, 1)
-plt.legend(title="Modelo (Mecanismo de Atenção)", bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.tight_layout()
+    plt.savefig(f"./images/bacc_all_common_sizes_grouped_{dataset_name}.png", dpi=400, bbox_inches='tight')
+    plt.show()
 
-plt.savefig("bacc_all_common_sizes_grouped.png", bbox_inches='tight')
-plt.show()
+
+if __name__=="__main__":
+    dataset_name= "PAD-UFES-20" # "ISIC-2019" 
+    # Caminho para o arquivo CSV
+    csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
+    
+    main(csv_file_path=csv_file_path, dataset_name=dataset_name)
