@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 
-def main(csv_file_path, dataset_name):
+def main(csv_file_path, use_legend, dataset_name):
     # Carregar CSV
     df = pd.read_csv(csv_file_path)
 
@@ -21,20 +21,29 @@ def main(csv_file_path, dataset_name):
     plt.figure(figsize=(14, 7))
 
     # Criar gráfico de barras
-    ax = sns.barplot(
-        data=df,
-        x='common_size',
-        y='BACC_mean',
-        hue='Model+Attention',
-        palette='tab20'
-    )
-
+    if use_legend is True:
+        ax = sns.barplot(
+            data=df,
+            x='common_size',
+            y='BACC_mean',
+            hue='Model+Attention',
+            palette='tab20'
+        )
+    else:
+        ax = sns.barplot(
+            data=df,
+            x='common_size',
+            y='BACC_mean',
+            # hue='Model+Attention',
+            palette='light:b'
+        )
     # Customizações
     plt.title("Balanced Accuracy (BACC) average value grouped by CNN's backbone")
     plt.ylabel("Balanced Accuracy (BACC)")
     plt.xlabel("Common size of projected features")
     plt.ylim(0, 1)
-    plt.legend(title="Attention mechanism)", bbox_to_anchor=(1.05, 1), loc='upper left')
+    if use_legend is True:
+        plt.legend(title="Attention mechanism)", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
 
     plt.savefig(f"./images/bacc_all_common_sizes_grouped_{dataset_name}.png", dpi=400, bbox_inches='tight')
@@ -46,4 +55,4 @@ if __name__=="__main__":
     # Caminho para o arquivo CSV
     csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
     
-    main(csv_file_path=csv_file_path, dataset_name=dataset_name)
+    main(csv_file_path=csv_file_path, use_legend=True, dataset_name=dataset_name)
