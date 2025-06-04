@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils import model_metrics
+from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal
@@ -256,6 +256,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         model, model_save_path = train_process(
             num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, train_loader=train_loader, val_loader=val_loader, targets=targets, model=model, device=device,
             weightes_per_category=class_weights, common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path)
+        # Salvar as predições em um arquivo csv
+        save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, type_of_problem:str, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:

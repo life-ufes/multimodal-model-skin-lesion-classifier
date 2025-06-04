@@ -19,8 +19,8 @@ if __name__ == "__main__":
     # Lista para armazenar todos os resultados
     all_results = []
 
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["no-metadata", "concatenation", "weighted-after-crossattention"]# ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
-    dataset_name = "PAD-UFES-20"# "ISIC-2020" # "PAD-UFES-25" # "ISIC-2019" # "PAD-UFES-20"
+    list_of_attention_mecanism = ["no-metadata", "concatenation", "weighted-after-crossattention"]# ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+    dataset_name = "ISIC-2019" # "PAD-UFES-20"# "ISIC-2020" # "PAD-UFES-25" # "ISIC-2019" # "PAD-UFES-20"
     num_heads = 8
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/{dataset_name}/multiclass/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/stratifiedkfold/2/all-weights-unfroozen/for_test/PAD-UFES-20/unfrozen_weights/{num_heads}"

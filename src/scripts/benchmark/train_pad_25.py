@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils import model_metrics
+from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
 from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsPAD2025, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning
@@ -148,7 +148,7 @@ def train_process(num_epochs,
             # Evaluate Metrics
             # -----------------------------
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+                model=model, dataloader=val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
@@ -180,7 +180,8 @@ def train_process(num_epochs,
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
-
+    
+    # Salvar as métricas dos modelos
     save_model_and_metrics(
         model=model, 
         metrics=metrics, 
@@ -208,34 +209,13 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
 
     for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
         print(f"Fold {fold+1}/{k_folds}")
+        # Criar datasets para treino e validação do fold atualAdd comment
 
-        train_dataset = type(dataset)(
-            metadata_file=dataset.metadata_file,
-            img_dir=dataset.img_dir,
-            size=dataset.size,
-            drop_nan=dataset.is_to_drop_nan,
-            bert_model_name=dataset.bert_model_name,
-            image_encoder=dataset.image_encoder,
-            is_train=True  # Apply training augmentations
-        )
-        train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
-        # train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
-
-        val_dataset = type(dataset)(
-            metadata_file=dataset.metadata_file,
-            img_dir=dataset.img_dir,
-            size=dataset.size,
-            drop_nan=dataset.is_to_drop_nan,
-            bert_model_name=dataset.bert_model_name,
-            image_encoder=dataset.image_encoder,
-            is_train=False  # Apply validation transforms
-        )
-        val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
-        # val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
-
+        train_subset = Subset(dataset, train_idx)
+        val_subset = Subset(dataset, val_idx)
         # Criar DataLoaders
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
 
         # Calcular pesos das classes com base no conjunto de treino
         train_labels = [labels[i] for i in train_idx]
@@ -249,22 +229,15 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
             class_weights, common_dim, model_name, text_model_encoder, attention_mecanism, results_folder_path
         )
-
+        # Salvar as predições em um arquivo csv
+        save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
                 try:
-                    if (text_model_encoder=='one-hot-encoder' or text_model_encoder=="tab-transformer"):
-                        dataset = skinLesionDatasetsPAD2025.SkinLesionDataset(
-                        metadata_file=f"{dataset_folder_path}/anonymous-metadata.csv",
-                        img_dir=f"{dataset_folder_path}/anonymous-images",
-                        bert_model_name=text_model_encoder,
-                        image_encoder=model_name,
-                        drop_nan=False,
-                        size=(224, 224))
-                    else:
+                    if (text_model_encoder in ["one-hot-encoder","tab-transformer"]):
                         dataset = skinLesionDatasetsPAD2025.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/anonymous-metadata.csv",
                         img_dir=f"{dataset_folder_path}/anonymous-images",
@@ -311,8 +284,8 @@ if __name__ == "__main__":
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] #  ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] #  ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["nextvit_small.bd_ssld_6m_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["densenet169"] # ["nextvit_small.bd_ssld_6m_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

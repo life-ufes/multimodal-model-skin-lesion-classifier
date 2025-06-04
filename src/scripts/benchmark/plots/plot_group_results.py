@@ -51,8 +51,8 @@ def main(csv_file_path, use_legend, dataset_name):
 
 
 if __name__=="__main__":
-    dataset_name= "PAD-UFES-20" # "ISIC-2019" 
+    dataset_name = "ISIC-2019" # "PAD-UFES-20" # "ISIC-2019" 
     # Caminho para o arquivo CSV
-    csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
-    
+    # csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
+    csv_file_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/ISIC-2019/unfrozen_weights/8/all_metric_values.csv"
     main(csv_file_path=csv_file_path, use_legend=True, dataset_name=dataset_name)
