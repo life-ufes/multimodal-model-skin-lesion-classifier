@@ -19,7 +19,8 @@ class EarlyStopping:
                  delta=0.0, 
                  verbose=False,
                  path='checkpoint.pt',
-                 save_to_disk=False):
+                 save_to_disk=False,
+                 early_stopping_metric_name="val_loss"):
         """
         Args:
             patience (int): Number of epochs to wait without improvement. Default: 7
@@ -33,6 +34,7 @@ class EarlyStopping:
         self.verbose = verbose
         self.path = path
         self.save_to_disk = save_to_disk
+        self.early_stopping_metric_name = early_stopping_metric_name
 
         # Internal counters and tracking
         self.counter = 0
@@ -41,40 +43,42 @@ class EarlyStopping:
         self.val_loss_min = np.Inf
         self.best_model_wts = None
 
-    def __call__(self, val_loss, model):
-        """
-        Checks if validation loss has improved enough (by self.delta). If not, increments counter. 
-        If counter >= patience, sets self.early_stop to True.
-
-        Args:
-            val_loss (float): The current epoch's validation loss.
-            model (torch.nn.Module): The model being trained.
-        """
-        # We use score = -val_loss because we want to *maximize* the negative of the loss
-        # (i.e., minimize val_loss).
-        score = -val_loss
+    def __call__(self, val_loss, val_bacc, model):
+        if self.early_stopping_metric_name == "val_loss":
+            score = -val_loss  # minimizar val_loss
+            current = val_loss
+            best_so_far = getattr(self, "val_loss_min", np.Inf)
+        elif self.early_stopping_metric_name == "val_bacc":
+            score = val_bacc   # maximizar val_bacc
+            current = val_bacc
+            best_so_far = getattr(self, "best_val_bacc", -np.Inf)
+        else:
+            raise ValueError(f"Unsupported early stopping metric: {self.early_stopping_metric_name}")
 
         if self.best_score is None:
-            # First epoch or first call
             self.best_score = score
-            self.val_loss_min = val_loss
             self.best_model_wts = model.state_dict()
+            if self.early_stopping_metric_name == "val_loss":
+                self.val_loss_min = val_loss
+            else:
+                self.best_val_bacc = val_bacc
             self._save_checkpoint(val_loss, model)
 
         elif score < self.best_score + self.delta:
-            # No improvement (or not enough improvement)
             self.counter += 1
             if self.verbose:
                 print(f"EarlyStopping counter: {self.counter}/{self.patience} "
-                      f"(val_loss: {val_loss:.6f} vs. best: {self.val_loss_min:.6f})")
+                    f"({self.early_stopping_metric_name}: {current:.6f} vs. best: {best_so_far:.6f})")
             if self.counter >= self.patience:
                 self.early_stop = True
 
         else:
-            # Improvement detected
             self.best_score = score
-            self.val_loss_min = val_loss
             self.best_model_wts = model.state_dict()
+            if self.early_stopping_metric_name == "val_loss":
+                self.val_loss_min = val_loss
+            else:
+                self.best_val_bacc = val_bacc
             self.counter = 0
             self._save_checkpoint(val_loss, model)
 

@@ -68,7 +68,8 @@ def train_process(num_epochs,
         delta=0.01, 
         verbose=True,
         path=str(model_save_path+f'/{str(fold_num)}/best-model/'),   # Where to save the best weights (optional)
-        save_to_disk=False       # If True, saves best weights to 'best_model.pt'
+        save_to_disk=False,
+        early_stopping_metric_name="val_bacc"
     )
 
     initial_time = time.time()
@@ -165,7 +166,7 @@ def train_process(num_epochs,
             # -----------------------------
             # Early Stopping
             # -----------------------------
-            early_stopping(val_loss, model)
+            early_stopping(val_loss=val_loss, val_bacc=float(metrics["balanced_accuracy"]), model=model)
 
             # Check if we should stop early
             if early_stopping.early_stop:
