@@ -68,7 +68,7 @@ def train_process(num_epochs,
         verbose=True,
         path=str(model_save_path + f'/{str(fold_num)}/best-model/'),
         save_to_disk=True,
-        early_stopping_metric_name="val_bacc"
+        early_stopping_metric_name="val_loss"
     )
 
     initial_time = time.time()
@@ -144,9 +144,18 @@ def train_process(num_epochs,
             if early_stopping.early_stop:
                 print("Early stopping triggered!")
                 break
-
-    early_stopping.load_best_weights(model)
+    
     train_process_time = time.time() - initial_time
+    
+    # Carrega o melhor modelo encontrado
+    model = early_stopping.load_best_weights(model)
+    model.eval()
+    # Inferência para validação com o melhor modelo
+    with torch.no_grad():
+        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+        )
+
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
@@ -181,7 +190,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             drop_nan=dataset.is_to_drop_nan,
             bert_model_name=dataset.bert_model_name,
             image_encoder=dataset.image_encoder,
-            is_train=True  # Apply training augmentations
+            is_train=False  # Apply training augmentations
         )
         train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
         train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
@@ -296,7 +305,7 @@ if __name__ == "__main__":
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["pit_b_distilled_224.in1k"] # ["davit_tiny.msft_in1k"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path, 

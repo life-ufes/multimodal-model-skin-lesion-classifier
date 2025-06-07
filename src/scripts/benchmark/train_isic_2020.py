@@ -175,11 +175,16 @@ def train_process(num_epochs,
                 print("Early stopping triggered!")
                 break
 
-    # Load the best model weights
-    early_stopping.load_best_weights(model)
-
     # End of training
     train_process_time = time.time() - initial_time
+    # Carrega o melhor modelo encontrado
+    model = early_stopping.load_best_weights(model)
+    model.eval()
+    # Inferência para validação com o melhor modelo
+    with torch.no_grad():
+        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+        )
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"

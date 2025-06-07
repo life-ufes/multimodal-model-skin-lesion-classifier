@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import os
+import copy
 
 class EarlyStopping:
     """
@@ -57,7 +58,7 @@ class EarlyStopping:
 
         if self.best_score is None:
             self.best_score = score
-            self.best_model_wts = model.state_dict()
+            self.best_model_wts = copy.deepcopy(model.state_dict())
             if self.early_stopping_metric_name == "val_loss":
                 self.val_loss_min = val_loss
             else:
@@ -74,7 +75,7 @@ class EarlyStopping:
 
         else:
             self.best_score = score
-            self.best_model_wts = model.state_dict()
+            self.best_model_wts = copy.deepcopy(model.state_dict())
             if self.early_stopping_metric_name == "val_loss":
                 self.val_loss_min = val_loss
             else:
@@ -103,4 +104,5 @@ class EarlyStopping:
             model (torch.nn.Module): The model to load the best weights into.
         """
         model.load_state_dict(self.best_model_wts)
+        print("Best model weights have been loaded!\n")
         return model

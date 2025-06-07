@@ -26,8 +26,8 @@ if __name__ == "__main__":
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/stratifiedkfold/2/all-weights-unfroozen/for_test/PAD-UFES-20/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimensiond_of_projected_features/PAD-UFES-20/unfrozen_weights/8"
     # Path to your CSV file
-    # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/{num_heads}"
-    base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/teste_com_val_bacc/PAD-UFES-20/unfrozen_weights/8"
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/{num_heads}"
+    # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/teste_com_val_bacc/PAD-UFES-20/unfrozen_weights/8"
     for common_size in [16, 32, 64, 128, 256, 512, 1024, 2048]:
         for attention_mecanism in list_of_attention_mecanism:
             # Testar com todos os modelos
