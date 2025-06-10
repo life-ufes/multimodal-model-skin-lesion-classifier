@@ -13,9 +13,9 @@ import pickle
 import cv2
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, size=(224,224), drop_nan=False, 
-                 bert_model_name='bert-base-uncased', random_undersampling=False, 
-                 image_encoder="resnet-18", is_train=True):
+    def __init__(self, metadata_file:str, img_dir:str, size:tuple=(224,224), drop_nan:bool=False, 
+            bert_model_name:str='bert-base-uncased', random_undersampling:bool=False, 
+            image_encoder:str="resnet-18", is_train:bool=True):
         # Store parameters
         self.metadata_file = metadata_file
         self.img_dir = img_dir
