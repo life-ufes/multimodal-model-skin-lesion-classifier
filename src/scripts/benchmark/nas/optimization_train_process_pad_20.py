@@ -13,6 +13,7 @@ from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import train_test_split
 import time
+import json
 from torch.utils.data import DataLoader, Subset
 import numpy as np
 import mlflow
@@ -283,6 +284,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
     print("\n--- Busca Finalizada ---")
     print(f"Melhor Reward: {best_reward:.4f}")
     print(f"Melhor Arquitetura: {best_config}")
+    with open(os.path.join(results_folder_path, "best_config.json"), "w") as f:
+        json.dump(best_config, f, indent=2)
+
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list, SEARCH_STEPS, search_space):
     for attention_mecanism in list_of_attention_mecanism:
