@@ -19,6 +19,10 @@ class DynamicCNN(nn.Module):
         self.k = config.get("kernel_size", 3)
         self.hidden_dim = config.get("mlp_hidden_dim", 512)
         self.num_classes = num_classes
+        self.num_layers_text_fc = config.get("num_layers_text_fc", 2)
+        self.neurons_per_layer_size_of_text_fc = config.get("neurons_per_layer_size_of_text_fc", 512)
+        self.num_layers_fc_module = config.get("num_layers_fc_module", 2)
+        self.neurons_per_layer_size_of_fc_module =  config.get("neurons_per_layer_size_of_fc_module", 1024)
 
         # CNN Backbone (otimizável)
         self.layers = []
@@ -41,15 +45,17 @@ class DynamicCNN(nn.Module):
         self.cnn_dim_output = filters[-1]
 
         # Text Encoder
-        if self.text_model_name == "one-hot-encoder":
-            # Metadados / one-hot -> FC
-            self.text_fc = nn.Sequential(
-                nn.Linear(vocab_size, 256),
-                nn.ReLU(),
-                nn.Linear(256, 512),
-                nn.ReLU(),
-                nn.Linear(512, self.text_encoder_dim_output)
-            )
+        neurons_per_layer_size_of_text_fc = []
+        neurons_per_layer_size_of_text_fc.append(nn.Linear(vocab_size, self.neurons_per_layer_size_of_text_fc))
+        neurons_per_layer_size_of_text_fc.append(nn.ReLU())
+        for _ in range(self.num_layers_text_fc):
+            neurons_per_layer_size_of_text_fc.append(nn.Linear(self.neurons_per_layer_size_of_text_fc, self.neurons_per_layer_size_of_text_fc))
+            neurons_per_layer_size_of_text_fc.append(nn.ReLU())        
+        neurons_per_layer_size_of_text_fc.append(nn.Linear(self.neurons_per_layer_size_of_text_fc, self.text_encoder_dim_output))
+        
+        # Montando o bloco de layers para processar os dados em One-Hot-Enconding
+        self.text_fc = nn.Sequential(*neurons_per_layer_size_of_text_fc)
+            
         # Projeções para espaço comum
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
         self.text_projector = nn.Linear(self.text_encoder_dim_output, self.common_dim)
@@ -105,18 +111,37 @@ class DynamicCNN(nn.Module):
         )
 
     def fc_mlp_module(self, n=1):
-        return nn.Sequential(
-            nn.Linear(self.common_dim*self.n, self.common_dim),
-            nn.BatchNorm1d(self.common_dim),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.common_dim, self.common_dim // 2),
-            nn.BatchNorm1d(self.common_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, self.num_classes),
-            nn.Softmax(dim=1)
-        )
+        # Fusion block
+        neurons_per_layer_size_of_fc_module = []
+        neurons_per_layer_size_of_fc_module.append(nn.Linear(self.common_dim*self.n, self.neurons_per_layer_size_of_fc_module))
+        neurons_per_layer_size_of_fc_module.append(nn.BatchNorm1d(self.neurons_per_layer_size_of_fc_module))
+        neurons_per_layer_size_of_fc_module.append(nn.ReLU())
+        neurons_per_layer_size_of_fc_module.append(nn.Dropout(0.3))
+
+        for _ in range(self.num_layers_fc_module):
+            neurons_per_layer_size_of_fc_module.append(nn.Linear(self.neurons_per_layer_size_of_fc_module, self.neurons_per_layer_size_of_fc_module))
+            neurons_per_layer_size_of_fc_module.append(nn.ReLU())        
+        
+        # Último layer com a quantidade de classes
+        neurons_per_layer_size_of_fc_module.append(nn.Linear(self.neurons_per_layer_size_of_fc_module, self.num_classes))
+        neurons_per_layer_size_of_fc_module.append(nn.Softmax(dim=1))
+        
+        # Montando o bloco de layers para processar as features fundidas
+        return nn.Sequential(*neurons_per_layer_size_of_fc_module)
+            
+
+        # return nn.Sequential(
+        #     nn.Linear(self.common_dim*self.n, self.common_dim),
+        #     nn.BatchNorm1d(self.common_dim),
+        #     nn.ReLU(),
+        #     nn.Dropout(0.3),
+        #     nn.Linear(self.common_dim, self.common_dim // 2),
+        #     nn.BatchNorm1d(self.common_dim // 2),
+        #     nn.ReLU(),
+        #     nn.Dropout(0.3),
+        #     nn.Linear(self.common_dim // 2, self.num_classes),
+        #     nn.Softmax(dim=1)
+        # )
 
     def forward(self, image, text_metadata):
         # === Image Encoder ===

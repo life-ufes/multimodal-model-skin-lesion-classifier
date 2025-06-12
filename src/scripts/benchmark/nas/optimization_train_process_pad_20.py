@@ -167,7 +167,7 @@ def train_process(config:dict, num_epochs:int,
         model=model, 
         metrics=metrics, 
         model_name=model_name, 
-        base_dir=model_save_path,
+        base_dir=results_folder_path,
         save_to_disk=True, 
         fold_num=fold_num, 
         all_labels=all_labels, 
@@ -250,10 +250,13 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
     for step in range(1, SEARCH_STEPS + 1):
         config, log_prob = controller.sample_config()
         
+        attention_mecanism= config["attention_mecanism"]
+        common_dim = config["common_dim"]
+
         try:
             dynamic_model = dynamicMultimodalmodel.DynamicCNN(
                 config, num_classes=num_classes, device=device,
-                common_dim=config["common_dim"], num_heads=num_heads, vocab_size=num_metadata_features,
+                common_dim=common_dim, num_heads=num_heads, vocab_size=num_metadata_features,
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
@@ -363,7 +366,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["metablock"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["custom-attention-mechanism"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
     list_of_models = ["custom-cnn-with-NAS"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     
@@ -374,7 +377,12 @@ if __name__ == "__main__":
         "kernel_size": [3, 5],                          # Tamanho do Kernel para todas as convs
         "layers_per_block": [1, 2],                     # Camadas conv por bloco
         "use_pooling": [True, False],                   # Usar MaxPool após cada bloco
-        "common_dim": [64, 128, 256, 512, 1024, 2048] # Tamanho do vetor
+        "common_dim": [64, 128, 256, 512, 1024, 2048], # Tamanho do vetor
+        "attention_mecanism": ["no-metadata", "concatenation", "crossattention", "metablock"],
+        "num_layers_text_fc": [1, 2, 3, 5,10],
+        "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],
+        "num_layers_fc_module": [1, 2, 3, 5,10],
+        "neurons_per_layer_size_of_fc_module": [256, 512, 1024, 2048]
     }
 
     SEARCH_STEPS = 100
