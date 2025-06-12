@@ -191,7 +191,7 @@ def train_process(config:dict, num_epochs:int,
 
 def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, device, num_classes, model_name, 
              num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, 
-             results_folder_path, SEARCH_STEPS, search_space, num_workers=10, persistent_workers=True, 
+             results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=True, 
              test_size=0.2):  # test_size é a proporção da validação
              
     labels = [dataset.labels[i] for i in range(len(dataset))]
@@ -342,7 +342,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         SEARCH_STEPS = SEARCH_STEPS, 
                         search_space = search_space,
-                        num_workers=5, persistent_workers=True
+                        num_workers=3, persistent_workers=True
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -372,17 +372,17 @@ if __name__ == "__main__":
     
     # Treina todos modelos que podem ser usados no modelo multi-modal
     search_space = {
-        "num_blocks": [2, 3, 4, 10, 20, 50, 100],                        # Número de blocos convolucionais
+        "num_blocks": [2, 5, 10, 50, 100],                        # Número de blocos convolucionais
         "initial_filters": [16, 32, 64],                # Filtros no primeiro bloco
         "kernel_size": [3, 5],                          # Tamanho do Kernel para todas as convs
         "layers_per_block": [1, 2],                     # Camadas conv por bloco
         "use_pooling": [True, False],                   # Usar MaxPool após cada bloco
-        "common_dim": [64, 128, 256, 512, 1024, 2048], # Tamanho do vetor
-        "attention_mecanism": ["no-metadata", "concatenation", "crossattention", "metablock"],
-        "num_layers_text_fc": [1, 2, 3, 5,10],
-        "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],
-        "num_layers_fc_module": [1, 2, 3, 5,10],
-        "neurons_per_layer_size_of_fc_module": [256, 512, 1024, 2048]
+        "common_dim": [64, 128, 256, 512],  # Tamanho do vetor
+        "attention_mecanism": ["no-metadata", "concatenation", "crossattention", "metablock"], # Formas de fusão das features
+        "num_layers_text_fc": [1, 2, 5],          # Quantidade de layers no Embedding do One-Hot Encoding
+        "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],   # Quantidade de neurônios nos layers no Embedding do One-Hot Encoding
+        "num_layers_fc_module": [1, 2, 5],        # Quantidade de layers no módulo MLP
+        "neurons_per_layer_size_of_fc_module": [256, 512, 1024] # Quantidade de neurônios nos layers do MLP
     }
 
     SEARCH_STEPS = 100
