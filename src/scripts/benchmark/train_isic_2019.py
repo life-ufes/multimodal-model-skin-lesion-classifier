@@ -150,7 +150,7 @@ def train_process(num_epochs,
             # Evaluate Metrics
             # -----------------------------
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
@@ -182,7 +182,7 @@ def train_process(num_epochs,
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
         metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
     # End of training
     train_process_time = time.time() - initial_time
@@ -268,7 +268,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         )
 
         # Salvar as predições em um arquivo csv
-        save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
+        save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, 
+            targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):

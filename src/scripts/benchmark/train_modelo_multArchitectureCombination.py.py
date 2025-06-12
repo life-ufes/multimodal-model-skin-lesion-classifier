@@ -56,7 +56,7 @@ def train_process(num_epochs,
         patience=5, 
         delta=0.01, 
         verbose=True,
-        path='best_model.pt',   # Where to save the best weights (optional)
+        path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=True       # If True, saves best weights to 'best_model.pt'
     )
 
@@ -136,7 +136,7 @@ def train_process(num_epochs,
             # Evaluate Metrics
             # -----------------------------
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model, val_loader, device, fold_num
+                model, val_loader, device, fold_num, model_name=model_name
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)

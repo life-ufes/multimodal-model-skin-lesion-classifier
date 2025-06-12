@@ -32,20 +32,20 @@ def compute_class_weights(labels, num_classes):
         weights.append(weight)
     return torch.tensor(weights, dtype=torch.float)
 
-def train_process(num_epochs, 
-                  num_heads, 
-                  fold_num, 
+def train_process(config:dict, num_epochs:int, 
+                  num_heads:int, 
+                  fold_num:int, 
                   train_loader, 
                   val_loader, 
                   targets, 
                   model, 
-                  device, 
-                  weightes_per_category, 
-                  common_dim, 
-                  model_name, 
+                  device:str, 
+                  weightes_per_category:str, 
+                  common_dim:str, 
+                  model_name:str, 
                   text_model_encoder, 
-                  attention_mecanism, 
-                  results_folder_path):
+                  attention_mecanism:str, 
+                  results_folder_path:str):
 
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
@@ -70,14 +70,14 @@ def train_process(num_epochs,
         delta=0.01, 
         verbose=True,
         path=str(model_save_path + f'/step_{str(fold_num)}/best-model/'),
-        save_to_disk=True,
+        save_to_disk=False,
         early_stopping_metric_name="val_loss"
     )
 
     initial_time = time.time()
     epoch_index = 0
 
-    experiment_name = f"EXPERIMENTOS-{dataset_folder_name}"
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name}"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -130,7 +130,7 @@ def train_process(num_epochs,
             print(f"Current Learning Rate(s): {current_lr}\n")
 
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
@@ -156,7 +156,7 @@ def train_process(num_epochs,
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
         metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
 
     metrics["train process time"] = str(train_process_time)
@@ -176,6 +176,15 @@ def train_process(num_epochs,
         data_val="val"
     )
     print(f"Model saved at {model_save_path}")
+    
+    # Salvar os dados da configuração
+    folder_name = f"{model_name}_fold_{fold_num}"
+    folder_path = os.path.join(model_save_path, folder_name)
+
+    # Criar a pasta para o modelo
+    os.makedirs(folder_path, exist_ok=True)
+    with open(os.path.join(folder_path, "config.json"), "w") as f:
+        json.dump(config, f, indent=2)
 
     return model, model_save_path, metrics
 
@@ -244,20 +253,20 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
         try:
             dynamic_model = dynamicMultimodalmodel.DynamicCNN(
                 config, num_classes=num_classes, device=device,
-                common_dim=common_dim, num_heads=num_heads, vocab_size=num_metadata_features,
+                common_dim=config["common_dim"], num_heads=num_heads, vocab_size=num_metadata_features,
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
 
             dynamic_model, model_save_path, metrics = train_process(
-                num_epochs=num_epochs, num_heads=num_heads, fold_num=step, train_loader=train_loader, val_loader=val_loader, 
+                config=config, num_epochs=num_epochs, num_heads=num_heads, fold_num=step, train_loader=train_loader, val_loader=val_loader, 
                 targets=dataset.targets, model=dynamic_model, device=device, weightes_per_category=class_weights, 
                 common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
             )
-
+            
             save_predictions.model_val_predictions(
                 model=dynamic_model, dataloader=val_loader, device=device,
-                fold_num=step, targets=dataset.targets, base_dir=model_save_path
+                fold_num=step, targets=dataset.targets, base_dir=model_save_path, model_name=model_name
             )
 
             reward = metrics["balanced_accuracy"]
@@ -269,6 +278,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
         if reward > best_reward:
             best_reward = reward
             best_config = config
+            best_step = step
             print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f}")
 
         baseline = reward if baseline is None else 0.9 * baseline + 0.1 * reward
@@ -284,6 +294,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
     print("\n--- Busca Finalizada ---")
     print(f"Melhor Reward: {best_reward:.4f}")
     print(f"Melhor Arquitetura: {best_config}")
+    print(f"Step da melhor arquitetura: {best_step}")
     with open(os.path.join(results_folder_path, "best_config.json"), "w") as f:
         json.dump(best_config, f, indent=2)
 
@@ -337,10 +348,10 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
 if __name__ == "__main__":
     # Carrega os dados localmente
     local_variables = load_local_variables.get_env_variables()
-    num_epochs =  1 ## Treino com poucas épocas # local_variables["num_epochs"]
+    num_epochs =  5 ## Treino com poucas épocas # local_variables["num_epochs"]
     batch_size = local_variables["batch_size"]
     k_folds = 1 ## Treino com poucas épocas # local_variables["k_folds"]
-    common_dim = local_variables["common_dim"]
+    common_dim = -1 # local_variables["common_dim"]
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
@@ -352,33 +363,34 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["metablock"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
     list_of_models = ["custom-cnn-with-NAS"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     
     # Treina todos modelos que podem ser usados no modelo multi-modal
     search_space = {
-        "num_blocks": [2, 3, 4],                        # Número de blocos convolucionais
+        "num_blocks": [2, 3, 4, 10, 20, 50, 100],                        # Número de blocos convolucionais
         "initial_filters": [16, 32, 64],                # Filtros no primeiro bloco
         "kernel_size": [3, 5],                          # Tamanho do Kernel para todas as convs
         "layers_per_block": [1, 2],                     # Camadas conv por bloco
-        "use_pooling": [True, False]                   # Usar MaxPool após cada bloco
+        "use_pooling": [True, False],                   # Usar MaxPool após cada bloco
+        "common_dim": [64, 128, 256, 512, 1024, 2048] # Tamanho do vetor
     }
 
-    SEARCH_STEPS = 1
+    SEARCH_STEPS = 100
 
     run_expirements(
-        dataset_folder_path, 
-        results_folder_path,
-        llm_model_name_sequence_generator, 
-        num_epochs, 
-        batch_size, 
-        k_folds, 
-        common_dim, 
-        text_model_encoder, 
-        unfreeze_weights, 
-        device, 
-        list_num_heads, 
+        dataset_folder_path=dataset_folder_path, 
+        results_folder_path=results_folder_path,
+        llm_model_name_sequence_generator=llm_model_name_sequence_generator, 
+        num_epochs=num_epochs, 
+        batch_size=batch_size, 
+        k_folds=k_folds, 
+        common_dim=common_dim, 
+        text_model_encoder=text_model_encoder, 
+        unfreeze_weights=unfreeze_weights, 
+        device=device, 
+        list_num_heads=list_num_heads, 
         list_of_attention_mecanism=list_of_attention_mecanism, 
         list_of_models=list_of_models,
         SEARCH_STEPS= SEARCH_STEPS, 

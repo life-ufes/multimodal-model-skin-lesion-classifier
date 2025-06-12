@@ -5,8 +5,12 @@ import torch
 import os
 import pandas as pd
 
-def evaluate_model(model, dataloader, targets, device: str, fold_num: int, base_dir: str):
-    folder_path = os.path.join(base_dir, str(fold_num))
+def evaluate_model(model, dataloader, targets, device: str, fold_num: int, base_dir: str, model_name:str="None"):
+    # Gerar o nome único da pasta usando o nome do modelo e o timestamp
+    folder_name = f"{model_name}_fold_{fold_num}"
+    folder_path = os.path.join(base_dir, folder_name)
+
+    # Criar a pasta para o modelo
     os.makedirs(folder_path, exist_ok=True)
 
     model.eval()

@@ -102,7 +102,7 @@ def train_model(train_loader, val_loader, dataset, model, device, class_weights,
             }, step=epoch)
 
             # Log evaluation metrics
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold)
+            metrics, all_labels, all_predictions = model_metrics.evaluate_model(model, val_loader, device, fold, model_name=model_name)
             # Logar métricas no MLflow
             for metric_name, metric_value in metrics.items():
                 if isinstance(metric_value, (int, float)):

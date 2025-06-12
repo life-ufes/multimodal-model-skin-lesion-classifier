@@ -151,7 +151,7 @@ def train_process(num_epochs,
             # Evaluate Metrics
             # -----------------------------
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
@@ -183,7 +183,7 @@ def train_process(num_epochs,
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
         metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path 
+            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))

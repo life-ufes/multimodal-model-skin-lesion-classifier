@@ -26,8 +26,7 @@ def save_model_and_metrics(model,
     all_predictions = np.array(all_predictions)
     targets = np.array(targets)
     # Gerar o nome único da pasta usando o nome do modelo e o timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    folder_name = f"{model_name}_fold_{fold_num}_{timestamp}"
+    folder_name = f"{model_name}_fold_{fold_num}"
     folder_path = os.path.join(base_dir, folder_name)
 
     # Criar a pasta para o modelo

@@ -47,8 +47,12 @@ def save_image_prediction_in_evaluation_by_fold(
     except Exception as e:
         print(f"Erro ao tentar salvar as predições! Erro: {e}\n")
 
-def model_val_predictions(model, dataloader, targets, device: str, fold_num: int, base_dir: str):
-    folder_path = os.path.join(base_dir, str(fold_num))
+def model_val_predictions(model, dataloader, targets, device: str, fold_num: int, base_dir: str, model_name:str= None):
+    # Salvar os dados da configuração
+    folder_name = f"{model_name}_fold_{fold_num}"
+    folder_path = os.path.join(base_dir, folder_name)
+
+    # Criar a pasta para o modelo
     os.makedirs(folder_path, exist_ok=True)
 
     model.eval()
