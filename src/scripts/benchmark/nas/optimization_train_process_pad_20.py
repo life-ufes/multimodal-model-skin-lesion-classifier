@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import os
+import csv
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from utils import model_metrics, save_predictions
@@ -71,7 +72,7 @@ def train_process(config:dict, num_epochs:int,
         verbose=True,
         path=str(model_save_path + f'/step_{str(fold_num)}/best-model/'),
         save_to_disk=False,
-        early_stopping_metric_name="val_loss"
+        early_stopping_metric_name="val_bacc"
     )
 
     initial_time = time.time()
@@ -84,7 +85,7 @@ def train_process(config:dict, num_epochs:int,
         run_name=(
             f"image_extractor_model_{model_name}_with_mecanism_"
             f"{attention_mecanism}_step_{fold_num}_num_heads_{num_heads}"
-        )
+        ), nested=True
     ):
         mlflow.log_param("step", fold_num)
         mlflow.log_param("batch_size", train_loader.batch_size)
@@ -135,7 +136,10 @@ def train_process(config:dict, num_epochs:int,
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
             metrics["val_loss"] = float(val_loss)
-            print(f"Metrics: {metrics}")
+            metrics["attention_mechanism"] = str(attention_mecanism)
+            metrics["common_dim"]=int(common_dim)
+
+            print(f"Metrics: {metrics}\n")
 
             for metric_name, metric_value in metrics.items():
                 if isinstance(metric_value, (int, float)):
@@ -158,23 +162,11 @@ def train_process(config:dict, num_epochs:int,
         metrics, all_labels, all_predictions = model_metrics.evaluate_model(
             model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
-
+    
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
 
-    save_model_and_metrics(
-        model=model, 
-        metrics=metrics, 
-        model_name=model_name, 
-        base_dir=results_folder_path,
-        save_to_disk=True, 
-        fold_num=fold_num, 
-        all_labels=all_labels, 
-        all_predictions=all_predictions, 
-        targets=targets, 
-        data_val="val"
-    )
     print(f"Model saved at {model_save_path}")
     
     # Salvar os dados da configuração
@@ -183,16 +175,43 @@ def train_process(config:dict, num_epochs:int,
 
     # Criar a pasta para o modelo
     os.makedirs(folder_path, exist_ok=True)
+
+    save_model_and_metrics(
+        model=model, 
+        metrics=metrics, 
+        model_name=model_name, 
+        base_dir=folder_path,
+        save_to_disk=False, 
+        fold_num=fold_num, 
+        all_labels=all_labels, 
+        all_predictions=all_predictions, 
+        targets=targets, 
+        data_val="val"
+    )
+
+    # Salvar as métricas
+    metrics_file = os.path.join(results_folder_path, "all_model_metrics.csv")
+    file_exists = os.path.isfile(metrics_file)
+
+    with open(metrics_file, mode='a', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=metrics.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(metrics)
+    
     with open(os.path.join(folder_path, "config.json"), "w") as f:
         json.dump(config, f, indent=2)
 
     return model, model_save_path, metrics
 
-
-def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, device, num_classes, model_name, 
-             num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, 
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num_classes, model_name, 
+             num_heads, common_dim, k_folds, text_model_encoder, unfreeze_weights, attention_mecanism, 
              results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=True, 
-             test_size=0.2):  # test_size é a proporção da validação
+             test_size=0.2, # Proporção da validação
+             controller_lr=1e-3, # Nova: Taxa de aprendizado do Controller
+             entropy_beta=0.01, # Nova: Ponderação da entropia para exploração
+             grad_clip_norm=1.0 # Nova: Valor para clipagem de gradientes
+            ): 
              
     labels = [dataset.labels[i] for i in range(len(dataset))]
     
@@ -214,7 +233,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
         drop_nan=dataset.is_to_drop_nan,
         bert_model_name=dataset.bert_model_name,
         image_encoder=dataset.image_encoder,
-        is_train=True  # Ativa augmentações de treino
+        is_train=True
     )
     train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
     train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
@@ -227,7 +246,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
         drop_nan=dataset.is_to_drop_nan,
         bert_model_name=dataset.bert_model_name,
         image_encoder=dataset.image_encoder,
-        is_train=False  # Transforms de validação
+        is_train=False
     )
     val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
     val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
@@ -240,67 +259,124 @@ def pipeline(dataset, num_metadata_features, num_epochs, k_folds, batch_size, de
     class_weights = compute_class_weights(train_labels, num_classes).to(device)
     print(f"Pesos das classes: {class_weights}")
     
-    controller = controllerMultimodalmodel.Controller(search_space).to(device)
-    optimizer = torch.optim.Adam(controller.parameters(), lr=5e-4)
+    controller = controllerMultimodalmodel.Controller(search_space=search_space, hidden_size=256).to(device)
+    # Otimizador específico para o Controller
+    optimizer_controller = torch.optim.Adam(controller.parameters(), lr=controller_lr) 
+    
+    # Scheduler para o Controller (reduz LR se a recompensa não melhorar)
+    scheduler_controller = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer_controller,
+        mode='max', # Otimiza para maximizar a recompensa (reward)
+        factor=0.1,
+        patience=5, # Paciência ajustável
+        verbose=True,
+        min_lr=1e-6
+    )
+
     baseline = None
-
-    best_reward = 0.0
+    best_reward = -float('inf') # Inicializa com um valor muito baixo
     best_config = None
+    best_step = -1
 
-    for step in range(1, SEARCH_STEPS + 1):
-        config, log_prob = controller.sample_config()
-        
-        attention_mecanism= config["attention_mecanism"]
-        common_dim = config["common_dim"]
+    # Inicia um run MLFlow para a busca do Controller (separado dos runs dos DynamicModels)
+    # global dataset_folder_name 
+    #experiment_name_controller = f"NAS-Controller-Search-{dataset_folder_name}"
+    #mlflow.set_experiment(experiment_name_controller)
+    # mlflow_controller_run = mlflow.start_run(run_name="Controller_Search_Run")
+    
+    with mlflow.start_run(nested=True):
+        # Loga os hiperparâmetros do Controller
+        mlflow.log_param("controller_learning_rate", controller_lr)
+        mlflow.log_param("entropy_beta", entropy_beta)
+        mlflow.log_param("gradient_clip_norm", grad_clip_norm)
+        mlflow.log_param("search_steps", SEARCH_STEPS)
+        mlflow.log_param("search_space_json", json.dumps(search_space)) # Log do search space completo
 
-        try:
-            dynamic_model = dynamicMultimodalmodel.DynamicCNN(
-                config, num_classes=num_classes, device=device,
-                common_dim=common_dim, num_heads=num_heads, vocab_size=num_metadata_features,
-                attention_mecanism=attention_mecanism, 
-                n=1 if attention_mecanism=="no-metadata" else 2
-            )
-
-            dynamic_model, model_save_path, metrics = train_process(
-                config=config, num_epochs=num_epochs, num_heads=num_heads, fold_num=step, train_loader=train_loader, val_loader=val_loader, 
-                targets=dataset.targets, model=dynamic_model, device=device, weightes_per_category=class_weights, 
-                common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
-            )
+        for step in range(1, SEARCH_STEPS + 1):
+            config, log_prob = controller.sample_config()
             
-            save_predictions.model_val_predictions(
-                model=dynamic_model, dataloader=val_loader, device=device,
-                fold_num=step, targets=dataset.targets, base_dir=model_save_path, model_name=model_name
-            )
+            attention_mecanism = config["attention_mecanism"]
+            common_dim = config["common_dim"]
 
-            reward = metrics["balanced_accuracy"]
+            reward = 0.0 # Inicializa reward para cada passo
+            try:
+                # Instancia o modelo dinâmico com a configuração amostrada
+                dynamic_model = dynamicMultimodalmodel.DynamicCNN(
+                    config, num_classes=num_classes, device=device,
+                    common_dim=common_dim, num_heads=num_heads, vocab_size=num_metadata_features,
+                    attention_mecanism=attention_mecanism, 
+                    n=1 if attention_mecanism=="no-metadata" else 2
+                )
 
-        except Exception as e:
-            print(f"Erro no modelo com config {config}: {e}")
-            reward = 0.0
+                # Treina e avalia o modelo dinâmico
+                dynamic_model, model_save_path, metrics = train_process(
+                    config=config, num_epochs=num_epochs, num_heads=num_heads, fold_num=step, train_loader=train_loader, val_loader=val_loader, 
+                    targets=dataset.targets, model=dynamic_model, device=device, weightes_per_category=class_weights, 
+                    common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
+                )
+                
+                # Salvar as predições (se necessário, certifique-se de que save_predictions exista e seja funcional)
+                # save_predictions.model_val_predictions(
+                #     model=dynamic_model, dataloader=val_loader, device=device,
+                #     fold_num=step, targets=dataset.targets, base_dir=model_save_path, model_name=model_name
+                # )
 
-        if reward > best_reward:
-            best_reward = reward
-            best_config = config
-            best_step = step
-            print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f}")
+                reward = metrics["balanced_accuracy"] # Usando balanced_accuracy como recompensa
 
-        baseline = reward if baseline is None else 0.9 * baseline + 0.1 * reward
-        advantage = reward - baseline
+            except Exception as e:
+                print(f"Erro ao treinar modelo com config {config}: {e}")
+                reward = 0.0 # Penaliza modelos que falham no treinamento ou têm erro
 
-        loss = -log_prob * advantage
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            # Atualiza o melhor reward e configuração
+            if reward > best_reward:
+                best_reward = reward
+                best_config = config
+                best_step = step
+                print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f} no passo {best_step}")
 
-        print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Baseline: {baseline:.4f} | Config: {config}")
+            # Atualiza a baseline para o algoritmo REINFORCE
+            baseline = reward if baseline is None else 0.8 * baseline + 0.2 * reward
+            advantage = reward - baseline
 
-    print("\n--- Busca Finalizada ---")
-    print(f"Melhor Reward: {best_reward:.4f}")
-    print(f"Melhor Arquitetura: {best_config}")
-    print(f"Step da melhor arquitetura: {best_step}")
-    with open(os.path.join(results_folder_path, "best_config.json"), "w") as f:
-        json.dump(best_config, f, indent=2)
+            # Calcula a perda do Controller com regularização de entropia
+            # log_prob é um tensor. A soma é necessária para obter um escalar para o loss.
+            # entropy_beta é a ponderação da entropia.
+            entropy = -log_prob.sum() # Representa a entropia da política (para incentivar exploração)
+            controller_loss = (- log_prob.sum() * advantage) + (entropy_beta * entropy)
+            # Otimiza o Controller
+            optimizer_controller.zero_grad()
+            controller_loss.backward()
+            
+            # # Clipagem de gradientes para estabilizar o treinamento do Controller
+            # torch.nn.utils.clip_grad_norm_(controller.parameters(), grad_clip_norm)
+            optimizer_controller.step()
 
+            # Atualiza o scheduler do Controller com a recompensa atual
+            scheduler_controller.step(reward)
+
+            # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
+            mlflow.log_metric("controller_reward", reward, step=step)
+            mlflow.log_metric("controller_baseline", baseline, step=step)
+            mlflow.log_metric("controller_loss", controller_loss.item(), step=step) 
+            mlflow.log_param(f"config_step_{step}", json.dumps(config)) # Log a configuração gerada em cada passo
+
+            print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Baseline: {baseline:.4f} | Controller Loss: {controller_loss.item():.4f} | Config: {config}")
+
+        print("\n--- Busca Finalizada ---")
+        print(f"Melhor Reward: {best_reward:.4f}")
+        print(f"Melhor Arquitetura: {best_config}")
+        print(f"Step da melhor arquitetura: {best_step}")
+
+        # **Registra as métricas finais da busca no MLFlow run do Controller**
+        mlflow.log_metric("final_best_reward", best_reward, step=SEARCH_STEPS)
+        mlflow.log_param("final_best_architecture_config", json.dumps(best_config)) 
+        mlflow.log_param("final_best_architecture_step", best_step)
+        
+        # Salva a melhor configuração em um arquivo JSON
+        with open(os.path.join(results_folder_path, "best_config.json"), "w") as f:
+            json.dump(best_config, f, indent=2)
+
+        # mlflow.end_run() # Finaliza o run MLFlow do Controller
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list, SEARCH_STEPS, search_space):
     for attention_mecanism in list_of_attention_mecanism:
@@ -342,7 +418,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         SEARCH_STEPS = SEARCH_STEPS, 
                         search_space = search_space,
-                        num_workers=3, persistent_workers=True
+                        num_workers=6, persistent_workers=True
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -351,7 +427,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
 if __name__ == "__main__":
     # Carrega os dados localmente
     local_variables = load_local_variables.get_env_variables()
-    num_epochs =  5 ## Treino com poucas épocas # local_variables["num_epochs"]
+    num_epochs =  10 # local_variables["num_epochs"] ## Treino com poucas épocas # local_variables["num_epochs"]
     batch_size = local_variables["batch_size"]
     k_folds = 1 ## Treino com poucas épocas # local_variables["k_folds"]
     common_dim = -1 # local_variables["common_dim"]
@@ -372,17 +448,17 @@ if __name__ == "__main__":
     
     # Treina todos modelos que podem ser usados no modelo multi-modal
     search_space = {
-        "num_blocks": [2, 5, 10, 50, 100],                        # Número de blocos convolucionais
+        "num_blocks": [2, 5, 10],              # Número de blocos convolucionais
         "initial_filters": [16, 32, 64],                # Filtros no primeiro bloco
         "kernel_size": [3, 5],                          # Tamanho do Kernel para todas as convs
         "layers_per_block": [1, 2],                     # Camadas conv por bloco
         "use_pooling": [True, False],                   # Usar MaxPool após cada bloco
         "common_dim": [64, 128, 256, 512],  # Tamanho do vetor
-        "attention_mecanism": ["no-metadata", "concatenation", "crossattention", "metablock"], # Formas de fusão das features
-        "num_layers_text_fc": [1, 2, 5],          # Quantidade de layers no Embedding do One-Hot Encoding
+        "attention_mecanism": ["concatenation", "crossattention", "metablock", "weighted-after-crossattention"], # Formas de fusão das features
+        "num_layers_text_fc": [1, 2, 3],          # Quantidade de layers no Embedding do One-Hot Encoding
         "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],   # Quantidade de neurônios nos layers no Embedding do One-Hot Encoding
-        "num_layers_fc_module": [1, 2, 5],        # Quantidade de layers no módulo MLP
-        "neurons_per_layer_size_of_fc_module": [256, 512, 1024] # Quantidade de neurônios nos layers do MLP
+        "num_layers_fc_module": [1, 2],        # Quantidade de layers no módulo MLP
+        "neurons_per_layer_size_of_fc_module": [256, 512] # Quantidade de neurônios nos layers do MLP
     }
 
     SEARCH_STEPS = 100
