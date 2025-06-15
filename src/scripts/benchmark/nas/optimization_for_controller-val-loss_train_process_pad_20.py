@@ -278,7 +278,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
         min_lr=1e-6
     )
 
-    baseline = float('inf')
+    baseline = 0.0
+    alpha = 0.9
     best_reward = -float('inf') # Inicializa com um valor muito baixo
     best_controller_val_loss = float('Inf') # Inicia com um loss alto
     best_config = None
@@ -317,15 +318,15 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
                     common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
                 )
                 
-                reward = - metrics["val_loss"] # metrics["balanced_accuracy"] # Usando balanced_accuracy como recompensa
-                # controller_val_loss = metrics["val_loss"]
+                reward = metrics["balanced_accuracy"] # Usando balanced_accuracy como recompensa
+                dynamic_cnn_val_loss = metrics["val_loss"]
             except Exception as e:
                 print(f"Erro ao treinar modelo com config {config}: {e}")
                 reward = 0.0 # Penaliza modelos que falham no treinamento ou têm erro
-                controller_val_loss = 1.0
+                dynamic_cnn_val_loss = 1.0
             # # Atualiza o melhor reward e configuração
-            if (controller_val_loss<best_controller_val_loss):
-                best_controller_val_loss = controller_val_loss
+            if (dynamic_cnn_val_loss<best_controller_val_loss):
+                best_controller_val_loss = dynamic_cnn_val_loss
                 best_config = config
                 best_step = step
                 print(f"🎉 Nova melhor arquitetura encontrada! Controller val_loss: {best_controller_val_loss} no passo {best_step}")
@@ -333,9 +334,11 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
             # Atualiza a baseline para o algoritmo REINFORCE
             # Calcula a perda do Controller com regularização de entropia
             # log_prob é um tensor. A soma é necessária para obter um escalar para o loss.
-            entropy = -log_prob.sum() 
+            # Atualiza a baseline para o algoritmo REINFORCE
+            baseline = reward if baseline is None else 0.8 * baseline + 0.2 * reward
             advantage = reward - baseline
-            controller_loss = - (log_prob.sum() * advantage) - (entropy_beta * entropy)
+            entropy = -log_prob.sum()
+            controller_loss = (( advantage + entropy_beta) * entropy) - dynamic_cnn_val_loss
             # Otimiza o Controller
             optimizer_controller.zero_grad()
             controller_loss.backward()
@@ -349,8 +352,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
 
             # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
             mlflow.log_metric("controller_reward", reward, step=step)
-            # mlflow.log_metric("controller_baseline", baseline, step=step)
+            mlflow.log_metric("controller_baseline", baseline, step=step)
             mlflow.log_metric("controller_loss", controller_loss.item(), step=step) 
+            mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step) 
             mlflow.log_param(f"config_step_{step}", json.dumps(config)) # Log a configuração gerada em cada passo
 
             print(f"[{step}/{SEARCH_STEPS}] s: {reward:.4f}| Controller Loss: {controller_loss.item():.4f} | Config: {config}")
@@ -443,7 +447,6 @@ if __name__ == "__main__":
         "initial_filters": [16, 32, 64],                # Filtros no primeiro bloco
         "kernel_size": [3, 5],                          # Tamanho do Kernel para todas as convs
         "layers_per_block": [1, 2],                     # Camadas conv por bloco
-        "use_pooling": [True, False],                   # Usar MaxPool após cada bloco
         "common_dim": [64, 128, 256, 512],  # Tamanho do vetor
         "attention_mecanism": ["concatenation", "crossattention", "metablock", "weighted-after-crossattention"], # Formas de fusão das features
         "num_layers_text_fc": [1, 2, 3],          # Quantidade de layers no Embedding do One-Hot Encoding
