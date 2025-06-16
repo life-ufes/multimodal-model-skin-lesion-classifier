@@ -166,6 +166,11 @@ def train_process(config:dict, num_epochs:int,
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
+    metrics["epoch"] = epoch_index
+    metrics["train_loss"] = float(train_loss)
+    metrics["val_loss"] = float(val_loss)
+    metrics["attention_mechanism"] = str(attention_mecanism)
+    metrics["common_dim"]=int(common_dim)
 
     print(f"Model saved at {model_save_path}")
     
@@ -322,15 +327,18 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
                 # )
 
                 reward = metrics["balanced_accuracy"] # Usando balanced_accuracy como recompensa
+                dynamic_cnn_val_loss = metrics["val_loss"]
 
             except Exception as e:
                 print(f"Erro ao treinar modelo com config {config}: {e}")
                 reward = 0.0 # Penaliza modelos que falham no treinamento ou têm erro
-
+                dynamic_cnn_val_loss = 1.0
+                
             # Atualiza o melhor reward e configuração
             if reward > best_reward:
-                best_reward = reward
+                best_controller_val_loss = dynamic_cnn_val_loss
                 best_config = config
+                best_reward = reward
                 best_step = step
                 print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f} no passo {best_step}")
 
@@ -342,7 +350,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
             # log_prob é um tensor. A soma é necessária para obter um escalar para o loss.
             # entropy_beta é a ponderação da entropia.
             entropy = -log_prob.sum() # Representa a entropia da política (para incentivar exploração)
-            controller_loss = (- log_prob.sum() * advantage) + (entropy_beta * entropy)
+            controller_loss = (( advantage + entropy_beta) * entropy)
             # Otimiza o Controller
             optimizer_controller.zero_grad()
             controller_loss.backward()
@@ -357,7 +365,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
             # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
             mlflow.log_metric("controller_reward", reward, step=step)
             mlflow.log_metric("controller_baseline", baseline, step=step)
-            mlflow.log_metric("controller_loss", controller_loss.item(), step=step) 
+            mlflow.log_metric("controller_loss", controller_loss.item(), step=step)
+            mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step)  
             mlflow.log_param(f"config_step_{step}", json.dumps(config)) # Log a configuração gerada em cada passo
 
             print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Baseline: {baseline:.4f} | Controller Loss: {controller_loss.item():.4f} | Config: {config}")
@@ -427,7 +436,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
 if __name__ == "__main__":
     # Carrega os dados localmente
     local_variables = load_local_variables.get_env_variables()
-    num_epochs =  10 # local_variables["num_epochs"] ## Treino com poucas épocas # local_variables["num_epochs"]
+    num_epochs = local_variables["num_epochs"] ## Treino com poucas épocas # local_variables["num_epochs"]
     batch_size = local_variables["batch_size"]
     k_folds = 1 ## Treino com poucas épocas # local_variables["k_folds"]
     common_dim = -1 # local_variables["common_dim"]
@@ -461,7 +470,7 @@ if __name__ == "__main__":
         "neurons_per_layer_size_of_fc_module": [256, 512] # Quantidade de neurônios nos layers do MLP
     }
 
-    SEARCH_STEPS = 100
+    SEARCH_STEPS = 500
 
     run_expirements(
         dataset_folder_path=dataset_folder_path, 

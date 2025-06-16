@@ -328,6 +328,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
             if (dynamic_cnn_val_loss<best_controller_val_loss):
                 best_controller_val_loss = dynamic_cnn_val_loss
                 best_config = config
+                best_reward = reward
                 best_step = step
                 print(f"🎉 Nova melhor arquitetura encontrada! Controller val_loss: {best_controller_val_loss} no passo {best_step}")
 
@@ -455,7 +456,7 @@ if __name__ == "__main__":
         "neurons_per_layer_size_of_fc_module": [256, 512] # Quantidade de neurônios nos layers do MLP
     }
 
-    SEARCH_STEPS = 100
+    SEARCH_STEPS = 500
 
     run_expirements(
         dataset_folder_path=dataset_folder_path, 
