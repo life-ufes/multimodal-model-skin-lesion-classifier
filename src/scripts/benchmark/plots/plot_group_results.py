@@ -38,9 +38,9 @@ def main(csv_file_path, use_legend, dataset_name):
             palette='light:b'
         )
     # Customizações
-    plt.title("Balanced Accuracy (BACC) average value grouped by CNN's backbone")
-    plt.ylabel("Balanced Accuracy (BACC)")
-    plt.xlabel("Common size of projected features")
+    plt.title("Balanced Accuracy (BACC) average value grouped by projected features' common size", fontsize=14)
+    plt.ylabel("Balanced Accuracy (BACC)", fontsize=14)
+    plt.xlabel("Common size of projected features", fontsize=14)
     plt.ylim(0, 1)
     if use_legend is True:
         plt.legend(title="Attention mechanism)", bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -51,8 +51,8 @@ def main(csv_file_path, use_legend, dataset_name):
 
 
 if __name__=="__main__":
-    dataset_name = "ISIC-2019" # "PAD-UFES-20" # "ISIC-2019" 
+    dataset_name = "PAD-UFES-20" # "ISIC-2019" 
     # Caminho para o arquivo CSV
-    # csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
-    csv_file_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/ISIC-2019/unfrozen_weights/8/all_metric_values.csv"
-    main(csv_file_path=csv_file_path, use_legend=True, dataset_name=dataset_name)
+    csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
+    # csv_file_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/ISIC-2019/unfrozen_weights/8/all_metric_values.csv"
+    main(csv_file_path=csv_file_path, use_legend=False, dataset_name=dataset_name)

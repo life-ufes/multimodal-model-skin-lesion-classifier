@@ -78,7 +78,7 @@ def train_process(config:dict, num_epochs:int,
     initial_time = time.time()
     epoch_index = 0
 
-    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name}"
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name}-- ONLY USING REWARD"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -319,12 +319,6 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
                     targets=dataset.targets, model=dynamic_model, device=device, weightes_per_category=class_weights, 
                     common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
                 )
-                
-                # Salvar as predições (se necessário, certifique-se de que save_predictions exista e seja funcional)
-                # save_predictions.model_val_predictions(
-                #     model=dynamic_model, dataloader=val_loader, device=device,
-                #     fold_num=step, targets=dataset.targets, base_dir=model_save_path, model_name=model_name
-                # )
 
                 reward = metrics["balanced_accuracy"] # Usando balanced_accuracy como recompensa
                 dynamic_cnn_val_loss = metrics["val_loss"]
@@ -343,14 +337,14 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
                 print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f} no passo {best_step}")
 
             # Atualiza a baseline para o algoritmo REINFORCE
-            baseline = reward if baseline is None else 0.8 * baseline + 0.2 * reward
+            baseline = reward if baseline is None else 0.5 * baseline + 0.5 * reward
             advantage = reward - baseline
 
             # Calcula a perda do Controller com regularização de entropia
             # log_prob é um tensor. A soma é necessária para obter um escalar para o loss.
             # entropy_beta é a ponderação da entropia.
-            entropy = -log_prob.sum() # Representa a entropia da política (para incentivar exploração)
-            controller_loss = (( advantage + entropy_beta) * entropy)
+            entropy = - log_prob.sum() # Representa a entropia da política (para incentivar exploração)
+            controller_loss = ( advantage * entropy)
             # Otimiza o Controller
             optimizer_controller.zero_grad()
             controller_loss.backward()
@@ -364,6 +358,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
 
             # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
             mlflow.log_metric("controller_reward", reward, step=step)
+            mlflow.log_metric("controller_entropy", entropy, step=step)
             mlflow.log_metric("controller_baseline", baseline, step=step)
             mlflow.log_metric("controller_loss", controller_loss.item(), step=step)
             mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step)  

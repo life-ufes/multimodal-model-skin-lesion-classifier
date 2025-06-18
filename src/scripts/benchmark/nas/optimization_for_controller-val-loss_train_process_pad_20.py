@@ -336,16 +336,16 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
             # Calcula a perda do Controller com regularização de entropia
             # log_prob é um tensor. A soma é necessária para obter um escalar para o loss.
             # Atualiza a baseline para o algoritmo REINFORCE
-            baseline = reward if baseline is None else 0.8 * baseline + 0.2 * reward
+            baseline = reward if baseline is None else 0.5 * baseline + 0.5 * reward
             advantage = reward - baseline
             entropy = -log_prob.sum()
-            controller_loss = (( advantage + entropy_beta) * entropy) - dynamic_cnn_val_loss
+            controller_loss = ( advantage * entropy) + dynamic_cnn_val_loss
             # Otimiza o Controller
             optimizer_controller.zero_grad()
             controller_loss.backward()
             
             # # Clipagem de gradientes para estabilizar o treinamento do Controller
-            torch.nn.utils.clip_grad_norm_(controller.parameters(), grad_clip_norm)
+            # torch.nn.utils.clip_grad_norm_(controller.parameters(), grad_clip_norm)
             optimizer_controller.step()
 
             # Atualiza o scheduler do Controller com a recompensa atual
@@ -353,6 +353,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
 
             # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
             mlflow.log_metric("controller_reward", reward, step=step)
+            mlflow.log_metric("controller_entropy", entropy, step=step)            
             mlflow.log_metric("controller_baseline", baseline, step=step)
             mlflow.log_metric("controller_loss", controller_loss.item(), step=step) 
             mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step) 
