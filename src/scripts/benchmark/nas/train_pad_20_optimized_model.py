@@ -3,15 +3,14 @@ import torch.nn as nn
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from utils import model_metrics, save_predictions
+from utils import model_metrics, load_local_variables, save_predictions, load_multimodal_config
 from utils.early_stopping import EarlyStopping
-from utils import load_local_variables
-import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, dynamicMultimodalmodel
 from models import skinLesionDatasets, skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold
+import json
 import time
 from torch.utils.data import DataLoader, Subset
 import numpy as np
@@ -70,7 +69,7 @@ def train_process(num_epochs,
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=True,
-        early_stopping_metric_name="val_loss"
+        early_stopping_metric_name="val_bacc"
     )
 
     initial_time = time.time()
@@ -90,7 +89,7 @@ def train_process(num_epochs,
         mlflow.log_param("model_name", model_name)
         mlflow.log_param("attention_mecanism", attention_mecanism)
         mlflow.log_param("text_model_encoder", text_model_encoder)
-        mlflow.log_param("criterion_type", "cross_entropy")
+        # mlflow.log_param("criterion_type", "cross_entropy")
         mlflow.log_param("num_heads", num_heads)
 
         # Loop de treinamento
@@ -178,23 +177,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
-    # Config do melhor modelo
-    config = {
-        "num_blocks": 2,
-        "initial_filters": 16,
-        "kernel_size": 5,
-        "layers_per_block": 2,
-        "use_pooling": True,
-        "common_dim": 128,
-        "attention_mecanism": "metablock",
-        "num_layers_text_fc": 3,
-        "neurons_per_layer_size_of_text_fc": 512,
-        "num_layers_fc_module": 1,
-        "neurons_per_layer_size_of_fc_module": 256
-        }
-
-
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
     labels = [dataset.labels[i] for i in range(len(dataset))]
     stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
 
@@ -236,7 +219,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         if (text_model_encoder in ["one-hot-encoder", "tab-transformer","gpt2", "bert-base-uncased"]):
             # Instancia o modelo dinâmico com a configuração amostrada
             model = dynamicMultimodalmodel.DynamicCNN(
-                config=config, num_classes=num_classes, device=device,
+                config=multimodel_config, num_classes=num_classes, device=device,
                     common_dim=common_dim, num_heads=num_heads, vocab_size=num_metadata_features,
                     attention_mecanism=attention_mecanism, 
                     n=1 if attention_mecanism=="no-metadata" else 2
@@ -257,7 +240,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodal_config:dict, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -285,8 +268,9 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                     print(f"Número de features do metadados: {num_metadata_features}\n")
                     num_classes = len(dataset.metadata['diagnostic'].unique())
 
-                    pipeline(dataset, 
-                        num_metadata_features=num_metadata_features, 
+                    pipeline(dataset=dataset, 
+                        num_metadata_features=num_metadata_features,
+                        multimodel_config=multimodal_config, 
                         num_epochs=num_epochs, batch_size=batch_size, 
                         device=device, k_folds=k_folds, num_classes=num_classes, 
                         model_name=model_name, common_dim=common_dim, 
@@ -319,22 +303,41 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["no-metadata"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    # Config do melhor modelo
+    # config = {
+    #     "num_blocks": 20,
+    #     "initial_filters": 16,
+    #     "kernel_size": 5,
+    #     "layers_per_block": 2,
+    #     "common_dim": 256,
+    #     "attention_mecanism": "weighted-after-crossattention",
+    #     "num_layers_text_fc": 1,
+    #     "neurons_per_layer_size_of_text_fc": 512,
+    #     "num_layers_fc_module": 1,
+    #     "neurons_per_layer_size_of_fc_module": 512
+    #     }
+
+    # Caminho de onde está o arquivo com as melhores configurações encontrada no processo de treino do NAS
+    best_model_parameters_file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/NAS-USING-RL-USING-REWARD-500-steps/PAD-UFES-20/unfrozen_weights/8/custom-attention-mechanism/best_config.json"
+    config = load_multimodal_config.load_multimodal_config(best_model_parameters_file_folder_path)
+
+    list_of_attention_mecanism = [config.get("attention_mecanism")] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["custom_multimodal_model"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
-        dataset_folder_path, 
-        results_folder_path,
-        llm_model_name_sequence_generator, 
-        num_epochs, 
-        batch_size, 
-        k_folds, 
-        common_dim, 
-        text_model_encoder, 
-        unfreeze_weights, 
-        device, 
-        list_num_heads, 
+        dataset_folder_path=dataset_folder_path, 
+        results_folder_path=results_folder_path,
+        multimodal_config=config,
+        llm_model_name_sequence_generator=llm_model_name_sequence_generator, 
+        num_epochs=num_epochs, 
+        batch_size=batch_size, 
+        k_folds=k_folds, 
+        common_dim=common_dim, 
+        text_model_encoder=text_model_encoder, 
+        unfreeze_weights=unfreeze_weights, 
+        device=device, 
+        list_num_heads=list_num_heads, 
         list_of_attention_mecanism=list_of_attention_mecanism, 
         list_of_models=list_of_models
     )
