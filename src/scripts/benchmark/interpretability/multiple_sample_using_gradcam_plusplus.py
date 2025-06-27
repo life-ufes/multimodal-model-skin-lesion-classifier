@@ -183,7 +183,7 @@ def generated_heatmap_image(text, image_pil, device, model_path):
         processed_metadata_tensor = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
         
         # Load multimodal model
-        model = load_multimodal_model(device, model_path, "weighted-after-crossattention", n=2)
+        model = load_multimodal_model(device, model_path, "gfcam", n=2)
         
         # Choose target layer for GradCAM++
         target_layer = model.image_encoder.features[-1]  # Adjust as needed
@@ -202,13 +202,13 @@ def generated_heatmap_image(text, image_pil, device, model_path):
 
 if __name__ == "__main__":
     device = torch.device("cpu") # torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
-    # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
-    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
+    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/gfcam/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
+    # model_path="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/gfcam/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth"
+    # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/unfreeze-weights/2/gfcam/model_densenet169_with_one-hot-encoder_512/densenet169_fold_5_20250112_181658/model.pth"
     # model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/optimize-num-heads/stratifiedkfold/frozen-weights/2/no-metadata/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_5_20250213_113702/model.pth"
-    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
-    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_083801/model.pth" # "unfrozen-weights"
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250215_075350/model.pth" # "frozen-weights"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/last-layer-unfrozen/2/gfcam/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250211_103249/model.pth" # "last-layer-unfrozen-weights"
+    # model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/gfcam/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_1_20250215_083801/model.pth" # "unfrozen-weights"
+    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/frozen-weights/2/gfcam/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_4_20250215_075350/model.pth" # "frozen-weights"
     # Define column names for metadata processing
     column_names = [
         "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",

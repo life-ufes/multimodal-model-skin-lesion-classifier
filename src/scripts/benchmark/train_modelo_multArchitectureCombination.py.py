@@ -262,7 +262,7 @@ def run_expirements(num_epochs, batch_size, k_folds, common_dims, text_model_enc
     text_fc_config_dropouts = [0.1, 0.5]
 
     # Outros parâmetros e listas já existentes
-    list_of_attention_mecanism = ["weighted-after-crossattention"]
+    list_of_attention_mecanism = ["gfcam"]
     list_of_models = ["densenet169"]
 
     for common_dim in common_dims:  # supondo que common_dims foi definido

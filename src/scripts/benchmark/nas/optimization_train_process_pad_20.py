@@ -446,7 +446,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["custom-attention-mechanism"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["custom-attention-mechanism"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
     list_of_models = ["custom-cnn-with-NAS"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     
@@ -458,7 +458,7 @@ if __name__ == "__main__":
         "layers_per_block": [1, 2],                     # Camadas conv por bloco
         "use_pooling": [True, False],                   # Usar MaxPool após cada bloco
         "common_dim": [64, 128, 256, 512],  # Tamanho do vetor
-        "attention_mecanism": ["concatenation", "crossattention", "metablock", "weighted-after-crossattention"], # Formas de fusão das features
+        "attention_mecanism": ["concatenation", "crossattention", "metablock", "gfcam"], # Formas de fusão das features
         "num_layers_text_fc": [1, 2, 3],          # Quantidade de layers no Embedding do One-Hot Encoding
         "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],   # Quantidade de neurônios nos layers no Embedding do One-Hot Encoding
         "num_layers_fc_module": [1, 2],        # Quantidade de layers no módulo MLP

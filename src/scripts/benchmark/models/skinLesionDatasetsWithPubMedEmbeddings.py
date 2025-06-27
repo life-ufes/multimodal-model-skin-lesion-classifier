@@ -1,6 +1,11 @@
 import os
 import re
 import pandas as pd
+import numpy as np
+from PIL import Image
+from torchvision import transforms
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
@@ -24,12 +29,17 @@ class SkinLesionDataset(Dataset):
         drop_nan=False,
         bert_model_name='bert-base-uncased',
         image_encoder="resnet-18",
-        random_undersampling=False
+        random_undersampling=False,
+        size=(224, 224), 
+        is_train=False
     ):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
         self.img_dir = img_dir
+        self.is_train = is_train
+        self.size=size
+        self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.bert_model_name = bert_model_name.lower()
         self.image_encoder = image_encoder
         self.random_undersampling = random_undersampling
@@ -68,13 +78,18 @@ class SkinLesionDataset(Dataset):
     def __getitem__(self, idx):
         # Carregar imagem
         row = self.metadata.iloc[idx]
-        img_path = os.path.join(self.img_dir, row['img_id'])
+        image_name = row['img_id']
+        img_path = os.path.join(self.img_dir, image_name)
         try:
-            image = Image.open(img_path).convert("RGB")
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Imagem não encontrada: {img_path}")
+            with Image.open(img_path) as img:
+                image = img.convert("RGB")
+                image = np.array(image)
+        except Exception as e:
+            print(f"[Erro] Não foi possível abrir imagem com PIL: {img_path} — {e}")
+            raise FileNotFoundError(f"Imagem inválida: {img_path}")
+
         if self.transform:
-            image = self.transform(image)
+            image = self.transform(image=image)['image']
 
         # Processar texto
         textual_data = row['sentence'] if isinstance(row['sentence'], str) else ""
@@ -96,29 +111,43 @@ class SkinLesionDataset(Dataset):
         # Rótulo
         label = torch.tensor(self.labels[idx], dtype=torch.long)
 
-        return image, text_input, label
+        return image_name, image, text_input, label
 
     def load_transforms(self):
-        if self.image_encoder == "vit-base-patch16-224":
-            # Transforma imagens para o formato necessário para treinamento
-            transform = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(360),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                # Garantir que os valores estejam no intervalo [0, 1]
-                transforms.Lambda(lambda x: torch.clamp(x, 0.0, 1.0))
+        if self.is_train:
+            drop_prob = np.random.uniform(0.0, 0.05)
+            return A.Compose([
+                A.Affine(scale={"x": (1.0, 2.0), "y": (1.0, 2.0)}, p=0.25),
+                A.Resize(self.size[0], self.size[1]),
+                A.HorizontalFlip(p=0.5),
+                A.VerticalFlip(p=0.2),
+                A.Affine(rotate=(-120, 120), mode=cv2.BORDER_REFLECT, p=0.25),
+                A.GaussianBlur(sigma_limit=(0, 3.0), p=0.25),
+                A.OneOf([
+                    A.PixelDropout(dropout_prob=drop_prob, p=1),
+                    A.CoarseDropout(
+                        num_holes_range=(int(0.00125 * self.size[0] * self.size[1]),
+                                        int(0.00125 * self.size[0] * self.size[1])),
+                        hole_height_range=(4, 4),
+                        hole_width_range=(4, 4),
+                        p=1),
+                ], p=0.1),
+                A.OneOf([
+                    A.OneOrOther(
+                        first=A.MultiplicativeNoise(multiplier=(0.9, 1.1), per_channel=False, elementwise=False, p=1),
+                        second=A.MultiplicativeNoise(multiplier=(0.9, 1.1), per_channel=True, elementwise=False, p=1),
+                        p=0.5),
+                    A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=0, p=1),
+                ], p=0.25),
+                A.Normalize(mean=self.normalization[0], std=self.normalization[1]),
+                ToTensorV2(),
             ])
         else:
-            transform = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(360),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            return A.Compose([
+                A.Resize(self.size[0], self.size[1]),
+                A.Normalize(mean=self.normalization[0], std=self.normalization[1]),
+                ToTensorV2()
             ])
-        return transform
 
     def load_metadata(self):
         # Carregar o CSV

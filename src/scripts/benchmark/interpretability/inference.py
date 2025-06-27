@@ -134,7 +134,7 @@ def get_target(wanted_label):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
+    model_path = "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/86_features_metadata/gfcam/model_densenet169_with_one-hot-encoder_512/densenet169_fold_4_20250108_170320/model.pth" # "/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/src/results/after_finetunning/densenet169/crossattention/model_densenet169_with_one-hot-encoder_1024/densenet169_fold_1_20250105_131137/model.pth"
 
     # Carregar imagem de teste
     image = Image.open("/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images/PAT_771_1491_390.png")

@@ -89,7 +89,7 @@ if __name__ == "__main__":
     list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
     
     # Path to the folder containing the results
-    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/weighted-after-crossattention/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
+    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/gfcam/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
     # Variáveis a serem selecionadas
     # Load dataset (though not used directly here)
     file_content = load_dataset(file_folder_path+"/model_metrics.csv")

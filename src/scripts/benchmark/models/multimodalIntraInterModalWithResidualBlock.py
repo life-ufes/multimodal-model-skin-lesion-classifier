@@ -324,7 +324,7 @@ class MultimodalModel(nn.Module):
             # Concatenar as features de imagem e texto
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)  # (batch, 2 * common_dim)
 
-        elif self.attention_mecanism == "weighted-after-crossattention":
+        elif self.attention_mecanism == "gfcam":
             # Gating após cross-attention
             alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
             alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)

@@ -14,7 +14,7 @@ import pickle
 import cv2
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', size=(224, 224), is_train=False, image_encoder="resnet-18", random_undersampling=False):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', max_seq_length:int = 256, size=(224, 224), is_train=False, image_encoder="resnet-18", random_undersampling=False):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
@@ -22,6 +22,7 @@ class SkinLesionDataset(Dataset):
         self.image_encoder = image_encoder
         self.size = size
         self.is_train = is_train
+        self.max_seq_length = max_seq_length
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.targets = None
         self.transform = self.load_transforms()
@@ -67,7 +68,7 @@ class SkinLesionDataset(Dataset):
             textual_data,
             padding='max_length',         # Preenche até o tamanho máximo
             truncation=True,              # Trunca se exceder o limite
-            max_length=256,               # Define o tamanho máximo da sequência
+            max_length=self.max_seq_length,               # Define o tamanho máximo da sequência
             return_tensors="pt"
         )
         

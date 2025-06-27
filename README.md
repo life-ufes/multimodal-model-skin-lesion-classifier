@@ -63,12 +63,12 @@ Below are the available methods and their corresponding configuration strings:
 - Concatenation: ["concatenation"]
 - MetaBlock: ["metablock"]
 - No Metadata or No Metadata Without MLP: ["no-metadata", "no-metadata-without-mlp"]
-- GFCAM (Weighted After Cross-Attention): ["weighted-after-crossattention"]
+- GFCAM (Weighted After Cross-Attention): ["gfcam"]
 - Cross-Attention: ["crossattention"]
 - Cross-Attention with Element-wise Gate: ["weighted"]
 - RG-ATT (Intra-modal + Residual + Cross-Attention with Metadata): ["att-intramodal+residual+cross-attention-metadados"]
 - Multiple Feature Combination Methods: [
-    "weighted-after-crossattention",
+    "gfcam",
     "cross-weights-after-crossattention",
     "crossattention",
     "concatenation",

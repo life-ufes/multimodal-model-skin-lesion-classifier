@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # Lista para armazenar todos os resultados
     all_results = []
     for metadata_encoder_name  in ["pubmedbert-base-embeddings-2M"]: # "one-hot-encoder"
-        list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "weighted-after-crossattention", "crossattention"]
+        list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "gfcam", "crossattention"]
         for llm_sentece_generator in ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
             base_folder_path = f"./src/results/testes/generated-senteces-by-llm/PAD-UFES-20"
             base_folder_path_by_metadata_encoder = base_folder_path+f"/textual-encoder-{metadata_encoder_name}"

@@ -322,7 +322,7 @@ if __name__ == "__main__":
     type_of_problem = "multiclass" #"binaryclass" #"multiclass"
     results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{type_of_problem}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
     list_of_models = ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal

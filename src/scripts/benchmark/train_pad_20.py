@@ -4,8 +4,8 @@ from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 import models.focalLoss as focalLoss
-from models import multimodalIntraInterModal, multimodalIntraModalWithBert
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import multimodalIntraInterModal, multimodalIntraModalWithBert, multimodalIntraModalWithPubMedBert
+from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold
@@ -212,11 +212,13 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
             val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
 
-        elif text_model_encoder in ["gpt2", "bert-base-uncased"]:
+        elif text_model_encoder in ["gpt2", "bert-base-uncased",
+            "pubmedbert-base-embeddings-100K","pubmedbert-base-embeddings-500K",
+            "pubmedbert-base-embeddings-1M","pubmedbert-base-embeddings-2M"]:
             train_subset = Subset(dataset, train_idx)
             val_subset = Subset(dataset, val_idx)
-            train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=15)
-            val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=15)
+            train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+            val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
         else:
             raise NotImplemented(f"Encoder {text_model_encoder} not found!\n")
 
@@ -225,7 +227,9 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
         
-        if (text_model_encoder in ["one-hot-encoder", "tab-transformer", "gpt2", "bert-base-uncased"]):
+        if (text_model_encoder in ["one-hot-encoder", "tab-transformer", "gpt2", "bert-base-uncased",
+            "pubmedbert-base-embeddings-100K","pubmedbert-base-embeddings-500K",
+            "pubmedbert-base-embeddings-1M","pubmedbert-base-embeddings-2M"]):
             model = multimodalIntraInterModal.MultimodalModel(
                 num_classes, num_heads, device, 
                 cnn_model_name=model_name, 
@@ -236,7 +240,6 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
-
         else:
             raise ValueError("Encoder de texto não implementado!\n")
 
@@ -271,8 +274,17 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
+                        max_seq_length = 512,
                         drop_nan=False,
                         size=(224,224))
+                    elif (text_model_encoder in ['pubmedbert-base-embeddings-100K','pubmedbert-base-embeddings-500K',
+                        'pubmedbert-base-embeddings-1M','pubmedbert-base-embeddings-2M']):
+                        dataset = skinLesionDatasetsWithPubMedEmbeddings.SkinLesionDataset(
+                        metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
+                        img_dir=f"{dataset_folder_path}/images",
+                        bert_model_name=text_model_encoder,
+                        image_encoder=model_name,
+                        drop_nan=False)
                     else:
                         raise ValueError("Encoder de texto não implementado!\n")
                     
@@ -312,11 +324,11 @@ if __name__ == "__main__":
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    text_model_encoder = 'gpt2' # 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
+    text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["densenet169"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path, 

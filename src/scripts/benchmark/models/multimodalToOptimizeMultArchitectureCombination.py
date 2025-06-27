@@ -236,7 +236,7 @@ class MultimodalModelToOptmizeWithGridSearch(nn.Module):
             combined_features = torch.cat([projected_image_features, projected_text_features], dim=1)
 
         
-        elif self.attention_mecanism == "weighted-after-crossattention":
+        elif self.attention_mecanism == "gfcam":
             # # === [F] Gating: quanto usar de cada modal?
             #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
             alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)

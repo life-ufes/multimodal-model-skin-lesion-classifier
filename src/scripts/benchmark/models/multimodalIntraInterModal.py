@@ -186,6 +186,17 @@ class MultimodalModel(nn.Module):
             # Projeção para espaço comum
             projected_text_features = self.text_projector(before_project_text_features)
             text_features = projected_text_features
+        elif (self.text_model_name in ['pubmedbert-base-embeddings-100K','pubmedbert-base-embeddings-500K',
+            'pubmedbert-base-embeddings-1M','pubmedbert-base-embeddings-2M']):
+            # metadata is precomputed embedding tensor
+            # Move and ensure float32
+            text_features = text_metadata.to(self.device).float()
+            text_features = text_features.unsqueeze(1)
+            before_project_text_features = text_features.permute(1, 0, 2)
+            projected_text_features = self.text_projector(before_project_text_features)
+            # Projeção para espaço comum
+            text_features = projected_text_features
+
         else:
             raise ValueError("Encoder de texto não implementado!\n")
         
@@ -248,7 +259,7 @@ class MultimodalModel(nn.Module):
         elif self.attention_mecanism == "concatenation":
             # # Apenas concatena as features projetadas
             combined_features = torch.cat((projected_image_features.squeeze(0), projected_text_features.squeeze(0)), dim=-1)
-        elif self.attention_mecanism == "weighted-after-crossattention":
+        elif self.attention_mecanism == "gfcam":
             # # === [F] Gating: quanto usar de cada modal?
             #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
             alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
-import models.focalLoss as focalLoss
+from utils import load_local_variables
 from models import multimodalIntraInterModal, multimodalIntraModalWithBert
 from models import skinLesionDatasets, skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
@@ -66,9 +66,9 @@ def train_process(num_epochs,
         delta=0.01, 
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
-        save_to_disk=False
+        save_to_disk=True,
+        early_stopping_metric_name="val_bacc"
     )
-
     initial_time = time.time()
     epoch_index = 0
 
@@ -88,13 +88,12 @@ def train_process(num_epochs,
         mlflow.log_param("text_model_encoder", text_model_encoder)
         mlflow.log_param("criterion_type", "cross_entropy")
         mlflow.log_param("num_heads", num_heads)
-
         # Loop de treinamento
         for epoch_index in range(num_epochs):
             model.train()
             running_loss = 0.0
 
-            for batch_index, (image, metadata, label) in enumerate(
+            for batch_index, (_, image, metadata, label) in enumerate(
                     tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
                 image, metadata, label = image.to(device), metadata.to(device), label.to(device)
                 optimizer.zero_grad()
@@ -110,7 +109,8 @@ def train_process(num_epochs,
             model.eval()
             val_loss = 0.0
             with torch.no_grad():
-                for image, metadata, label in val_loader:
+                for _ , image, metadata, label in val_loader:
+                    # print(f"Image names: {image_name}\n")
                     image, metadata, label = image.to(device), metadata.to(device), label.to(device)
                     outputs = model(image, metadata)
                     loss = criterion(outputs, label)
@@ -124,7 +124,7 @@ def train_process(num_epochs,
             print(f"Current Learning Rate(s): {current_lr}\n")
 
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model, val_loader, device, fold_num, model_name=model_name
+                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
             )
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
@@ -137,13 +137,22 @@ def train_process(num_epochs,
                 else:
                     mlflow.log_param(metric_name, metric_value)
 
-            early_stopping(val_loss, model)
+            early_stopping(val_loss=val_loss, val_bacc=float(metrics["balanced_accuracy"]), model=model)
             if early_stopping.early_stop:
                 print("Early stopping triggered!")
                 break
 
-    early_stopping.load_best_weights(model)
     train_process_time = time.time() - initial_time
+    
+    # Carrega o melhor modelo encontrado
+    model = early_stopping.load_best_weights(model)
+    model.eval()
+    # Inferência para validação com o melhor modelo
+    with torch.no_grad():
+        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
+        )
+
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
@@ -152,8 +161,8 @@ def train_process(num_epochs,
         model=model, 
         metrics=metrics, 
         model_name=model_name, 
-        save_to_disk=False,
-        base_dir=model_save_path, 
+        base_dir=model_save_path,
+        save_to_disk=True, 
         fold_num=fold_num, 
         all_labels=all_labels, 
         all_predictions=all_predictions, 
@@ -164,6 +173,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
+
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path):
     labels = [dataset.labels[i] for i in range(len(dataset))]
     stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
@@ -172,8 +182,8 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Fold {fold+1}/{k_folds}")
         train_subset = Subset(dataset, train_idx)
         val_subset = Subset(dataset, val_idx)
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=15)
-        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=15)
+        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=5)
+        val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=5)
 
         train_labels = [labels[i] for i in train_idx]
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
@@ -212,6 +222,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
+                        is_train=True,
                         drop_nan=False)
                     elif (text_model_encoder in ['gpt2', 'bert-base-uncased']):
                         dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
@@ -243,21 +254,25 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                     continue
 
 if __name__ == "__main__":
-    num_epochs = 100
-    batch_size = 16
-    k_folds = 5
-    common_dim = 512
+    # Carrega os dados localmente
+    local_variables=load_local_variables.get_env_variables()
+    num_epochs = local_variables["num_epochs"]
+    batch_size = local_variables["batch_size"]
+    k_folds = local_variables["k_folds"]
+    common_dim = local_variables["common_dim"]
+    list_num_heads = local_variables["list_num_heads"]
+    dataset_folder_name = local_variables["dataset_folder_name"]
+    dataset_folder_path = local_variables["dataset_folder_path"]
+    unfreeze_weights = bool(local_variables["unfreeze_weights"])
+    llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
+    results_folder_path = local_variables["results_folder_path"]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    list_num_heads = [2]
-    dataset_folder_name = "PAD-UFES-20"
-    dataset_folder_path = f"./data/{dataset_folder_name}"
-    unfreeze_weights = True
     for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
         for llm_model_name_sequence_generator in ["gemma3:27b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
             results_folder_path = f"./src/results/testes/generated-senteces-by-llm-with-patient-and-image-content-description/{dataset_folder_name}/textual-encoder-{text_model_encoder}/{llm_model_name_sequence_generator}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
             
             # Para todas os tipos de estratégias a serem usadas
-            list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
+            list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
             # Testar com todos os modelos
             list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
             # Treina todos modelos que podem ser usados no modelo multi-modal
