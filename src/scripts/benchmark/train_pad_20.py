@@ -64,11 +64,11 @@ def train_process(num_epochs,
 
     early_stopping = EarlyStopping(
         patience=10, 
-        delta=0.01, 
+        delta=0.00, 
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=True,
-        early_stopping_metric_name="val_loss"
+        early_stopping_metric_name="val_bacc"
     )
 
     initial_time = time.time()
@@ -183,39 +183,49 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
     for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
         print(f"Fold {fold+1}/{k_folds}")
 
-        train_dataset = type(dataset)(
-            metadata_file=dataset.metadata_file,
-            img_dir=dataset.img_dir,
-            size=dataset.size,
-            drop_nan=dataset.is_to_drop_nan,
-            bert_model_name=dataset.bert_model_name,
-            image_encoder=dataset.image_encoder,
-            is_train=False  # Apply training augmentations
-        )
-        train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
-        train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
+        if text_model_encoder in ["one-hot-encoder", "tab-transformer"]:
+            train_dataset = type(dataset)(
+                metadata_file=dataset.metadata_file,
+                img_dir=dataset.img_dir,
+                size=dataset.size,
+                drop_nan=dataset.is_to_drop_nan,
+                bert_model_name=dataset.bert_model_name,
+                image_encoder=dataset.image_encoder,
+                is_train=True  # Apply training augmentations
+            )
+            train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
+            train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
 
-        val_dataset = type(dataset)(
-            metadata_file=dataset.metadata_file,
-            img_dir=dataset.img_dir,
-            size=dataset.size,
-            drop_nan=dataset.is_to_drop_nan,
-            bert_model_name=dataset.bert_model_name,
-            image_encoder=dataset.image_encoder,
-            is_train=False  # Apply validation transforms
-        )
-        val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
-        val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
+            val_dataset = type(dataset)(
+                metadata_file=dataset.metadata_file,
+                img_dir=dataset.img_dir,
+                size=dataset.size,
+                drop_nan=dataset.is_to_drop_nan,
+                bert_model_name=dataset.bert_model_name,
+                image_encoder=dataset.image_encoder,
+                is_train=False  # Apply validation transforms
+            )
+            val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
+            val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
 
-        # Criar DataLoaders
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
+            # Criar DataLoaders
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
+            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
+
+        elif text_model_encoder in ["gpt2", "bert-base-uncased"]:
+            train_subset = Subset(dataset, train_idx)
+            val_subset = Subset(dataset, val_idx)
+            train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=15)
+            val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False, num_workers=15)
+        else:
+            raise NotImplemented(f"Encoder {text_model_encoder} not found!\n")
 
         train_labels = [labels[i] for i in train_idx]
+
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
         
-        if (text_model_encoder in ["one-hot-encoder", "tab-transformer","gpt2", "bert-base-uncased"]):
+        if (text_model_encoder in ["one-hot-encoder", "tab-transformer", "gpt2", "bert-base-uncased"]):
             model = multimodalIntraInterModal.MultimodalModel(
                 num_classes, num_heads, device, 
                 cnn_model_name=model_name, 
@@ -302,11 +312,11 @@ if __name__ == "__main__":
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
+    text_model_encoder = 'gpt2' # 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["no-metadata"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["weighted-after-crossattention"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "weighted-after-crossattention", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["densenet169"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path, 
