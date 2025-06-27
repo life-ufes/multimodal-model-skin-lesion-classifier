@@ -268,6 +268,7 @@ if __name__ == "__main__":
     unfreeze_weights = bool(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
     results_folder_path = local_variables["results_folder_path"]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
         for llm_model_name_sequence_generator in ["gemma3:27b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:
             for llm_model_name in ["qwen2.5:72b", "phi4", "deepseek-r1:70b", "gemma3:27b", "qwq"]:
