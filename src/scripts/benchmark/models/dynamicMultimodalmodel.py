@@ -1,5 +1,10 @@
+import os
 import torch
 import torch.nn as nn
+import sys
+# Adicione sys.path se necessário, mas geralmente é melhor configurar o PYTHONPATH
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), './')))
+
 from gatedResidualBlock import GatedAlteredResidualBlock
 from metablock import MetaBlock
 
@@ -16,13 +21,13 @@ class DynamicCNN(nn.Module):
         self.attention_mecanism = attention_mecanism
         self.text_model_name = text_model_name
         self.vocab_size = vocab_size
-        self.k = config.get("kernel_size", 3)
-        self.hidden_dim = config.get("mlp_hidden_dim", 512)
-        self.num_classes = num_classes
-        self.num_layers_text_fc = config.get("num_layers_text_fc", 2)
-        self.neurons_per_layer_size_of_text_fc = config.get("neurons_per_layer_size_of_text_fc", 512)
-        self.num_layers_fc_module = config.get("num_layers_fc_module", 2)
-        self.neurons_per_layer_size_of_fc_module =  config.get("neurons_per_layer_size_of_fc_module", 1024)
+        self.k = int(config.get("kernel_size", 3))
+        self.hidden_dim = int(config.get("mlp_hidden_dim", 512))
+        self.num_classes = int(num_classes)
+        self.num_layers_text_fc = int(config.get("num_layers_text_fc", 2))
+        self.neurons_per_layer_size_of_text_fc = int(config.get("neurons_per_layer_size_of_text_fc", 512))
+        self.num_layers_fc_module = int(config.get("num_layers_fc_module", 2))
+        self.neurons_per_layer_size_of_fc_module = int(config.get("neurons_per_layer_size_of_fc_module", 1024))
 
         # CNN Backbone (otimizável)
         self.layers = []
@@ -31,11 +36,11 @@ class DynamicCNN(nn.Module):
         self.out_channels = filters[0]
 
         for out_channels in filters:
-            for _ in range(config.get("layers_per_block", 2)):
-                self.layers.append(nn.Conv2d(self.in_channels, out_channels, kernel_size=self.k, padding=self.k // 2, bias=False))
-                self.layers.append(nn.BatchNorm2d(out_channels))
+            for _ in range(int(config.get("layers_per_block", 2))):
+                self.layers.append(nn.Conv2d(int(self.in_channels), int(out_channels), kernel_size=int(self.k), padding=int(self.k) // 2, bias=False))
+                self.layers.append(nn.BatchNorm2d(int(out_channels)))
                 self.layers.append(nn.ReLU(inplace=True))
-                self.in_channels = out_channels
+                self.in_channels = int(out_channels)
             if config.get("use_pooling", True):
                 self.layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
 
