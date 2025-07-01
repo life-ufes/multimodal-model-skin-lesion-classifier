@@ -189,10 +189,12 @@ def train_and_evaluate_model(
             )
             
             current_val_bacc = float(metrics["balanced_accuracy"])
+            metrics["train_loss"] = float(train_loss)
+            metrics["val_loss"] = float(val_loss)
 
             for metric_name, metric_value in metrics.items():
                 if isinstance(metric_value, (int, float)):
-                    mlflow.log_metric(metric_name, metric_value, step=epoch_index + 1)
+                    mlflow.log_metric(metric_name, metric_value, step=epoch_index)
                 else:
                     mlflow.log_param(metric_name, metric_value)
 
@@ -246,13 +248,8 @@ def train_and_evaluate_model(
             targets=targets, 
             data_val="val"
         )
-    # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
-    mlflow.log_metric("val_bacc", final_balanced_accuracy, step=global_fold_counter)
-    mlflow.log_metric("epochs", int(epoch_index), step=global_fold_counter)
-    mlflow.log_metric("val_loss", val_loss, step=global_fold_counter)
-    mlflow.log_metric("attention_mechanism", str(attention_mecanism), step=global_fold_counter)  
-    mlflow.log_metric("common_dim", int(common_dim), step=global_fold_counter)  
-    mlflow.log_param(f"config_step_{global_fold_counter}", json.dumps(config)) # Log a configuração gerada em cada passo
+    mlflow.log_param("common_dim", int(common_dim))  
+    mlflow.log_param(f"config_step_{global_fold_counter}", json.dumps(config)) # sLog a configuração gerada em cada passo
     # Limpar a memória da GPU para a próxima avaliação
     del model
     torch.cuda.empty_cache()
