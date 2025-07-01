@@ -64,6 +64,7 @@ def compute_class_weights(labels, num_classes):
 
 def train_and_evaluate_model(
     params: dict, # Parâmetros de arquitetura propostos pelo skopt
+    fold_num:int,
     num_classes: int, train_loader:dict, val_loader:dict, device: str,
     targets:list, class_weights:list, results_folder_path:str,
     num_epochs_per_eval:int, num_metadata_features:int,
@@ -172,7 +173,7 @@ def train_and_evaluate_model(
         # Avaliar métricas para Early Stopping
         metrics, _, _ = model_metrics.evaluate_model(
             model=model, dataloader=val_loader, device=device,
-            fold_num=-1, # fold_num fictício para BO
+            fold_num=fold_num, # fold_num fictício para BO
             targets=targets,
             base_dir=model_save_path, # Não salva dados intermediários
             model_name=model_name
@@ -194,7 +195,7 @@ def train_and_evaluate_model(
     model.eval()
     metrics, all_labels, all_predictions = model_metrics.evaluate_model(
         model=model, dataloader=val_loader, device=device,
-        fold_num=-1, targets=targets,
+        fold_num=fold_num, targets=targets,
         base_dir=model_save_path, model_name=model_name
     )
     final_balanced_accuracy = float(metrics["balanced_accuracy"])
@@ -213,7 +214,7 @@ def train_and_evaluate_model(
     print(f"Model saved at {model_save_path}")
     
     # Salvar os dados da configuração
-    folder_name = f"{model_name}_fold_-1"
+    folder_name = f"{model_name}_fold_{fold_num}"
     folder_path = os.path.join(model_save_path, folder_name)
 
     # Criar a pasta para o modelo
@@ -224,7 +225,7 @@ def train_and_evaluate_model(
             model_name=model_name, 
             base_dir=folder_path,
             save_to_disk=False, 
-            fold_num=-1, 
+            fold_num=fold_num, 
             all_labels=all_labels, 
             all_predictions=all_predictions, 
             targets=targets, 
@@ -247,6 +248,11 @@ def train_and_evaluate_model(
         
     with open(os.path.join(folder_path, "config.json"), "w") as f:
         json.dump(dict(config), f, indent=2)
+
+    # Contabiliza um novo fold
+    global global_fold_counter
+    fold_num = global_fold_counter
+    global_fold_counter += 1
     # Retorna 1.0 - acurácia para minimização (o gp_minimize buscará o menor valor)
     return 1.0 - final_balanced_accuracy
 
@@ -258,17 +264,18 @@ if __name__ == "__main__":
     print(f"Usando device: {device}")
     # Parâmetros fixos para esta execução da otimização Bayesiana
     NUM_EPOCHS_PER_EVAL = 5 # Número de épocas para treinar CADA arquitetura candidata
+    global_fold_counter = 0
     NUMBER_OF_TRIES = 5 # Número de arquiteturas a serem avaliadas pela BO. Aumente para resultados melhores.
     print(f"\nIniciando Otimização Bayesiana com {NUMBER_OF_TRIES} avaliações...")
+    n_initial_points = 5
     BATCH_SIZE = local_variables["batch_size"]
     # k_folds = 1 # Para a BO, geralmente não usamos k-folds para a avaliação interna
-    COMMON_DIM_FIXO = -1 # Se este não for otimizado, defina um valor fixo
     TEXT_MODEL_ENCODER = 'one-hot-encoder'
     UNFREEZE_WEIGHTS = bool(local_variables["unfreeze_weights"])
     LLM_MODEL_NAME_SEQUENCE_GENERATOR = local_variables["llm_model_name_sequence_generator"]
     RESULTS_FOLDER_PATH = local_variables["results_folder_path"]
     RESULTS_FOLDER_PATH = f"{RESULTS_FOLDER_PATH}/{local_variables['dataset_folder_name']}/{'unfrozen_weights' if UNFREEZE_WEIGHTS else 'frozen_weights'}"
-    NUM_WORKERS = 5
+    NUM_WORKERS = 1
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
     list_num_heads = local_variables["list_num_heads"]
@@ -354,6 +361,7 @@ if __name__ == "__main__":
     res = gp_minimize(
         func=lambda params: train_and_evaluate_model(
             params=params,
+            fold_num=global_fold_counter,
             num_classes=num_classes,
             train_loader=train_loader,
             val_loader=val_loader,
@@ -362,13 +370,12 @@ if __name__ == "__main__":
             class_weights=class_weights,
             results_folder_path=RESULTS_FOLDER_PATH,
             num_epochs_per_eval=NUM_EPOCHS_PER_EVAL,
-            # fold_num = i, # Valor referente a epoca testada de NUM_EPOCHS_PER_EVAL,
             num_metadata_features=num_metadata_features,
             model_name="custom-cnn-with-NAS" # Passa o nome do image_encoder fixo
         ),
         dimensions=search_space_skopt,
         n_calls=NUMBER_OF_TRIES,
-        n_initial_points=5, # Número de pontos iniciais aleatórios
+        n_initial_points=n_initial_points, # Número de pontos iniciais aleatórios
         acq_func="gp_hedge", # Estratégia de aquisição
         random_state=42
     )
@@ -388,7 +395,7 @@ if __name__ == "__main__":
     # Salvar os melhores parâmetros e a melhor acurácia
     best_result_path = os.path.join(RESULTS_FOLDER_PATH, "best_nas_result.json")
     with open(best_result_path, "w") as f:
-        json.dump({"best_balanced_accuracy": best_balanced_accuracy, "best_params": best_params_dict}, f, indent=2)
+        json.dump({"best_balanced_accuracy": best_balanced_accuracy, "best_params": best_params_dict}, f, indent=2, cls=NumpyEncoder)
     print(f"\nMelhores resultados salvos em: {best_result_path}")
 
     # --- Plotando a Curva de Convergência ---
@@ -405,16 +412,16 @@ if __name__ == "__main__":
     print(f"Gráfico de convergência salvo em: {plot_path}")
     plt.show()
 
-    # MLflow logging para a run principal da BO
-    with mlflow.start_run(run_name="Bayesian_Optimization_NAS_Run"):
-        mlflow.log_param("total_evaluations", NUMBER_OF_TRIES)
-        mlflow.log_metric("best_balanced_accuracy", best_balanced_accuracy)
-        mlflow.log_params(best_params_dict)
-        mlflow.log_artifact(plot_path)
-        mlflow.log_artifact(best_result_path)
-        # Log do espaço de busca
-        mlflow.log_param("search_space_definition", json.dumps(
-            {dim.name: (dim.low, dim.high) if isinstance(dim, (Integer, Real)) else dim.categories for dim in search_space_skopt}
-        ))
+    # # MLflow logging para a run principal da BO
+    # with mlflow.start_run(run_name="Bayesian_Optimization_NAS_Run"):
+    #     mlflow.log_param("total_evaluations", NUMBER_OF_TRIES)
+    #     mlflow.log_metric("best_balanced_accuracy", best_balanced_accuracy)
+    #     mlflow.log_params(best_params_dict)
+    #     mlflow.log_artifact(plot_path)
+    #     mlflow.log_artifact(best_result_path)
+    #     # Log do espaço de busca
+    #     mlflow.log_param("search_space_definition", json.dumps(
+    #         {dim.name: (dim.low, dim.high) if isinstance(dim, (Integer, Real)) else dim.categories for dim in search_space_skopt}
+    #     ))
 
     print("\nOtimização Bayesiana concluída. Verifique os logs do MLflow para mais detalhes.")
