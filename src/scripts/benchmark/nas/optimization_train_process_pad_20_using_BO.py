@@ -68,11 +68,9 @@ def train_and_evaluate_model(
     num_classes: int, train_loader:dict, val_loader:dict, device: str,
     targets:list, class_weights:list, results_folder_path:str,
     num_epochs_per_eval:int, num_metadata_features:int,
-    model_name:str # Parâmetro fixo para esta rodada da BO
-):
+    model_name:str,
+    text_model_encoder:str="one-hot-encoder"):
     # Desempacotar os parâmetros da lista (a ordem deve corresponder ao search_space_skopt)
-    # Adapte os nomes e a ordem para o seu search_space_skopt
-    # Exemplo:
     (num_blocks, initial_filters, kernel_size, num_heads, layers_per_block, 
      use_pooling, common_dim, attention_mecanism, 
      num_layers_text_fc, neurons_per_layer_size_of_text_fc, 
@@ -113,11 +111,10 @@ def train_and_evaluate_model(
     model.to(device)
     model_save_path = os.path.join(
         results_folder_path, 
-        f"model_custom-cnn-with-NAS_with_one-hot-encoder_{common_dim}_with_best_architecture"
+        f"model_custom-cnn-with-NAS_with_{text_model_encoder}_{common_dim}_with_best_architecture"
     )
     os.makedirs(model_save_path, exist_ok=True)
     print(model_save_path)
-
 
     # --- Treinamento do Modelo (Simplificado para a BO) ---
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
@@ -128,63 +125,81 @@ def train_and_evaluate_model(
     
     # Early stopping (opcional, pode ser simplificado para o BO para apenas parar o treino)
     # Se o EarlyStopping salvar em disco, isso pode ficar muito lento e gerar muitos arquivos.
-    # É melhor ter um EarlyStopping que apenas retorne um sinal para parar o loop.
-    # Ou desabilitar save_to_disk para o contexto da BO.
-    # Para o BO, o objetivo é uma avaliação RÁPIDA do desempenho, não o melhor modelo salvo.
     early_stopping = EarlyStopping(
         patience=5, # Reduzido para BO para acelerar
-        delta=0.001,
+        delta=0.000,
         verbose=False,
-        path=None,
-        save_to_disk=False,
+        path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
+        save_to_disk=True,
         early_stopping_metric_name="val_bacc"
     )
-
+    global global_fold_counter 
     current_best_val_bacc = 0.0 # Usaremos para o early stopping simplificado se não usar a classe
 
     initial_time = time.time()
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- BO"
+    mlflow.set_experiment(experiment_name)
+    with mlflow.start_run(
+        run_name=(
+            f"image_extractor_model_{model_name}_with_mecanism_"
+            f"{attention_mecanism}_step_{fold_num}_num_heads_{num_heads}"
+        ), nested=True
+    ):
+        mlflow.log_param("step", fold_num)
+        mlflow.log_param("batch_size", train_loader.batch_size)
+        mlflow.log_param("model_name", model_name)
+        mlflow.log_param("attention_mecanism", attention_mecanism)
+        mlflow.log_param("text_model_encoder", text_model_encoder)
+        mlflow.log_param("criterion_type", "cross_entropy")
+        mlflow.log_param("num_heads", num_heads)
 
-    for epoch_index in range(num_epochs_per_eval): # Usar TRAIN_EPOCHS_PER_EVAL aqui
-        model.train()
-        running_loss = 0.0
-        for _, image, metadata, label in train_loader:
-            image, metadata, label = image.to(device), metadata.to(device), label.to(device)
-            optimizer.zero_grad()
-            outputs = model(image, metadata)
-            loss = criterion(outputs, label)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-        
-        train_loss = running_loss / len(train_loader)
-
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for _, image, metadata, label in val_loader:
+        for epoch_index in range(num_epochs_per_eval): # Usar TRAIN_EPOCHS_PER_EVAL aqui
+            model.train()
+            running_loss = 0.0
+            for _, image, metadata, label in train_loader:
                 image, metadata, label = image.to(device), metadata.to(device), label.to(device)
+                optimizer.zero_grad()
                 outputs = model(image, metadata)
                 loss = criterion(outputs, label)
-                val_loss += loss.item()
-        
-        val_loss = val_loss / len(val_loader)
-        scheduler.step(val_loss)
+                loss.backward()
+                optimizer.step()
+                running_loss += loss.item()
+            
+            train_loss = running_loss / len(train_loader)
 
-        # Avaliar métricas para Early Stopping
-        metrics, _, _ = model_metrics.evaluate_model(
-            model=model, dataloader=val_loader, device=device,
-            fold_num=fold_num, # fold_num fictício para BO
-            targets=targets,
-            base_dir=model_save_path, # Não salva dados intermediários
-            model_name=model_name
-        )
-        current_val_bacc = float(metrics["balanced_accuracy"])
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                for _, image, metadata, label in val_loader:
+                    image, metadata, label = image.to(device), metadata.to(device), label.to(device)
+                    outputs = model(image, metadata)
+                    loss = criterion(outputs, label)
+                    val_loss += loss.item()
+            
+            val_loss = val_loss / len(val_loader)
+            scheduler.step(val_loss)
 
-        # Usar o EarlyStopping para decidir se para o treino desta arquitetura
-        early_stopping(val_loss=val_loss, val_bacc=current_val_bacc, model=model)
-        if early_stopping.early_stop:
-            print(f"    Early stopping para esta arquitetura na época {epoch_index+1}")
-            break
+            # Avaliar métricas para Early Stopping
+            metrics, _, _ = model_metrics.evaluate_model(
+                model=model, dataloader=val_loader, device=device,
+                fold_num=fold_num, # fold_num fictício para BO
+                targets=targets,
+                base_dir=model_save_path, # Não salva dados intermediários
+                model_name=model_name
+            )
+            
+            current_val_bacc = float(metrics["balanced_accuracy"])
+
+            for metric_name, metric_value in metrics.items():
+                if isinstance(metric_value, (int, float)):
+                    mlflow.log_metric(metric_name, metric_value, step=epoch_index + 1)
+                else:
+                    mlflow.log_param(metric_name, metric_value)
+
+            early_stopping(val_loss=val_loss, val_bacc=current_val_bacc, model=model)
+            if early_stopping.early_stop:
+                print("Early stopping triggered!")
+                break
     
     train_process_time = time.time() - initial_time
 
@@ -231,7 +246,13 @@ def train_and_evaluate_model(
             targets=targets, 
             data_val="val"
         )
-
+    # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
+    mlflow.log_metric("val_bacc", final_balanced_accuracy, step=global_fold_counter)
+    mlflow.log_metric("epochs", int(epoch_index), step=global_fold_counter)
+    mlflow.log_metric("val_loss", val_loss, step=global_fold_counter)
+    mlflow.log_metric("attention_mechanism", str(attention_mecanism), step=global_fold_counter)  
+    mlflow.log_metric("common_dim", int(common_dim), step=global_fold_counter)  
+    mlflow.log_param(f"config_step_{global_fold_counter}", json.dumps(config)) # Log a configuração gerada em cada passo
     # Limpar a memória da GPU para a próxima avaliação
     del model
     torch.cuda.empty_cache()
@@ -250,8 +271,6 @@ def train_and_evaluate_model(
         json.dump(dict(config), f, indent=2)
 
     # Contabiliza um novo fold
-    global global_fold_counter
-    fold_num = global_fold_counter
     global_fold_counter += 1
     # Retorna 1.0 - acurácia para minimização (o gp_minimize buscará o menor valor)
     return 1.0 - final_balanced_accuracy
@@ -263,10 +282,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Usando device: {device}")
     # Parâmetros fixos para esta execução da otimização Bayesiana
-    NUM_EPOCHS_PER_EVAL = 5 # Número de épocas para treinar CADA arquitetura candidata
     global_fold_counter = 0
-    NUMBER_OF_TRIES = 5 # Número de arquiteturas a serem avaliadas pela BO. Aumente para resultados melhores.
+    NUMBER_OF_TRIES = 5 ## Treino com poucas épocas # local_variables["num_epochs"]
     print(f"\nIniciando Otimização Bayesiana com {NUMBER_OF_TRIES} avaliações...")
+    NUM_EPOCHS_PER_EVAL = local_variables["num_epochs"] # Número de épocas para treinar CADA arquitetura candidata
     n_initial_points = 5
     BATCH_SIZE = local_variables["batch_size"]
     # k_folds = 1 # Para a BO, geralmente não usamos k-folds para a avaliação interna
@@ -275,7 +294,7 @@ if __name__ == "__main__":
     LLM_MODEL_NAME_SEQUENCE_GENERATOR = local_variables["llm_model_name_sequence_generator"]
     RESULTS_FOLDER_PATH = local_variables["results_folder_path"]
     RESULTS_FOLDER_PATH = f"{RESULTS_FOLDER_PATH}/{local_variables['dataset_folder_name']}/{'unfrozen_weights' if UNFREEZE_WEIGHTS else 'frozen_weights'}"
-    NUM_WORKERS = 1
+    NUM_WORKERS = 4
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
     list_num_heads = local_variables["list_num_heads"]
@@ -379,7 +398,7 @@ if __name__ == "__main__":
         acq_func="gp_hedge", # Estratégia de aquisição
         random_state=42
     )
-
+    
     # --- Exibindo os Resultados Finais da Otimização Bayesiana ---
     print("\n" + "="*60)
     print("             RESULTADOS FINAIS DA OTIMIZAÇÃO BAYESIANA          ")
@@ -411,17 +430,5 @@ if __name__ == "__main__":
     plt.savefig(plot_path, dpi=300)
     print(f"Gráfico de convergência salvo em: {plot_path}")
     plt.show()
-
-    # # MLflow logging para a run principal da BO
-    # with mlflow.start_run(run_name="Bayesian_Optimization_NAS_Run"):
-    #     mlflow.log_param("total_evaluations", NUMBER_OF_TRIES)
-    #     mlflow.log_metric("best_balanced_accuracy", best_balanced_accuracy)
-    #     mlflow.log_params(best_params_dict)
-    #     mlflow.log_artifact(plot_path)
-    #     mlflow.log_artifact(best_result_path)
-    #     # Log do espaço de busca
-    #     mlflow.log_param("search_space_definition", json.dumps(
-    #         {dim.name: (dim.low, dim.high) if isinstance(dim, (Integer, Real)) else dim.categories for dim in search_space_skopt}
-    #     ))
 
     print("\nOtimização Bayesiana concluída. Verifique os logs do MLflow para mais detalhes.")
