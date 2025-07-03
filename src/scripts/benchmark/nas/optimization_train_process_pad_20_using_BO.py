@@ -248,7 +248,11 @@ def train_and_evaluate_model(
             targets=targets, 
             data_val="val"
         )
-    mlflow.log_param("common_dim", int(common_dim))  
+    # --- Registro de Métricas Finais do Controller no MLFlow ---
+    mlflow.log_metric("final_val_bacc", final_balanced_accuracy, step=global_fold_counter)
+    mlflow.log_metric("final_epochs", int(epoch_index), step=global_fold_counter)
+    mlflow.log_metric("final_val_loss", val_loss, step=global_fold_counter)
+        
     mlflow.log_param(f"config_step_{global_fold_counter}", json.dumps(config)) # sLog a configuração gerada em cada passo
     # Limpar a memória da GPU para a próxima avaliação
     del model
@@ -280,7 +284,7 @@ if __name__ == "__main__":
     print(f"Usando device: {device}")
     # Parâmetros fixos para esta execução da otimização Bayesiana
     global_fold_counter = 0
-    NUMBER_OF_TRIES = 5 ## Treino com poucas épocas # local_variables["num_epochs"]
+    NUMBER_OF_TRIES = 100 # Treino com poucas épocas # local_variables["num_epochs"]
     print(f"\nIniciando Otimização Bayesiana com {NUMBER_OF_TRIES} avaliações...")
     NUM_EPOCHS_PER_EVAL = local_variables["num_epochs"] # Número de épocas para treinar CADA arquitetura candidata
     n_initial_points = 5
@@ -363,8 +367,8 @@ if __name__ == "__main__":
         Categorical(categories=list_num_heads, name="num_heads"),
         Integer(low=1, high=3, name="layers_per_block"), # Aumentei o range
         Categorical(categories=[True, False], name="use_pooling"),
-        Categorical(categories=[64, 128, 256, 512], name="common_dim"), # common_dim agora é otimizado
-        Categorical(categories=["concatenation", "crossattention", "metablock", "gfcam", "no-metadata", "weighted"], name="attention_mecanism"), # Incluí mais opções
+        Categorical(categories=[64, 128, 256, 512, 1024], name="common_dim"), # common_dim agora é otimizado
+        Categorical(categories=["no-metadata", "concatenation", "crossattention", "metablock", "gfcam", "weighted"], name="attention_mecanism"), # Incluí mais opções
         Integer(low=1, high=3, name="num_layers_text_fc"), # Exemplo: 1 a 3 camadas FC para texto
         Categorical(categories=[128, 256, 512], name="neurons_per_layer_size_of_text_fc"), # Neurônios FC para texto
         Integer(low=1, high=3, name="num_layers_fc_module"), # Exemplo: 1 a 3 camadas FC para a cabeça final
