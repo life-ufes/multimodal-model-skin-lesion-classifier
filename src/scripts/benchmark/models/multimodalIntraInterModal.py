@@ -97,7 +97,7 @@ class MultimodalModel(nn.Module):
         # -------------------------
         # 5) Camada de Fusão Final
         # -------------------------
-        self.fc_fusion = self.fc_mlp_module(n=1 if self.attention_mecanism in ["no-metadata", "att-intramodal+residual+cross-attention-metadados+metablock"] else self.n)
+        self.fc_fusion = self.fc_mlp_module(n=1 if self.attention_mecanism in ["no-metadata", "att-intramodal+residual+cross-attention-metadados+metablock", "metabock-se"] else self.n)
         # 6) Residual Blocks
         # -------------------------
         self.image_residual = GatedAlteredResidualBlock(dim=self.common_dim)
@@ -110,13 +110,29 @@ class MultimodalModel(nn.Module):
 
         # Bloco do Metablock, caso queira usar
         self.meta_block = MetaBlock(V=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock"] else self.cnn_dim_output,
-            U=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock"] else self.text_encoder_dim_output
+            U=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock", "metablock-se"] else self.text_encoder_dim_output
         )
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
+        self.fc_mlp_module_after_metablock_fusion_module = self.fc_mlp_module_after_metablock()
     def fc_mlp_module(self, n=1):
         fc_fusion = nn.Sequential(
             nn.Linear(self.common_dim * n, self.common_dim),
+            nn.BatchNorm1d(self.common_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(self.common_dim, self.common_dim // 2),
+            nn.BatchNorm1d(self.common_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(self.common_dim // 2, self.num_classes),
+            nn.Softmax(dim=1)
+        )
+        return fc_fusion
+    
+    def fc_mlp_module_after_metablock(self):
+        fc_fusion = nn.Sequential(
+            nn.Linear(self.cnn_dim_output, self.common_dim),
             nn.BatchNorm1d(self.common_dim),
             nn.ReLU(),
             nn.Dropout(0.3),
@@ -422,5 +438,22 @@ class MultimodalModel(nn.Module):
             text_pooled = text_features_residual_after_cross_attention.mean(dim=1)    # (batch, common_dim)
             # === Fusão das features
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+
+        elif self.attention_mecanism=="metablock-se":
+           # === Pooling das features finais 
+            image_features = image_features.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
+            text_features = text_features.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+
+            image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
+            text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
+
+            # === Fusão das features
+            meta_block_features = self.meta_block(image_pooled, text_pooled)  # [B, num_channels, H', W']
+            # Pooling global e classificação
+            pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
+            pooled_metablock_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
+            output = self.fc_mlp_module_after_metablock_fusion_module(pooled_metablock_features)  # (batch, num_classes)
+            return output
+        
         output = self.fc_fusion(combined_features)  # (batch, num_classes)
         return output
