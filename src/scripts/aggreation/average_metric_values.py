@@ -19,16 +19,16 @@ if __name__ == "__main__":
     # Lista para armazenar todos os resultados
     all_results = []
 
-    list_of_attention_mecanism = ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "no-metadata", "cross-weights-after-crossattention", "concatenation", "weighted", "gfcam", "crossattention"]
-    dataset_name = "PAD-UFES-20"# "ISIC-2020" # "PAD-UFES-25" # "ISIC-2019" # "PAD-UFES-20"
+    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"]
+    dataset_name = "PAD-UFES-25"# "ISIC-2020" # "PAD-UFES-25" # "ISIC-2019" # "PAD-UFES-20"
     num_heads = 8
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/{dataset_name}/multiclass/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/stratifiedkfold/2/all-weights-unfroozen/for_test/PAD-UFES-20/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimensiond_of_projected_features/PAD-UFES-20/unfrozen_weights/8"
     # Path to your CSV file
     ## base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/{num_heads}"
-    base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/teste_com_gfcam-se/PAD-UFES-20/unfrozen_weights/8"
-    # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/teste_com_val_bacc/PAD-UFES-20/unfrozen_weights/8"
+    # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/teste_com_gfcam-se/PAD-UFES-20/unfrozen_weights/8"
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/{dataset_name}/unfrozen_weights/8"
     
     for common_size in [16, 32, 64, 128, 256, 512, 1024, 2048]:
         for attention_mecanism in list_of_attention_mecanism:

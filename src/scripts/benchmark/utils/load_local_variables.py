@@ -18,6 +18,7 @@ def get_env_variables():
         "dataset_folder_name": os.getenv("DATASET_FOLDER_NAME", "PAD-UFES-20"),
         "dataset_folder_path": os.getenv("DATASET_FOLDER_PATH"),
         "results_folder_path": os.getenv("RESULTS_FOLDER_PATH"),
+        "num_workers": os.getenv("NUMBER_OF_WORKERS", 4),
         "unfreeze_weights": os.getenv("UNFREEZE_WEIGHTS", "False").lower() in ("true", "1", "yes"),
         "llm_model_name_sequence_generator": os.getenv("LLM_MODEL_NAME_SEQUENCE_GENERATOR", None)
     }

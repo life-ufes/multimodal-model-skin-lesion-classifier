@@ -64,13 +64,12 @@ def train_process(num_epochs,
     print(model_save_path)
 
     # Instantiate EarlyStopping
-    # Make sure EarlyStopping stores model.state_dict(), not the entire model.
     early_stopping = EarlyStopping(
-        patience=5, 
-        delta=0.01, 
+        patience=10, 
+        delta=0.00, 
         verbose=True,
-        path=str(model_save_path+f'/{str(fold_num)}/best-model/'),   # Where to save the best weights (optional)
-        save_to_disk=False,       # If True, saves best weights to 'best_model.pt'
+        path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
+        save_to_disk=True,
         early_stopping_metric_name="val_bacc"
     )
 
@@ -78,7 +77,7 @@ def train_process(num_epochs,
     epoch_index = 0  # Track the epoch
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-ISIC-2020 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK - MULTICLASS"
+    experiment_name = "EXPERIMENTOS-ISIC-2020 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -177,6 +176,7 @@ def train_process(num_epochs,
 
     # End of training
     train_process_time = time.time() - initial_time
+    
     # Carrega o melhor modelo encontrado
     model = early_stopping.load_best_weights(model)
     model.eval()
@@ -185,16 +185,17 @@ def train_process(num_epochs,
         metrics, all_labels, all_predictions = model_metrics.evaluate_model(
             model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
+
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
     metrics["data_val"] = "val"
-    
+
     save_model_and_metrics(
         model=model, 
         metrics=metrics, 
-        model_name=model_name,
+        model_name=model_name, 
+        base_dir=model_save_path,
         save_to_disk=True, 
-        base_dir=model_save_path, 
         fold_num=fold_num, 
         all_labels=all_labels, 
         all_predictions=all_predictions, 
@@ -204,7 +205,6 @@ def train_process(num_epochs,
     print(f"Model saved at {model_save_path}")
 
     return model, model_save_path
-
 
 
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
@@ -324,6 +324,6 @@ if __name__ == "__main__":
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["vgg16", "mobilenet-v2", "densenet169", "resnet-50"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path, results_folder_path, num_epochs, type_of_problem, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
