@@ -111,8 +111,8 @@ class DynamicCNN(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
         self.fc_no_mlp_to_visual_cls = nn.Sequential(
-            nn.Linear(self.cnn_dim_output, self.num_classes),
-            nn.Softmax(dim=1)
+            nn.Linear(self.cnn_dim_output, self.num_classes) # ,
+            # nn.Softmax(dim=1)
         )
 
     def fc_mlp_module(self, n=1):

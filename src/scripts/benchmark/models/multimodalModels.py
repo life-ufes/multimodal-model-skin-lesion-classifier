@@ -33,8 +33,8 @@ class MultimodalModel(nn.Module):
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Linear(256, num_classes),
-            nn.Softmax(dim=1)  # Softmax na saída
+            nn.Linear(256, num_classes)# ,
+            # nn.Softmax(dim=1)  # Softmax na saída
         )
 
     def forward(self, image, metadata):

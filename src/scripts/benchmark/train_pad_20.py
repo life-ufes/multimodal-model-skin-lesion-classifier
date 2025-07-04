@@ -281,6 +281,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         'pubmedbert-base-embeddings-1M','pubmedbert-base-embeddings-2M']):
                         dataset = skinLesionDatasetsWithPubMedEmbeddings.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
+                        # metadata_file=f"{dataset_folder_path}/vllms-and-llms-sentences/metadata_with_sentences_of_patient_description_and_image-description_llm-deepseek-r1:70b_vllm-qwen2.5:72b.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
@@ -324,9 +325,9 @@ if __name__ == "__main__":
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    text_model_encoder = 'pubmedbert-base-embeddings-100K' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
+    text_model_encoder = 'one-hot-encoder' # 'pubmedbert-base-embeddings-500K' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["metablock-se"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["att-intramodal+residual"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
     list_of_models = ["davit_tiny.msft_in1k"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal

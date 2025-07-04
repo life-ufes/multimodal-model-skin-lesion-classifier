@@ -104,8 +104,8 @@ class MultimodalModel(nn.Module):
         self.text_residual = GatedAlteredResidualBlock(dim=self.common_dim)
 
         self.fc_no_mlp_to_visual_cls = nn.Sequential(
-            nn.Linear(self.cnn_dim_output, self.num_classes),
-            nn.Softmax(dim=1)
+            nn.Linear(self.cnn_dim_output, self.num_classes) #,
+            # nn.Softmax(dim=1)
         )
 
         # Bloco do Metablock, caso queira usar
@@ -125,8 +125,8 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, self.num_classes),
-            nn.Softmax(dim=1)
+            nn.Linear(self.common_dim // 2, self.num_classes)#,
+            # nn.Softmax(dim=1)
         )
         return fc_fusion
     
@@ -140,8 +140,8 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, self.num_classes),
-            nn.Softmax(dim=1)
+            nn.Linear(self.common_dim // 2, self.num_classes)#,
+            # nn.Softmax(dim=1)
         )
         return fc_fusion
 

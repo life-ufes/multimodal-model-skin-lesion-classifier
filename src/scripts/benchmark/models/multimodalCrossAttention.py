@@ -96,8 +96,8 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, num_classes),
-            nn.Softmax(dim=1)
+            nn.Linear(self.common_dim // 2, num_classes)# ,
+            # nn.Softmax(dim=1)
         )
     
     def forward(self, image, text_metadata):
