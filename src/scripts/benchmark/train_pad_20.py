@@ -255,7 +255,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_workers:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -303,7 +303,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
-                        num_workers=5, persistent_workers=True
+                        num_workers=num_workers, persistent_workers=True
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -317,6 +317,7 @@ if __name__ == "__main__":
     k_folds = local_variables["k_folds"]
     common_dim = local_variables["common_dim"]
     list_num_heads = local_variables["list_num_heads"]
+    num_workers=int(local_variables["num_workers"])    
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
     unfreeze_weights = bool(local_variables["unfreeze_weights"])
@@ -332,17 +333,18 @@ if __name__ == "__main__":
     list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
-        dataset_folder_path, 
-        results_folder_path,
-        llm_model_name_sequence_generator, 
-        num_epochs, 
-        batch_size, 
-        k_folds, 
-        common_dim, 
-        text_model_encoder, 
-        unfreeze_weights, 
-        device, 
-        list_num_heads, 
+        dataset_folder_path=dataset_folder_path, 
+        results_folder_path=results_folder_path,
+        llm_model_name_sequence_generator=llm_model_name_sequence_generator, 
+        num_workers=num_workers,
+        num_epochs=num_epochs, 
+        batch_size=batch_size, 
+        k_folds=k_folds, 
+        common_dim=common_dim, 
+        text_model_encoder=text_model_encoder, 
+        unfreeze_weights=unfreeze_weights, 
+        device=device, 
+        list_num_heads=list_num_heads, 
         list_of_attention_mecanism=list_of_attention_mecanism, 
         list_of_models=list_of_models
     )

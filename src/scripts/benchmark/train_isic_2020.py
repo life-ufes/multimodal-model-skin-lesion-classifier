@@ -265,7 +265,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         # Salvar as predições em um arquivo csv
         save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, type_of_problem:str, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, num_workers:int, persistent_workers:bool, type_of_problem:str, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -297,7 +297,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                         num_heads=num_heads,
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
-                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=5, persistent_workers=True
+                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=num_workers, persistent_workers=True
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -310,20 +310,22 @@ if __name__ == "__main__":
     batch_size = int(local_variables["batch_size"])
     k_folds = int(local_variables["k_folds"])
     common_dim = int(local_variables["common_dim"])
-    
+    num_workers=int(local_variables["num_workers"])    
     list_num_heads = local_variables["list_num_heads"]
-    dataset_folder_name = "ISIC-2020" # local_variables["dataset_folder_name"]
-    dataset_folder_path=f"/data/{dataset_folder_name}" # local_variables["dataset_folder_path"]
+    dataset_folder_name = local_variables["dataset_folder_name"]
+    dataset_folder_path= local_variables["dataset_folder_path"]
     unfreeze_weights = bool(local_variables["unfreeze_weights"]) # Caso queira descongelar os pesos da CNN desejada
 
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
     type_of_problem = "multiclass" #"binaryclass" #"multiclass"
-    results_folder_path = f"./src/results/testes/testes-da-implementacao-final/{dataset_folder_name}/{type_of_problem}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    results_folder_path = local_variables["results_folder_path"]
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
     list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(dataset_folder_path, results_folder_path, num_epochs, type_of_problem, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
+    run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, persistent_workers=True, num_epochs=num_epochs, type_of_problem=type_of_problem, batch_size=batch_size, k_folds=k_folds,
+                    common_dim = common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

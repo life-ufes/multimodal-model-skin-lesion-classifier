@@ -212,7 +212,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1,
             targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, num_workers:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -239,6 +239,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                         num_heads=num_heads,
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
+                        num_workers=num_workers,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
                     )
                 except Exception as e:
@@ -252,7 +253,7 @@ if __name__ == "__main__":
     batch_size = int(local_variables["batch_size"])
     k_folds = int(local_variables["k_folds"])
     common_dim = int(local_variables["common_dim"])
-    
+    num_workers=int(local_variables["num_workers"])    
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = "PAD-UFES-25" # local_variables["dataset_folder_name"]
     dataset_folder_path=f"/data/{dataset_folder_name}" # local_variables["dataset_folder_path"]
@@ -268,4 +269,5 @@ if __name__ == "__main__":
     # Testar com todos os modelos
     list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(dataset_folder_path, results_folder_path, num_epochs, batch_size, k_folds, common_dim, text_model_encoder, unfreeze_weights, device, list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
+    run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, num_epochs=num_epochs,
+        batch_size=batch_size, k_folds=k_folds, common_dim=common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
