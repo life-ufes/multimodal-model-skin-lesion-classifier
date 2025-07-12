@@ -258,7 +258,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
         # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
+        model = multimodalIntraInterModal.MultimodalModel(num_classes=num_classes, num_heads=num_heads, device=device, batch_size=batch_size, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
             num_epochs, num_heads, fold+1, train_loader, val_loader, dataset.targets, model, device,
@@ -287,7 +287,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_worker
                     print(f"Número de features do metadados: {num_metadata_features}\n")
                     num_classes = len(dataset.metadata['category'].unique())
 
-                    pipeline(dataset, 
+                    pipeline(dataset=dataset,
                         num_metadata_features=num_metadata_features, 
                         num_epochs=num_epochs, batch_size=batch_size, 
                         device=device, k_folds=k_folds, num_classes=num_classes, 
@@ -321,9 +321,9 @@ if __name__ == "__main__":
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["concatenation"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"]
+    list_of_models = ["mobilenet-v2"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, num_epochs=num_epochs, batch_size=
                     batch_size, k_folds=k_folds, common_dim=common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

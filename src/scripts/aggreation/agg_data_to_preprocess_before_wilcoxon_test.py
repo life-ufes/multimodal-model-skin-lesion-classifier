@@ -132,7 +132,7 @@ if __name__ == "__main__":
     list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
 
 
-    for alg in ["no-metadata", "concat", "metanet", "metablock"]:
+    for alg in ["no-metadata", "concatenation", "metanet", "metablock"]:
         file_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results/PAD-20/{alg}"
         # Concat, Metablock, MetaNet
         list_of_used_algs.append(alg)

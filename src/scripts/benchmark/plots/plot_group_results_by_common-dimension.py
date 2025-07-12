@@ -7,6 +7,7 @@ import os
 dataset_name = "PAD-UFES-20"
 # Path to your CSV file
 csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
+#csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
 
 # Output directory for plots
 output_dir = "./bacc_plots"

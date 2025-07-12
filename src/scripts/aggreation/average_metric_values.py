@@ -19,18 +19,18 @@ if __name__ == "__main__":
     # Lista para armazenar todos os resultados
     all_results = []
 
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"]
-    dataset_name = "ISIC-2019" # "PAD-UFES-25" # "ISIC-2019" # "PAD-UFES-20"
+    list_of_attention_mecanism = ["no-metadata", "concatenation", "metablock", "gfcam"]
+    dataset_name = "PAD-UFES-20" # "ISIC-2019" # "PAD-UFES-20"
     num_heads = 8
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/{dataset_name}/multiclass/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/stratifiedkfold/2/all-weights-unfroozen/for_test/PAD-UFES-20/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimensiond_of_projected_features/PAD-UFES-20/unfrozen_weights/8"
     # Path to your CSV file
-    ## base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/{num_heads}"
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/{num_heads}"
     # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/teste_com_gfcam-se/PAD-UFES-20/unfrozen_weights/8"
-    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/{dataset_name}/unfrozen_weights/8"
+    # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/different_features_with_dimension_size/PAD-UFES-20/unfrozen_weights/8"
     
-    for common_size in [16, 32, 64, 128, 256, 512, 1024, 2048]:
+    for common_size in [64, 128, 256, 512, 1024, 2048]:
         for attention_mecanism in list_of_attention_mecanism:
             # Testar com todos os modelos
             list_of_models = ["mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]

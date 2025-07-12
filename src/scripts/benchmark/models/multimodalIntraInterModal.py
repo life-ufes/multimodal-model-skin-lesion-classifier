@@ -3,20 +3,21 @@ import torch.nn as nn
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from transformers import ViTFeatureExtractor
 # from residualBlock import ResidualBlock
 # from residualBlockADeepBasedMultimodal import ResidualBlock
 from gatedResidualBlock import GatedAlteredResidualBlock
 from loadImageModelClassifier import loadModels
 from metablock import MetaBlock
+from metanet import MetaNet
 
 class MultimodalModel(nn.Module):
-    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, common_dim=512, vocab_size=85, unfreeze_weights=False, attention_mecanism="combined", n=2):
+    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, batch_size=32, common_dim=512, vocab_size=85, unfreeze_weights=False, attention_mecanism="combined", n=2):
         super(MultimodalModel, self).__init__()
         # Dimensões do modelo
         self.common_dim = common_dim
         self.text_encoder_dim_output = 512
         self.cnn_dim_output = 512
+        self.batch_size = batch_size
         self.device = device
         self.cnn_model_name = cnn_model_name
         self.text_model_name = text_model_name
@@ -104,8 +105,7 @@ class MultimodalModel(nn.Module):
         self.text_residual = GatedAlteredResidualBlock(dim=self.common_dim)
 
         self.fc_no_mlp_to_visual_cls = nn.Sequential(
-            nn.Linear(self.cnn_dim_output, self.num_classes) #,
-            # nn.Softmax(dim=1)
+            nn.Linear(self.cnn_dim_output, self.num_classes)
         )
 
         # Bloco do Metablock, caso queira usar
@@ -115,6 +115,7 @@ class MultimodalModel(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
         self.fc_mlp_module_after_metablock_fusion_module = self.fc_mlp_module_after_metablock()
+
     def fc_mlp_module(self, n=1):
         fc_fusion = nn.Sequential(
             nn.Linear(self.common_dim * n, self.common_dim),
@@ -125,8 +126,7 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, self.num_classes)#,
-            # nn.Softmax(dim=1)
+            nn.Linear(self.common_dim // 2, self.num_classes)
         )
         return fc_fusion
     
@@ -140,8 +140,7 @@ class MultimodalModel(nn.Module):
             nn.BatchNorm1d(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, self.num_classes)#,
-            # nn.Softmax(dim=1)
+            nn.Linear(self.common_dim // 2, self.num_classes)
         )
         return fc_fusion
 
@@ -253,13 +252,18 @@ class MultimodalModel(nn.Module):
         elif self.attention_mecanism=="no-metadata-without-mlp":
             output = self.fc_no_mlp_to_visual_cls(image_features_before)
             return output
-        
-        elif self.attention_mecanism=="metablock":
-            meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, num_channels, H', W']
-            # Pooling global e classificação
-            pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
-            pooled_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
-            return self.fc_no_mlp_to_visual_cls(pooled_features)
+            
+        elif self.attention_mecanism == "metablock":
+            # Certifique-se de que ambas entradas têm a forma [B, D]
+            if image_features_before.dim() == 2:
+                # Adiciona uma dimensão extra para compatibilizar com operação de atenção: [B, C] → [B, C, 1]
+                image_features_before = image_features_before.unsqueeze(-1)  # [B, C, 1]
+
+            meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, C, 1]
+            pooled_features = meta_block_features.squeeze(-1)  # remove última dimensão → [B, C]
+            # Passa pelas camadas MLP após o MetaBlock
+            return self.fc_mlp_module_after_metablock_fusion_module(pooled_features)
+
         
         elif self.attention_mecanism == "weighted":
             # # === [F] Gating: quanto usar de 'peso' para cada modal
@@ -287,6 +291,7 @@ class MultimodalModel(nn.Module):
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
         elif self.attention_mecanism == "crossattention":
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+
         elif self.attention_mecanism == "cross-weights-after-crossattention":
             #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
             alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
@@ -452,7 +457,7 @@ class MultimodalModel(nn.Module):
             # Pooling global e classificação
             pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
             pooled_metablock_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
-            output = self.fc_mlp_module_after_metablock_fusion_module(pooled_metablock_features)  # (batch, num_classes)
+            output = self.fc_no_mlp_to_visual_cls(pooled_metablock_features)  # (batch, num_classes)
             return output
         
         output = self.fc_fusion(combined_features)  # (batch, num_classes)

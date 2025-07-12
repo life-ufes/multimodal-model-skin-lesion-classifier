@@ -41,11 +41,15 @@ if __name__ == "__main__":
     list_all_models_metrics = []
     list_all_models_metrics_all_lists = []
     method_names = []
-    base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/residual-block/frozen-weights/2"
-    list_of_attention_mecanism = ["cross-weights-after-crossattention", "concatenation", "weighted", "gfcam", "crossattention", "no-metadata"]
+    num_heads = 8
+    dataset_name = "PAD-UFES-20" # "ISIC-2019
+    # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/residual-block/frozen-weights/2"
+    # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8"
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/different_features_with_dimension_size/PAD-UFES-20/unfrozen_weights/{num_heads}/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture"
+    list_of_attention_mecanism = ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     for attention_mecanism in list_of_attention_mecanism:
         # Testar com todos os modelos
-        list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "vit-base-patch16-224"]
+        list_of_models = ["vgg16", "mobilenet-v2", "densenet169", "resnet-18", "resnet-50", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k"]
         for model_name in list_of_models:
             for wanted_metric_metric_name in wanted_metric_list:
                 file_folder_path = f"{base_folder_path}/{attention_mecanism}/model_{model_name}_with_one-hot-encoder_512_with_best_architecture"
