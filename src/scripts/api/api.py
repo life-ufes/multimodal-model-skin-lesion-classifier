@@ -1,3 +1,8 @@
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from typing import List
+import uvicorn
+from io import BytesIO
 import os
 import torch
 from PIL import Image
@@ -8,9 +13,31 @@ import pickle
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from benchmark.models import multimodalIntraInterModal # Ajuste conforme a estrutura do seu projeto
+# from benchmark.interpretability import inerence
+app = FastAPI()
 
+# Variáveis globais
+model = None
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_3/best-model/best_model.pt"
+
+@app.on_event("startup")
+def load_model_once():
+    global model
+    print("🔁 Carregando modelo...")
+    model = load_multimodal_model(
+        device=device,
+        model_path=model_path,
+        num_classes=6,
+        num_heads=8,
+        vocab_size=85,
+        cnn_model_name="davit_tiny.msft_in1k",
+        text_model_name="one-hot-encoder",
+        attention_mecanism="att-intramodal+residual+cross-attention-metadados"
+    )
+    print("✅ Modelo carregado com sucesso.")
 
 
 def one_hot_encoding(metadata, ohe_path = "./src/results/preprocess_data/ohe.pickle", scaler_path = "./src/results/preprocess_data/scaler.pickle"):
@@ -29,7 +56,6 @@ def one_hot_encoding(metadata, ohe_path = "./src/results/preprocess_data/ohe.pic
 
     # Preencher valores faltantes nas colunas numéricas com a média da coluna
     dataset_features[numerical_cols] = dataset_features[numerical_cols].fillna(-1)
-    print(f"{dataset_features[numerical_cols]}\n")
     # Assegurar que as colunas categóricas usadas na inferência correspondem às usadas no treinamento
     dataset_features_categorical = dataset_features[categorical_cols]
 
@@ -90,18 +116,26 @@ def load_multimodal_model(device, model_path, num_classes=6, num_heads=2, vocab_
         raise SystemError("Erro ao carregar o modelo")
     return model
 
-def inference(processed_image, processed_metadata, device, model_path, num_classes=6, num_heads=2, vocab_size=85, cnn_model_name="densenet169", text_model_name="one-hot-encoder", attention_mecanism="concatenation"):
-    model = load_multimodal_model(device, model_path, num_classes, num_heads, vocab_size, cnn_model_name, text_model_name, attention_mecanism)
-    
+def inference(processed_image, processed_metadata, device):
+    """Realiza a inferência no modelo multimodal com a imagem e metadados processados.      
+    Args:
+        processed_image (torch.Tensor): Imagem processada.
+        processed_metadata (np.ndarray): Metadados processados.
+        device (torch.device): Dispositivo para execução (CPU ou GPU).
+    Returns:
+        predictions (torch.Tensor): Previsões do modelo.
+        probabilities (torch.Tensor): Probabilidades das classes previstas.
+    """
+    global model    
     # Adiciona a dimensão de batch
     processed_image = processed_image.unsqueeze(0).to(device)
     processed_metadata = torch.tensor(processed_metadata, dtype=torch.float32).to(device)
-    print(processed_metadata.shape)
-    print(processed_image.shape)
+
     with torch.no_grad():
         outputs = model(processed_image, processed_metadata)
         probabilities = torch.softmax(outputs, dim=1)
         predictions = torch.argmax(probabilities, dim=1)
+        torch.cuda.empty_cache()  # Limpar cache da GPU
     return predictions, probabilities
 
 
@@ -125,32 +159,47 @@ def get_target(wanted_label):
     return target_index
 
 
+@app.post("/predict/")
+async def predict_skin_lesion(
+    file: UploadFile = File(...),
+    metadata_csv: str = Form(...)
+):
+    """
+    Endpoint para prever a classe de uma lesão cutânea com base em imagem e metadados.
+    """
+    global model, device, model_path
+    try:
+        # 1. Carregar a imagem corretamente
+        contents = await file.read()
+        image = Image.open(BytesIO(contents)).convert("RGB")
+        processed_image = process_image(img=image)
+
+        # 2. Limpar e processar metadados
+        metadata_csv = metadata_csv.replace('\x00', '')              # <–– remove null bytes
+        column_names = [
+            "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
+            "pesticide", "gender", "skin_cancer_history", "cancer_history", "has_piped_water",
+            "has_sewage_system", "fitspatrick", "region", "diameter_1", "diameter_2", "diagnostic", "itch",
+            "grew", "hurt", "changed", "bleed", "elevation", "img_id", "biopsed"
+        ]
+        metadata = process_data(metadata_csv, column_names)
+        processed_metadata = one_hot_encoding(metadata)
+
+        # 3. Rodar inferência
+        predictions, probabilities = inference(
+            processed_image=processed_image,
+            processed_metadata=processed_metadata,
+            device=device)
+        # 4. Formatar e retornar
+        return JSONResponse({
+            "predicted_label_index": predictions.item(),
+            "probabilities": np.max(np.array(probabilities.cpu()).tolist()[0])
+        })
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_3/best-model/best_model.pt"
-
-    # Carregar imagem de teste
-    image = Image.open("./data/PAD-UFES-20/images/PAT_771_1491_390.png")
-    # Processar imagem
-    processed_image = process_image(img=image)  # Ajuste conforme o modelo de codificação de imagem
-    # Definir nomes das colunas
-    column_names = [
-        "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
-        "pesticide", "gender", "skin_cancer_history", "cancer_history", "has_piped_water",
-        "has_sewage_system", "fitspatrick", "region", "diameter_1", "diameter_2", "diagnostic", "itch",
-        "grew", "hurt", "changed", "bleed", "elevation", "img_id", "biopsed"
-    ]
-
-    # Carregar dados de teste
-    text = "PAT_771,1491,True,True,ITALY,ITALY,69,False,MALE,False,True,True,True,3.0,FACE,6.0,3.0,BCC,True,UNK,False,UNK,False,True,PAT_771_1491_390.png,True"  # "PAT_1516,1765,,,,,8,,,,,,,,ARM,,,NEV,False,False,False,False,False,False,PAT_1516_1765_530.png,False"
-    metadata = process_data(text, column_names)
-
-    # Processar metadados
-    processed_metadata = one_hot_encoding(metadata, ohe_path="./src/results/preprocess_data/ohe.pickle", scaler_path="./src/results/preprocess_data/scaler.pickle")
-    print(f"Processed_metadata:{processed_metadata}\n")
-
-    # Realizar inferência
-    predictions, probabilities = inference(processed_image=processed_image, processed_metadata=processed_metadata, device=device, model_path=model_path, num_classes=6, num_heads=8, vocab_size=85, cnn_model_name="davit_tiny.msft_in1k", text_model_name="one-hot-encoder", attention_mecanism="att-intramodal+residual+cross-attention-metadados")
-
-    print(f"Predictions: {predictions}\n")
-    print(f"Probabilities: {probabilities}\n")
+    import uvicorn
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)

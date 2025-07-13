@@ -49,12 +49,14 @@ def main(csv_file_path, use_legend, dataset_name):
     plt.savefig(f"./images/bacc_all_common_sizes_grouped_{dataset_name}.png", dpi=400, bbox_inches='tight')
     plt.show()
 
+    print(f"Gráfico salvo como './images/bacc_all_common_sizes_grouped_{dataset_name}.png'")
+
 
 if __name__=="__main__":
     dataset_name = "PAD-UFES-20" # "ISIC-2019" 
     # Caminho para o arquivo CSV
     # csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
     # csv_file_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/ISIC-2019/unfrozen_weights/8/all_metric_values.csv"
-    csv_file_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/different_features_with_dimension_size/PAD-UFES-20/unfrozen_weights/8/all_metric_values.csv"
+    csv_file_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/PAD-UFES-20/unfrozen_weights/8/all_metric_values.csv"
     # csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
-    main(csv_file_path=csv_file_path, use_legend=True, dataset_name=dataset_name)
+    main(csv_file_path=csv_file_path, use_legend=False, dataset_name=dataset_name)

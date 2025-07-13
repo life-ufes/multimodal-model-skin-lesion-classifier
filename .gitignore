@@ -70,3 +70,5 @@ images/bacc_all_common_sizes_grouped_ISIC-2019.png
 images/bacc_all_common_sizes_grouped_PAD-UFES-20.png
 bacc_plots/bacc_plot_common_size_1024.png
 bacc_plots/bacc_plot_common_size_2048.png
+src/scripts/api/__pycache__/api.cpython-310.pyc
+src/scripts/benchmark/__pycache__/__init__.cpython-310.pyc

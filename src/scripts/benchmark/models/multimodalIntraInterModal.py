@@ -276,9 +276,15 @@ class MultimodalModel(nn.Module):
             image_pooled_gated = alpha_img * projected_image_features
             text_pooled_gated = alpha_txt * projected_text_features
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
+        
         elif self.attention_mecanism == "concatenation":
             # # Apenas concatena as features projetadas
             combined_features = torch.cat((projected_image_features.squeeze(0), projected_text_features.squeeze(0)), dim=-1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
+        
         elif self.attention_mecanism == "gfcam":
             # # === [F] Gating: quanto usar de cada modal?
             #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
@@ -289,8 +295,13 @@ class MultimodalModel(nn.Module):
             text_pooled_gated = alpha_txt * text_pooled
             # === [G] Fusão e classificação
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
+        
         elif self.attention_mecanism == "crossattention":
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
 
         elif self.attention_mecanism == "cross-weights-after-crossattention":
             #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
@@ -301,6 +312,8 @@ class MultimodalModel(nn.Module):
             text_pooled_gated = alpha_img * text_pooled
             # === [G] Fusão e classificação
             combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
 
         # Com blocos residuais e gated
         elif self.attention_mecanism=="att-intramodal+residual":
@@ -324,6 +337,9 @@ class MultimodalModel(nn.Module):
             text_pooled = text_features_residual_before_cross_attention.mean(dim=1)    # (batch, common_dim)
             # === Fusão das features
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
+        
         elif self.attention_mecanism=="att-intramodal+residual+cross-attention-metadados":
             # === Self-Attention Intra-Modality ===
             image_features_att, _ = self.image_self_attention(
@@ -357,6 +373,8 @@ class MultimodalModel(nn.Module):
             text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
             # === Fusão das features
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
         
         elif self.attention_mecanism=="att-intramodal+residual+cross-attention-metadados+metablock":
             # === Self-Attention Intra-Modality ===
@@ -443,6 +461,8 @@ class MultimodalModel(nn.Module):
             text_pooled = text_features_residual_after_cross_attention.mean(dim=1)    # (batch, common_dim)
             # === Fusão das features
             combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
 
         elif self.attention_mecanism=="metablock-se":
            # === Pooling das features finais 
@@ -460,5 +480,6 @@ class MultimodalModel(nn.Module):
             output = self.fc_no_mlp_to_visual_cls(pooled_metablock_features)  # (batch, num_classes)
             return output
         
-        output = self.fc_fusion(combined_features)  # (batch, num_classes)
-        return output
+        else:
+            raise ValueError(f"Attention mechanism '{self.attention_mecanism}' not implemented!")
+            return None
