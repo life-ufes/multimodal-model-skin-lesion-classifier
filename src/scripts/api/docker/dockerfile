@@ -1,0 +1,20 @@
+# Usar a imagem base do Node.js 18
+FROM python:3
+# Ajuste do fuso horário
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+WORKDIR /app
+
+COPY ../ .
+
+# Copy the requirements file first to leverage Docker cache
+COPY ./requirements.txt /app/api/requirements.txt
+
+# Install the dependencies
+RUN pip3 install -r requirements.txt
+
+
+EXPOSE 8008
+
+# CMD [ "python3", "/app/api/api.py" ]

@@ -1,0 +1,30 @@
+services:
+  skin_lesion_api_service:
+    container_name: skin_lesion_api_container
+    build:
+      context: .
+      dockerfile: dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ../..:/app
+      - ../weights:/app/weights:rw      
+    environment:
+      - API_HOSTNAME=${API_HOSTNAME}
+      - API_PORT=${API_PORT}
+      - MODEL_FOLDER_PATH=${MODEL_FOLDER_PATH}
+    ports:
+      - ${API_PORT}:8000
+    command: "python3 /app/api/api.py"
+    tty: true
+    restart: always
+    cpus: 3
+    mem_limit: 2000MB
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    runtime: nvidia  
+    networks:
+      - default

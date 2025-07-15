@@ -72,3 +72,12 @@ bacc_plots/bacc_plot_common_size_1024.png
 bacc_plots/bacc_plot_common_size_2048.png
 src/scripts/api/__pycache__/api.cpython-310.pyc
 src/scripts/benchmark/__pycache__/__init__.cpython-310.pyc
+resultados_de_lighterm_e_outros/PAD-20/concatenation/cv-results.csv
+resultados_de_lighterm_e_outros/PAD-20/lighterm/model_metrics.csv
+resultados_de_lighterm_e_outros/PAD-20/metablock/cv-results.csv
+resultados_de_lighterm_e_outros/PAD-20/metanet/cv-results.csv
+resultados_de_lighterm_e_outros/PAD-20/no-metadata/cv-results.csv
+src/scripts/api/docker/env/.env
+src/scripts/api/docker/env/.env.example
+src/scripts/api/docker/.env
+src/scripts/benchmark/__pycache__/__init__.cpython-313.pyc
