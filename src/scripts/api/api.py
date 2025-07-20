@@ -4,9 +4,9 @@ from typing import List
 import uvicorn
 from io import BytesIO
 import os
+from dotenv import load_dotenv
 import torch
 from PIL import Image
-from torchvision import transforms
 import pandas as pd
 import numpy as np
 import pickle
@@ -16,12 +16,16 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from benchmark.models import multimodalIntraInterModal # Ajuste conforme a estrutura do seu projeto
 # from benchmark.interpretability import inerence
+
+# Carregar as variáveis de ambiente
+load_dotenv()
+# Instanciar a API
 app = FastAPI()
 
 # Variáveis globais
 model = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model_path = "/app/api/weights/att-intramodal+residual+cross-attention-metadados/model_resnet-50_with_one-hot-encoder_512_with_best_architecture/resnet-50_fold_1/best-model/best_model.pt" # "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_3/best-model/best_model.pt"
+model_path = os.getenv("MODEL_NAME_PATH") # "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_3/best-model/best_model.pt"
 
 @app.on_event("startup")
 def load_model_once():
@@ -30,12 +34,12 @@ def load_model_once():
     model = load_multimodal_model(
         device=device,
         model_path=model_path,
-        num_classes=6,
-        num_heads=8,
-        vocab_size=86,
-        cnn_model_name="resnet-50",
-        text_model_name="one-hot-encoder",
-        attention_mecanism="att-intramodal+residual+cross-attention-metadados"
+        num_classes=int(os.getenv("NUM_LABELS")),
+        num_heads=int(os.getenv("NUM_HEADS")),
+        vocab_size=int(os.getenv("VOCAB_SIZE")),
+        cnn_model_name=os.getenv("CNN_MODEL_NAME"),
+        text_model_name=os.getenv("TEXT_PROCESSOR_NAME"),
+        attention_mecanism=os.getenv("ATTENTION_MECHANISM")
     )
     print("✅ Modelo carregado com sucesso.")
 
@@ -96,7 +100,7 @@ def process_image(img):
 
 
 
-def load_multimodal_model(device, model_path, num_classes=6, num_heads=2, vocab_size=85, cnn_model_name="densenet169", text_model_name="one-hot-encoder", attention_mecanism="concatenation"):
+def load_multimodal_model(device, model_path, num_classes=6, num_heads=2, vocab_size=86, cnn_model_name="densenet169", text_model_name="one-hot-encoder", attention_mecanism="concatenation"):
     try:
         model = multimodalIntraInterModal.MultimodalModel(
             num_classes=num_classes,
@@ -202,4 +206,4 @@ async def predict_skin_lesion(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api:app", host="0.0.0.0", port=8008, reload=True)

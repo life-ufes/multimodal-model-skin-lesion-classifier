@@ -173,6 +173,26 @@ The final image is inside the folder `ìmages`. For example:
 
 ![Samples of joined images of ISIC-2019](./images/samples_of_images_of_dataset_ISIC-2019.png)
 
+# API for inference
+
+Now you can use the API on docker just adjusting the necessary configurations of:
+- src/scripts/api/docker/.env
+- Add the model's weights iin the folder 'src/scripts/api/weights'
+- The preprocessing data in: 'src/scripts/api/preprocess_data'
+
+Then, change the enviroment variables, for example:
+   - MODEL_FOLDER_PATH="/app/api/weights"
+   - API_PORT=8008
+   - API_HOSTNAME="127.0.0.1"
+   - MODEL_NAME_PATH="/app/api/weights/concatenation/resnet-50_fold_1/best-model/best_model.pt"
+   - NUM_LABELS=6
+   - NUM_HEADS=8
+   - VOCAB_SIZE=86
+   - CNN_MODEL_NAME="resnet-50"
+   - TEXT_PROCESSOR_NAME="one-hot-encoder"
+   - ATTENTION_MECHANISM="concatenation" 
+
+
 # Citation
 Feel free to cite this framework and the paper:
 

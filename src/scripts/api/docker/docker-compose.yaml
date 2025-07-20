@@ -15,8 +15,14 @@ services:
       - API_HOSTNAME=${API_HOSTNAME}
       - API_PORT=${API_PORT}
       - MODEL_FOLDER_PATH=${MODEL_FOLDER_PATH}
+      - NUM_LABELS=${NUM_LABELS}
+      - NUM_HEADS=${NUM_HEADS}
+      - VOCAB_SIZE=${VOCAB_SIZE}
+      - CNN_MODEL_NAME=${CNN_MODEL_NAME}
+      - TEXT_PROCESSOR_NAME=${TEXT_PROCESSOR_NAME}
+      - ATTENTION_MECHANISM=${ATTENTION_MECHANISM}
     ports:
-      - ${API_PORT}:8000
+      - ${API_PORT}:8008
     command: "python3 /app/api/api.py"
     tty: true
     restart: always
