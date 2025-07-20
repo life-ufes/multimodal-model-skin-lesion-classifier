@@ -21,7 +21,7 @@ app = FastAPI()
 # Variáveis globais
 model = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_3/best-model/best_model.pt"
+model_path = "/app/api/weights/att-intramodal+residual+cross-attention-metadados/model_resnet-50_with_one-hot-encoder_512_with_best_architecture/resnet-50_fold_1/best-model/best_model.pt" # "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_3/best-model/best_model.pt"
 
 @app.on_event("startup")
 def load_model_once():
@@ -32,15 +32,15 @@ def load_model_once():
         model_path=model_path,
         num_classes=6,
         num_heads=8,
-        vocab_size=85,
-        cnn_model_name="davit_tiny.msft_in1k",
+        vocab_size=86,
+        cnn_model_name="resnet-50",
         text_model_name="one-hot-encoder",
         attention_mecanism="att-intramodal+residual+cross-attention-metadados"
     )
     print("✅ Modelo carregado com sucesso.")
 
 
-def one_hot_encoding(metadata, ohe_path = "./src/results/preprocess_data/ohe.pickle", scaler_path = "./src/results/preprocess_data/scaler.pickle"):
+def one_hot_encoding(metadata, ohe_path = "/app/api/preprocess_data/ohe.pickle", scaler_path = "/app/api/preprocess_data/scaler.pickle"):
     # Remover colunas desnecessárias e selecionar as features
     dataset_features = metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'])
 
@@ -175,7 +175,7 @@ async def predict_skin_lesion(
         processed_image = process_image(img=image)
 
         # 2. Limpar e processar metadados
-        metadata_csv = metadata_csv.replace('\x00', '')              # <–– remove null bytes
+        metadata_csv = metadata_csv.replace('\x00', '')              
         column_names = [
             "patient_id", "lesion_id", "smoke", "drink", "background_father", "background_mother", "age",
             "pesticide", "gender", "skin_cancer_history", "cancer_history", "has_piped_water",
@@ -184,7 +184,7 @@ async def predict_skin_lesion(
         ]
         metadata = process_data(metadata_csv, column_names)
         processed_metadata = one_hot_encoding(metadata)
-
+        
         # 3. Rodar inferência
         predictions, probabilities = inference(
             processed_image=processed_image,

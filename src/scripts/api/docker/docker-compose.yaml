@@ -8,7 +8,9 @@ services:
       - .env
     volumes:
       - ../..:/app
-      - ../weights:/app/weights:rw      
+      - ../weights:/app/weights:rw
+      - ../preprocess_data:/app/api/preprocess_data
+      - /root:/root:rw      
     environment:
       - API_HOSTNAME=${API_HOSTNAME}
       - API_PORT=${API_PORT}
