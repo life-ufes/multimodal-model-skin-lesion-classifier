@@ -1,6 +1,7 @@
 import os
 import re
 import pandas as pd
+import cv2
 import numpy as np
 from PIL import Image
 from torchvision import transforms

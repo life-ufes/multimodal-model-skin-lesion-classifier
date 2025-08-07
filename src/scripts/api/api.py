@@ -155,21 +155,19 @@ def process_data(text, column_names):
     return data
 
 def get_target(wanted_label):
-    target_index=-1
+    """
+        Returno o nome da classe
+    """
     LABELS = ["ACK", "BCC", "MEL", "NEV", "SCC", "SEK"] # PAD-UFES-20
-    for i in LABELS:
-        if wanted_label==LABELS[i]:
-            target_index        
-    return target_index
+    return LABELS[wanted_label]
 
 
 @app.post("/predict/")
 async def predict_skin_lesion(
     file: UploadFile = File(...),
-    metadata_csv: str = Form(...)
-):
+    metadata_csv: str = Form(...)):
     """
-    Endpoint para prever a classe de uma lesão cutânea com base em imagem e metadados.
+        Endpoint para prever a classe de uma lesão cutânea com base em imagem e metadados.
     """
     global model, device, model_path
     try:
@@ -197,6 +195,7 @@ async def predict_skin_lesion(
         # 4. Formatar e retornar
         return JSONResponse({
             "predicted_label_index": predictions.item(),
+            "predicted_classname": get_target(predictions.item()),
             "probabilities": np.max(np.array(probabilities.cpu()).tolist()[0])
         })
 
