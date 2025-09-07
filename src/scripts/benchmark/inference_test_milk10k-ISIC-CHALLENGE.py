@@ -3,8 +3,7 @@ import pickle
 import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader
-from tqdm import tqdm # Ótimo para barras de progresso
-# Supondo que seus imports estejam corretos
+from tqdm import tqdm
 from models import multimodalIntraInterModal
 from models import skinLesionDatasetsMILK10K 
 

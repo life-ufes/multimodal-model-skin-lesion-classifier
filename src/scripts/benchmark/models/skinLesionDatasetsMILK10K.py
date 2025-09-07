@@ -44,7 +44,7 @@ class SkinLesionDataset(Dataset):
         # Carregar metadados + ground truth
         self.metadata = self.load_metadata()
         # Se for treino (tem ground truth), roda o one_hot_encoding normal
-        if self.is_train and self.train_ground_truth is not None:
+        if self.train_ground_truth is not None:
             self.features, self.labels, self.targets = self.one_hot_encoding()
         else:
             # No teste, apenas inicializa vazio
@@ -74,11 +74,11 @@ class SkinLesionDataset(Dataset):
         label = "None"
         
         # Se for treino/validação:
-        if self.is_train and self.train_ground_truth is not None:
+        if (self.train_ground_truth is not None):
             label = torch.tensor(self.labels[idx], dtype=torch.long)
         
         # Dataset de teste, não tem labels
-        return image_name, image, metadata, label
+        return lesion_id_name, image, metadata, label
 
     def load_transforms(self):
         if self.is_train:
