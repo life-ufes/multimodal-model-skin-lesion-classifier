@@ -60,7 +60,7 @@ def save_model_and_metrics(model,
     cm   = confusion_matrix(all_labels, preds, normalize="true")
     disp = ConfusionMatrixDisplay(cm, display_labels=targets)
     fig, ax = plt.subplots(figsize=(8,6))
-    disp.plot(ax=ax, cmap=plt.cm.Blues, values_format=".4f")
+    disp.plot(ax=ax, cmap=plt.cm.Blues, values_format=".3f")
     ax.set_title("Confusion Matrix")
     fig.savefig(os.path.join(folder_path, "confusion_matrix.png"), dpi=400)
     plt.close(fig)
@@ -76,7 +76,7 @@ def save_model_and_metrics(model,
         roc_auc     = auc(fpr, tpr)
 
         fig, ax = plt.subplots(figsize=(8,6))
-        ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.4f}")
+        ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.3f}")
         ax.plot([0,1],[0,1], lw=2, linestyle="--", label="Random")
         ax.set_xlim(0,1); ax.set_ylim(0,1.05)
         ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate")
@@ -94,7 +94,7 @@ def save_model_and_metrics(model,
         roc_auc     = auc(fpr, tpr)
 
         fig, ax = plt.subplots(figsize=(8,6))
-        ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.4f}")
+        ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.3f}")
         ax.plot([0,1],[0,1], lw=2, linestyle="--", label="Random")
         ax.set_xlim(0,1); ax.set_ylim(0,1.05)
         ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate")

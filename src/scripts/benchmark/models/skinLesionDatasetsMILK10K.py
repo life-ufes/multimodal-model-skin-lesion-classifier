@@ -41,12 +41,14 @@ class SkinLesionDataset(Dataset):
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.transform = self.load_transforms()
 
-
         # Carregar metadados + ground truth
         self.metadata = self.load_metadata()
-
-        # Extrair features, labels e lista de targets
-        self.features, self.labels, self.targets = self.one_hot_encoding()
+        # Se for treino (tem ground truth), roda o one_hot_encoding normal
+        if self.is_train and self.train_ground_truth is not None:
+            self.features, self.labels, self.targets = self.one_hot_encoding()
+        else:
+            # No teste, apenas inicializa vazio
+            self.features, self.labels, self.targets = None, None, None
 
     def __len__(self):
         return len(self.metadata)
@@ -69,8 +71,13 @@ class SkinLesionDataset(Dataset):
             image = self.transform(image=image)['image']
 
         metadata = torch.tensor(self.features[idx], dtype=torch.float32)
-        label = torch.tensor(self.labels[idx], dtype=torch.long)
-
+        label = "None"
+        
+        # Se for treino/validação:
+        if self.is_train and self.train_ground_truth is not None:
+            label = torch.tensor(self.labels[idx], dtype=torch.long)
+        
+        # Dataset de teste, não tem labels
         return image_name, image, metadata, label
 
     def load_transforms(self):
@@ -119,13 +126,14 @@ class SkinLesionDataset(Dataset):
         metadata = metadata.fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").replace("NÃO  ENCONTRADO", "EMPTY")
 
         # Carregar ground truth
-        if not os.path.exists(self.train_ground_truth):
-            raise FileNotFoundError(f"Arquivo de ground truth não encontrado: {self.train_ground_truth}")
+        if self.train_ground_truth is None:
+            print(f"Arquivo de ground truth não encontrado: {self.train_ground_truth}")
+            pass
+        else:
+            df_groundtruth = pd.read_csv(self.train_ground_truth, dtype=str)
 
-        df_groundtruth = pd.read_csv(self.train_ground_truth, dtype=str)
-
-        # Merge pelo lesion_id
-        metadata = metadata.merge(df_groundtruth, on='lesion_id', how='left', suffixes=('', '_gt'))
+            # Merge pelo lesion_id
+            metadata = metadata.merge(df_groundtruth, on='lesion_id', how='left', suffixes=('', '_gt'))
 
         if self.is_to_drop_nan:
             metadata = metadata.dropna().reset_index(drop=True)
