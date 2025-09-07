@@ -129,7 +129,7 @@ class DynamicCNN(nn.Module):
         
         # Último layer com a quantidade de classes
         neurons_per_layer_size_of_fc_module.append(nn.Linear(self.neurons_per_layer_size_of_fc_module, self.num_classes))
-        neurons_per_layer_size_of_fc_module.append(nn.Softmax(dim=1))
+        # neurons_per_layer_size_of_fc_module.append(nn.Softmax(dim=1))
         
         # Montando o bloco de layers para processar as features fundidas
         return nn.Sequential(*neurons_per_layer_size_of_fc_module)

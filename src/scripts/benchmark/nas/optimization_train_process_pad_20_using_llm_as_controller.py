@@ -4,21 +4,36 @@ import os
 import csv
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from utils import model_metrics, save_predictions
+import utils
+from utils.model_metrics import evaluate_model
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, dynamicMultimodalmodel, controllerMultimodalmodel
 from models import skinLesionDatasets, skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
+from utils.request_to_llm import request_to_ollama, filter_generated_response
 from collections import Counter
 from sklearn.model_selection import train_test_split
 import time
-import json
 from torch.utils.data import DataLoader, Subset
 import numpy as np
 import mlflow
 from tqdm import tqdm
+import json
+import re
+
+def safe_json_parse(raw_response: str):
+    try:
+        # Remove cercas de código tipo ```json ... ```
+        cleaned = re.sub(r"^```(?:json)?", "", raw_response.strip(), flags=re.IGNORECASE | re.MULTILINE)
+        cleaned = re.sub(r"```$", "", cleaned.strip(), flags=re.MULTILINE)
+        
+        return json.loads(cleaned)
+    except Exception as e:
+        print(f"[safe_json_parse] Erro no parsing: {e}")
+        print("Resposta bruta:", raw_response)
+        return None
 
 # Função para calcular os pesos das classes garantindo que haja um peso para cada classe
 def compute_class_weights(labels, num_classes):
@@ -78,7 +93,7 @@ def train_process(config:dict, num_epochs:int,
     initial_time = time.time()
     epoch_index = 0
 
-    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name}-- ONLY USING REWARD"
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -130,7 +145,7 @@ def train_process(config:dict, num_epochs:int,
             current_lr = [pg['lr'] for pg in optimizer.param_groups]
             print(f"Current Learning Rate(s): {current_lr}\n")
 
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            metrics, all_labels, all_predictions = evaluate_model(
                 model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name
             )
             metrics["epoch"] = epoch_index
@@ -159,7 +174,7 @@ def train_process(config:dict, num_epochs:int,
     model.eval()
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
-        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+        metrics, all_labels, all_predictions = evaluate_model(
             model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
     
@@ -264,50 +279,68 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
     class_weights = compute_class_weights(train_labels, num_classes).to(device)
     print(f"Pesos das classes: {class_weights}")
     
-    controller = controllerMultimodalmodel.Controller(search_space=search_space, hidden_size=256).to(device)
-    # Otimizador específico para o Controller
-    optimizer_controller = torch.optim.Adam(controller.parameters(), lr=controller_lr) 
-    
-    # Scheduler para o Controller (reduz LR se a recompensa não melhorar)
-    scheduler_controller = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer_controller,
-        mode='max', # Otimiza para maximizar a recompensa (reward)
-        factor=0.1,
-        patience=5, # Paciência ajustável
-        verbose=True,
-        min_lr=1e-6
-    )
-
-    baseline = None
+    # Controller LLM
+    history = []
     best_reward = -float('inf') # Inicializa com um valor muito baixo
     best_config = None
     best_step = -1
+    llm_model_name = "qwen3:0.6b"
 
-    # Inicia um run MLFlow para a busca do Controller (separado dos runs dos DynamicModels)
-    # global dataset_folder_name 
-    #experiment_name_controller = f"NAS-Controller-Search-{dataset_folder_name}"
-    #mlflow.set_experiment(experiment_name_controller)
-    # mlflow_controller_run = mlflow.start_run(run_name="Controller_Search_Run")
-    
     with mlflow.start_run(nested=True):
-        # Loga os hiperparâmetros do Controller
         mlflow.log_param("controller_learning_rate", controller_lr)
         mlflow.log_param("entropy_beta", entropy_beta)
         mlflow.log_param("gradient_clip_norm", grad_clip_norm)
         mlflow.log_param("search_steps", SEARCH_STEPS)
-        mlflow.log_param("search_space_json", json.dumps(search_space)) # Log do search space completo
+        mlflow.log_param("search_space_json", json.dumps(search_space))
 
         for step in range(1, SEARCH_STEPS + 1):
-            config, log_prob = controller.sample_config()
-            
-            attention_mecanism = config["attention_mecanism"]
-            common_dim = config["common_dim"]
+            # Histórico para prompt
+            history_text = "\n".join([
+                f"Step {i}: config={json.dumps(h['config'])}, BACC={h['reward']:.4f}"
+                for i, h in enumerate(history)
+            ])
 
-            reward = 0.0 # Inicializa reward para cada passo
+            prompt = f"""
+                You are an AI NAS controller for skin lesion classification.
+                Your goal is to maximize Balanced Accuracy (BACC).
+
+                The Search Space has been defined by the possibles configurations:
+                -- {search_space}\n
+                Below is the history of past attempts:
+
+                {history_text if history else "No history yet, start exploring."}
+
+                Output only a JSON with the multidomodel attributtes:
+                {{
+                    'num_blocks': 2, 
+                    'initial_filters': 16, 
+                    'kernel_size': 3, 
+                    'layers_per_block': 1, 
+                    'use_pooling': True, 
+                    'common_dim': 128, 
+                    'attention_mecanism': 'concatenation', 
+                    'num_layers_text_fc': 2, 
+                    'neurons_per_layer_size_of_text_fc': 64, 
+                    'num_layers_fc_module': 1, 
+                    'neurons_per_layer_size_of_fc_module': 256}}
+                """
+
+           
             try:
-                # Instancia o modelo dinâmico com a configuração amostrada
+                # Chama LLM
+                response = request_to_ollama(prompt, model_name=llm_model_name)
+                config_llm = filter_generated_response(generated_sentence=response)
+            
+                config_llm= json.loads(config_llm)
+                print(f"Config filtrada: {config_llm}")
+            except Exception as e:
+                print(f"[Step {step}] Erro no parsing do LLM: {e}")
+                continue
+
+            try:
+                # Instancia modelo dinâmico
                 dynamic_model = dynamicMultimodalmodel.DynamicCNN(
-                    config, num_classes=num_classes, device=device,
+                config=config_llm, num_classes=num_classes, device=device,
                     common_dim=common_dim, num_heads=num_heads, vocab_size=num_metadata_features,
                     attention_mecanism=attention_mecanism, 
                     n=1 if attention_mecanism=="no-metadata" else 2
@@ -315,7 +348,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
 
                 # Treina e avalia o modelo dinâmico
                 dynamic_model, model_save_path, metrics = train_process(
-                    config=config, num_epochs=num_epochs, num_heads=num_heads, fold_num=step, train_loader=train_loader, val_loader=val_loader, 
+                    config=config_llm, num_epochs=num_epochs, num_heads=num_heads, fold_num=step, train_loader=train_loader, val_loader=val_loader, 
                     targets=dataset.targets, model=dynamic_model, device=device, weightes_per_category=class_weights, 
                     common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
                 )
@@ -323,49 +356,33 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
                 reward = metrics["balanced_accuracy"] # Usando balanced_accuracy como recompensa
                 dynamic_cnn_val_loss = metrics["val_loss"]
 
+                reward = metrics["balanced_accuracy"]
+                dynamic_cnn_val_loss = metrics["val_loss"]
+
             except Exception as e:
-                print(f"Erro ao treinar modelo com config {config}: {e}")
-                reward = 0.0 # Penaliza modelos que falham no treinamento ou têm erro
-                dynamic_cnn_val_loss = 1.0
-                
-            # Atualiza o melhor reward e configuração
+                print(f"Erro ao treinar modelo com config {config_llm}: {e}")
+                reward, dynamic_cnn_val_loss = 0.0, 1.0
+
+            # Histórico
+            history.append({"config": config_llm, "reward": reward})
+
+            # Atualiza melhor
             if reward > best_reward:
-                best_controller_val_loss = dynamic_cnn_val_loss
-                best_config = config
                 best_reward = reward
+                best_config = config_llm
                 best_step = step
-                print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f} no passo {best_step}")
+                os.makedirs(os.path.join(results_folder_path, "best_config.json"), True)
+                with open(os.path.join(results_folder_path, "best_config.json"), "w") as f:
+                    json.dump(best_config, f, indent=2)
 
-            # Atualiza a baseline para o algoritmo REINFORCE
-            baseline = reward if baseline is None else 0.5 * baseline + 0.5 * reward
-            advantage = reward - baseline
-
-            # Calcula a perda do Controller com regularização de entropia
-            # log_prob é um tensor. A soma é necessária para obter um escalar para o loss.
-            # entropy_beta é a ponderação da entropia.
-            entropy = - log_prob.sum() # Representa a entropia da política (para incentivar exploração)
-            controller_loss = ( advantage * entropy)
-            # Otimiza o Controller
-            optimizer_controller.zero_grad()
-            controller_loss.backward()
-            
-            # # Clipagem de gradientes para estabilizar o treinamento do Controller
-            # torch.nn.utils.clip_grad_norm_(controller.parameters(), grad_clip_norm)
-            optimizer_controller.step()
-
-            # Atualiza o scheduler do Controller com a recompensa atual
-            scheduler_controller.step(reward)
-
-            # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
+            # Log métricas
             mlflow.log_metric("controller_reward", reward, step=step)
-            mlflow.log_metric("controller_entropy", entropy, step=step)
-            mlflow.log_metric("controller_baseline", baseline, step=step)
-            mlflow.log_metric("controller_loss", controller_loss.item(), step=step)
             mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step)  
-            mlflow.log_param(f"config_step_{step}", json.dumps(config)) # Log a configuração gerada em cada passo
+            mlflow.log_param(f"config_step_{step}", json.dumps(config_llm))
 
-            print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Baseline: {baseline:.4f} | Controller Loss: {controller_loss.item():.4f} | Config: {config}")
+            print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Best={best_reward:.4f} | Config: {config_llm}")
 
+        
         print("\n--- Busca Finalizada ---")
         print(f"Melhor Reward: {best_reward:.4f}")
         print(f"Melhor Arquitetura: {best_config}")
@@ -380,7 +397,6 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
         with open(os.path.join(results_folder_path, "best_config.json"), "w") as f:
             json.dump(best_config, f, indent=2)
 
-        # mlflow.end_run() # Finaliza o run MLFlow do Controller
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list, SEARCH_STEPS, search_space):
     for attention_mecanism in list_of_attention_mecanism:
