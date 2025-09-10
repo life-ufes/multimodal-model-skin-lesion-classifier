@@ -5,6 +5,7 @@ from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal
 from models import skinLesionDatasetsMILK10K
+from torchvision.transforms import v2
 from utils import load_local_variables
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
@@ -32,6 +33,7 @@ def train_process(num_epochs,
                   train_loader, 
                   val_loader, 
                   targets, 
+                  num_classes,
                   model, 
                   device, 
                   weightes_per_category, 
@@ -44,6 +46,11 @@ def train_process(num_epochs,
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
 
+    # Uso de CutMix e MixUP 
+    cutmix = v2.CutMix(num_classes=num_classes)
+    mixup = v2.MixUp(num_classes=num_classes)
+    cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
+    
     # ReduceLROnPlateau
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -103,13 +110,9 @@ def train_process(num_epochs,
             running_loss = 0.0
 
             # Adicionando barra de progresso para o loop de batches
-            for batch_index, (_, image, metadata, label) in enumerate(
-                    tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
-                image, metadata, label = (
-                    image.to(device),
-                    metadata.to(device),
-                    label.to(device)
-                )
+            for batch_index, (_, image, metadata, label) in enumerate(tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
+                image, metadata, label = (image.to(device), metadata.to(device),label.to(device))
+                image, label = cutmix_or_mixup(image, label)
 
                 optimizer.zero_grad()
                 outputs = model(image, metadata)
@@ -259,7 +262,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
-            num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, train_loader=train_loader, val_loader=val_loader, targets=targets, model=model, device=device,
+            num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, num_classes=num_classes, train_loader=train_loader, val_loader=val_loader, targets=targets, model=model, device=device,
             weightes_per_category=class_weights, common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path)
         # Salvar as predições em um arquivo csv
         save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
@@ -325,7 +328,7 @@ if __name__ == "__main__":
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["mvitv2_small.fb_in1k"]# ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["davit_tiny.msft_in1k"]# ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, image_type=image_type, num_workers=num_workers, persistent_workers=True, num_epochs=num_epochs, type_of_problem=type_of_problem, batch_size=batch_size, k_folds=k_folds,
                     common_dim = common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

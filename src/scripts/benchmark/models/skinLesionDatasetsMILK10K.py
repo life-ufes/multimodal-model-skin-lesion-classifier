@@ -125,6 +125,9 @@ class SkinLesionDataset(Dataset):
         metadata = pd.read_csv(self.metadata_file, dtype=str)
         metadata = metadata.fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").replace("NÃO  ENCONTRADO", "EMPTY")
 
+        # Filtrar pelo tipo de imagem ANTES do merge
+        metadata = metadata[metadata['image_type'] == self.image_type].reset_index(drop=True)
+
         # Carregar ground truth
         if self.train_ground_truth is None:
             print(f"Arquivo de ground truth não encontrado: {self.train_ground_truth}")
@@ -141,10 +144,6 @@ class SkinLesionDataset(Dataset):
         return metadata.reset_index(drop=True)
 
     def one_hot_encoding(self):
-        # Filtrar pelo tipo de imagem
-        clinical_metadata = self.metadata[self.metadata['image_type'] == self.image_type].copy()
-        self.metadata = clinical_metadata.reset_index(drop=True)
-
         # Colunas categóricas e numéricas
         drop_cols = ['image_type', 'attribution', 'copyright_license']
 
