@@ -16,7 +16,9 @@ def save_model_and_metrics(model,
                            all_labels,
                            all_predictions,
                            targets: list,
-                           data_val:str="val"):
+                           data_val:str="val",
+                           train_losses: np.array=[],
+                           val_losses: np.array=[]):
     """
     Salva modelo, métricas, matriz de confusão e curva ROC em 400 dpi,
     tratando corretamente shapes 1-D, (n,1), (n,2) e multiclasses.
@@ -129,5 +131,22 @@ def save_model_and_metrics(model,
         ax.legend(loc="lower right")
         fig.savefig(os.path.join(folder_path, "roc_curve.png"), dpi=400)
         plt.close(fig)
+
+    # Plotando curvas de loss
+    plt.figure(figsize=(8, 6))
+    plt.plot(range(1, len(train_losses) + 1), train_losses, label="Train Loss", marker="o")
+    plt.plot(range(1, len(val_losses) + 1), val_losses, label="Validation Loss", marker="o")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss")
+    plt.legend()
+    plt.grid(True)
+
+    # Caminho para salvar o gráfico
+    loss_plot_path = os.path.join(base_dir, f"loss_curve_fold_{fold_num}.png")
+    plt.savefig(loss_plot_path, dpi=400, bbox_inches="tight")
+    plt.close()
+
+    print(f"Loss curve saved at {loss_plot_path}")
 
     return folder_path

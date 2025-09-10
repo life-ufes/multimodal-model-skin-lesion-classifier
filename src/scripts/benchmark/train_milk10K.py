@@ -8,6 +8,7 @@ from models import skinLesionDatasetsMILK10K
 from torchvision.transforms import v2
 from utils import load_local_variables
 from utils.save_model_and_metrics import save_model_and_metrics
+from models.softtargetsCrossEntropy import SoftTargetCrossEntropy
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold
 import numpy as np
@@ -44,6 +45,7 @@ def train_process(num_epochs,
                   results_folder_path):
 
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
+    # criterion = SoftTargetCrossEntropy(weight=weightes_per_category.to(device))
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
 
     # Uso de CutMix e MixUP 
@@ -105,6 +107,8 @@ def train_process(num_epochs,
         # -----------------------------
         # Training Loop
         # -----------------------------
+        train_losses = []
+        val_losses = []
         for epoch_index in range(num_epochs):
             model.train()
             running_loss = 0.0
@@ -167,6 +171,9 @@ def train_process(num_epochs,
                 else:
                     mlflow.log_param(metric_name, metric_value)
 
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+
             # -----------------------------
             # Early Stopping
             # -----------------------------
@@ -203,7 +210,9 @@ def train_process(num_epochs,
         all_labels=all_labels, 
         all_predictions=all_predictions, 
         targets=targets, 
-        data_val="val"
+        data_val="val",
+        train_losses=train_losses,
+        val_losses=val_losses,
     )
     print(f"Model saved at {model_save_path}")
 
@@ -328,7 +337,7 @@ if __name__ == "__main__":
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["davit_tiny.msft_in1k"]# ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["mobilenet-v2"]# ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, image_type=image_type, num_workers=num_workers, persistent_workers=True, num_epochs=num_epochs, type_of_problem=type_of_problem, batch_size=batch_size, k_folds=k_folds,
                     common_dim = common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
