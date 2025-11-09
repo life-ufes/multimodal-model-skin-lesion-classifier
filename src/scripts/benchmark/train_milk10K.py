@@ -5,10 +5,8 @@ from utils.early_stopping import EarlyStopping
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal
 from models import skinLesionDatasetsMILK10K
-from torchvision.transforms import v2
 from utils import load_local_variables
 from utils.save_model_and_metrics import save_model_and_metrics
-from models.softtargetsCrossEntropy import SoftTargetCrossEntropy
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold
 import numpy as np
@@ -34,7 +32,6 @@ def train_process(num_epochs,
                   train_loader, 
                   val_loader, 
                   targets, 
-                  num_classes,
                   model, 
                   device, 
                   weightes_per_category, 
@@ -45,14 +42,8 @@ def train_process(num_epochs,
                   results_folder_path):
 
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
-    # criterion = SoftTargetCrossEntropy(weight=weightes_per_category.to(device))
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
 
-    # Uso de CutMix e MixUP 
-    cutmix = v2.CutMix(num_classes=num_classes)
-    mixup = v2.MixUp(num_classes=num_classes)
-    cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
-    
     # ReduceLROnPlateau
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -74,12 +65,12 @@ def train_process(num_epochs,
 
     # Instantiate EarlyStopping
     early_stopping = EarlyStopping(
-        patience=10, 
-        delta=0.00, 
+        patience=5, 
+        delta=0.01, 
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=True,
-        early_stopping_metric_name="val_bacc"
+        early_stopping_metric_name="val_loss"
     )
 
     initial_time = time.time()
@@ -107,16 +98,18 @@ def train_process(num_epochs,
         # -----------------------------
         # Training Loop
         # -----------------------------
-        train_losses = []
-        val_losses = []
         for epoch_index in range(num_epochs):
             model.train()
             running_loss = 0.0
 
             # Adicionando barra de progresso para o loop de batches
-            for batch_index, (_, image, metadata, label) in enumerate(tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
-                image, metadata, label = (image.to(device), metadata.to(device),label.to(device))
-                image, label = cutmix_or_mixup(image, label)
+            for batch_index, (_, image, metadata, label) in enumerate(
+                    tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
+                image, metadata, label = (
+                    image.to(device),
+                    metadata.to(device),
+                    label.to(device)
+                )
 
                 optimizer.zero_grad()
                 outputs = model(image, metadata)
@@ -171,9 +164,6 @@ def train_process(num_epochs,
                 else:
                     mlflow.log_param(metric_name, metric_value)
 
-            train_losses.append(train_loss)
-            val_losses.append(val_loss)
-
             # -----------------------------
             # Early Stopping
             # -----------------------------
@@ -210,9 +200,7 @@ def train_process(num_epochs,
         all_labels=all_labels, 
         all_predictions=all_predictions, 
         targets=targets, 
-        data_val="val",
-        train_losses=train_losses,
-        val_losses=val_losses,
+        data_val="val"
     )
     print(f"Model saved at {model_save_path}")
 
@@ -271,7 +259,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
         # Treinar o modelo no fold atual
         model, model_save_path = train_process(
-            num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, num_classes=num_classes, train_loader=train_loader, val_loader=val_loader, targets=targets, model=model, device=device,
+            num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, train_loader=train_loader, val_loader=val_loader, targets=targets, model=model, device=device,
             weightes_per_category=class_weights, common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path)
         # Salvar as predições em um arquivo csv
         save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
@@ -331,13 +319,13 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
     type_of_problem = "multiclass" #"binaryclass" #"multiclass"
-    image_type="clinical: close-up"
+    image_type="dermoscopic" #"clinical: close-up"
     results_folder_path = local_variables["results_folder_path"]
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{image_type}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["mobilenet-v2"]# ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["mobilenet-v2"] # ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, image_type=image_type, num_workers=num_workers, persistent_workers=True, num_epochs=num_epochs, type_of_problem=type_of_problem, batch_size=batch_size, k_folds=k_folds,
                     common_dim = common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

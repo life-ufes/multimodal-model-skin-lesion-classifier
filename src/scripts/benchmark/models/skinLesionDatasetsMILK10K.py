@@ -1,5 +1,3 @@
-from torch.utils.data import Dataset
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 import pandas as pd
 import numpy as np
 from PIL import Image
@@ -9,6 +7,8 @@ import torch
 import os
 import pickle
 import cv2
+from torch.utils.data import Dataset
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 class SkinLesionDataset(Dataset):
@@ -124,7 +124,8 @@ class SkinLesionDataset(Dataset):
         # Carregar CSV de metadados
         metadata = pd.read_csv(self.metadata_file, dtype=str)
         metadata = metadata.fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").replace("NÃO  ENCONTRADO", "EMPTY")
-
+        
+        # 💡 [CORREÇÃO AQUI] FILTRAGEM MOVIDA
         # Filtrar pelo tipo de imagem ANTES do merge
         metadata = metadata[metadata['image_type'] == self.image_type].reset_index(drop=True)
 
@@ -140,10 +141,15 @@ class SkinLesionDataset(Dataset):
 
         if self.is_to_drop_nan:
             metadata = metadata.dropna().reset_index(drop=True)
-
+            
         return metadata.reset_index(drop=True)
 
     def one_hot_encoding(self):
+        # 💡 [CORREÇÃO AQUI] FILTRAGEM REMOVIDA
+        # O DataFrame já está filtrado, não precisa mais do trecho abaixo
+        # clinical_metadata = self.metadata[self.metadata['image_type'] == self.image_type].copy()
+        # self.metadata = clinical_metadata.reset_index(drop=True)
+
         # Colunas categóricas e numéricas
         drop_cols = ['image_type', 'attribution', 'copyright_license']
 

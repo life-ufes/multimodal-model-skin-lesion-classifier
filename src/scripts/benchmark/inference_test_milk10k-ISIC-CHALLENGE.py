@@ -41,7 +41,7 @@ if __name__ == "__main__":
     num_classes = 11
     num_heads = 8
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model_name = "davit_tiny.msft_in1k"
+    model_name = "caformer_b36.sail_in22k_ft_in1k" # "vgg16" # "resnet-50" # "mobilenet-v2"
     text_model_encoder = "one-hot-encoder"
     common_dim = 512
     attention_mecanism = "att-intramodal+residual+cross-attention-metadados"
@@ -50,9 +50,9 @@ if __name__ == "__main__":
     target_names = ['AKIEC', 'BCC', 'BEN_OTH', 'BKL', 'DF', 'INF',
                     'MAL_OTH', 'MEL', 'NV', 'SCCKA', 'VASC']
     # Peso do modelo usado
-    weight_fold_path = "./src/results/MILK10k/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_1/best-model/best_model.pt"
+    weight_fold_path = f"./src/results/MILK10k/MILK10k/unfrozen_weights/8/att-intramodal+residual+cross-attention-metadados/model_{model_name}_with_one-hot-encoder_512_with_best_architecture/caformer_b36.sail_in22k_ft_in1k_fold_1/model.pth"
     # Predições das amostras do dataset de teste
-    output_path = "./data/MILK10k_Test_Predictions.csv"
+    output_path = f"./data/MILK10k/MILK10k_Test_Predictions_using_{model_name}.csv"
 
     print(f"Usando dispositivo: {device}")
 
@@ -129,6 +129,9 @@ if __name__ == "__main__":
     # Monta DataFrame final
     df_predictions = pd.DataFrame(one_hot_preds, columns=target_names)
     df_predictions.insert(0, 'lesion_id', image_names_list)
+
+    # Corrige o problema: atribui o resultado de volta ao DataFrame
+    df_predictions = df_predictions.drop_duplicates(subset="lesion_id", keep='first')
 
     df_predictions.to_csv(output_path, index=False)
 
