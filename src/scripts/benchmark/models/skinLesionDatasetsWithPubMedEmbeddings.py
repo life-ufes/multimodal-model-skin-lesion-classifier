@@ -12,7 +12,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 from transformers import AutoTokenizer
-from model2vec import StaticModel
+# from model2vec import StaticModel
 
 class SkinLesionDataset(Dataset):
     RAW_TEXT_ENCODERS = [
@@ -58,8 +58,8 @@ class SkinLesionDataset(Dataset):
             if 'gpt2' in self.bert_model_name and self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.padding_side = "right"
-        else:
-            self.tokenizer = StaticModel.from_pretrained(f"neuml/{self.bert_model_name}")
+        # else:
+        #     self.tokenizer = StaticModel.from_pretrained(f"neuml/{self.bert_model_name}")
 
         # Preparar transforms de imagem
         self.transform = self.load_transforms()

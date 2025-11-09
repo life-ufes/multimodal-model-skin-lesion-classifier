@@ -190,6 +190,7 @@ class loadModels():
                 # Congelar ou descongelar pesos
                 for param in image_encoder.parameters():
                     param.requires_grad = unfreeze_weights
+
             elif cnn_model_name == "davit_tiny.msft_in1k":
                 image_encoder = timm.create_model(cnn_model_name, pretrained=True)
 
@@ -204,7 +205,7 @@ class loadModels():
 
                 # Congelar ou descongelar pesos
                 for param in image_encoder.parameters():
-                    param.requires_grad = unfreeze_weights
+                    param.requires_grad = bool(unfreeze_weights)    
             elif cnn_model_name=="pit_b_distilled_224.in1k":
                 image_encoder = timm.create_model(cnn_model_name, pretrained=True)
 

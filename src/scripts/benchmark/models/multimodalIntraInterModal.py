@@ -5,7 +5,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # from residualBlock import ResidualBlock
 # from residualBlockADeepBasedMultimodal import ResidualBlock
-from gatedResidualBlock import GatedAlteredResidualBlock
+from gatedResidualBlock import GatedAlteredResidualBlock, StackedGatedResidualBlock
 from loadImageModelClassifier import loadModels
 from metablock import MetaBlock
 from metanet import MetaNet
@@ -119,11 +119,11 @@ class MultimodalModel(nn.Module):
     def fc_mlp_module(self, n=1):
         fc_fusion = nn.Sequential(
             nn.Linear(self.common_dim * n, self.common_dim),
-            nn.BatchNorm1d(self.common_dim),
+            nn.LayerNorm(self.common_dim),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(self.common_dim, self.common_dim // 2),
-            nn.BatchNorm1d(self.common_dim // 2),
+            nn.LayerNorm(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(self.common_dim // 2, self.num_classes)
@@ -133,11 +133,11 @@ class MultimodalModel(nn.Module):
     def fc_mlp_module_after_metablock(self):
         fc_fusion = nn.Sequential(
             nn.Linear(self.cnn_dim_output, self.common_dim),
-            nn.BatchNorm1d(self.common_dim),
+            nn.LayerNorm(self.common_dim),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(self.common_dim, self.common_dim // 2),
-            nn.BatchNorm1d(self.common_dim // 2),
+            nn.LayerNorm(self.common_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(self.common_dim // 2, self.num_classes)

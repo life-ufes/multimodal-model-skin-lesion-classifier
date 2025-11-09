@@ -8,7 +8,7 @@ from models import multimodalIntraInterModal, multimodalIntraModalWithBert, mult
 from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 import time
 import os
 from torch.utils.data import DataLoader, Subset
@@ -177,10 +177,18 @@ def train_process(num_epochs,
     return model, model_save_path
 
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
-    labels = [dataset.labels[i] for i in range(len(dataset))]
-    stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+    labels = dataset.labels              # diagnóstico codificado
+    groups = dataset.metadata["patient_id"].values  # agrupa por paciente
+    stratifiedKFold = StratifiedGroupKFold(n_splits=k_folds, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
+    for fold, (train_idx, val_idx) in enumerate(
+        stratifiedKFold.split(X=np.zeros(len(labels)), y=labels, groups=groups)
+    ):
+
+    # labels = [dataset.labels[i] for i in range(len(dataset))]
+    # stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+
+    # for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
         print(f"Fold {fold+1}/{k_folds}")
 
         if text_model_encoder in ["one-hot-encoder", "tab-transformer"]:
@@ -193,6 +201,10 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
                 image_encoder=dataset.image_encoder,
                 is_train=True  # Apply training augmentations
             )
+
+            train_counts = Counter([dataset.labels[i] for i in train_idx])
+            val_counts = Counter([dataset.labels[i] for i in val_idx])
+            print(f"Fold {fold+1}: train={train_counts}, val={val_counts}")
             train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
             train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
 
@@ -328,9 +340,9 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # 'pubmedbert-base-embeddings-500K' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["crossattention"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["davit_tiny.msft_in1k", "mobilenet-v2", "resnet-50"] # ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path, 
