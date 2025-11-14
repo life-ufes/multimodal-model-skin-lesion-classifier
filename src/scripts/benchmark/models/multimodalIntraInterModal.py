@@ -262,7 +262,7 @@ class MultimodalModel(nn.Module):
             meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, C, 1]
             pooled_features = meta_block_features.squeeze(-1)  # remove última dimensão → [B, C]
             # Passa pelas camadas MLP após o MetaBlock
-            return self.fc_mlp_module_after_metablock_fusion_module(pooled_features)
+            return self.fc_no_mlp_to_visual_cls(pooled_features)
 
         
         elif self.attention_mecanism == "weighted":

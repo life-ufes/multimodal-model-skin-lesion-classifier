@@ -8,7 +8,7 @@ from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 import models.focalLoss as focalLoss
-from models import multimodalIntraInterModal, dynamicMultimodalmodel, controllerMultimodalmodel
+from models import multimodalIntraInterModal, dynamicMultimodalmodel
 from models import skinLesionDatasets, skinLesionDatasetsWithBert
 from utils.request_to_llm import request_to_ollama, filter_generated_response
 from utils.save_model_and_metrics import save_model_and_metrics
@@ -79,6 +79,7 @@ def train_process(config:dict, num_epochs:int,
     initial_time = time.time()
     epoch_index = 0
 
+    # usa variável global dataset_folder_name definida no main
     experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER"
     mlflow.set_experiment(experiment_name)
 
@@ -118,7 +119,6 @@ def train_process(config:dict, num_epochs:int,
             val_loss = 0.0
             with torch.no_grad():
                 for _ , image, metadata, label in val_loader:
-                    # print(f"Image names: {image_name}\n")
                     image, metadata, label = image.to(device), metadata.to(device), label.to(device)
                     outputs = model(image, metadata)
                     loss = criterion(outputs, label)
@@ -210,16 +210,20 @@ def train_process(config:dict, num_epochs:int,
 
     return model, model_save_path, metrics
 
+
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num_classes, model_name, 
              num_heads, common_dim, k_folds, text_model_encoder, unfreeze_weights, attention_mecanism, 
              results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=True, 
              test_size=0.2, # Proporção da validação
-             controller_lr=1e-3, # Nova: Taxa de aprendizado do Controller
-             entropy_beta=0.01, # Nova: Ponderação da entropia para exploração
-             grad_clip_norm=1.0 # Nova: Valor para clipagem de gradientes
+             controller_lr=1e-3, # (não usado agora, pode remover depois)
+             entropy_beta=0.01,  # (não usado agora, pode remover depois)
+             grad_clip_norm=1.0  # (não usado agora, pode remover depois)
             ): 
              
     labels = [dataset.labels[i] for i in range(len(dataset))]
+    
+    # Garante que o diretório de resultados exista
+    os.makedirs(results_folder_path, exist_ok=True)
     
     # Split simples com estratificação
     train_idx, val_idx = train_test_split(
@@ -258,175 +262,204 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
     val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
 
     # Dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        persistent_workers=persistent_workers
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        persistent_workers=persistent_workers
+    )
 
     train_labels = [labels[i] for i in train_idx]
     class_weights = compute_class_weights(train_labels, num_classes).to(device)
     print(f"Pesos das classes: {class_weights}")
     
-    controller = controllerMultimodalmodel.Controller(search_space=search_space, hidden_size=256).to(device)
-    # Otimizador específico para o Controller
-    optimizer_controller = torch.optim.Adam(controller.parameters(), lr=controller_lr) 
-    
-    # Scheduler para o Controller (reduz LR se a recompensa não melhorar)
-    scheduler_controller = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer_controller,
-        mode='max', # Otimiza para maximizar a recompensa (reward)
-        factor=0.1,
-        patience=5, # Paciência ajustável
-        verbose=True,
-        min_lr=1e-6
-    )
-
     baseline = None
     best_reward = -float('inf') # Inicializa com um valor muito baixo
     best_config = None
     best_step = -1
     history = []
-    history_text = ""
-    llm_model_name="qwen3:0.6b"
+    llm_model_name = "qwen3:0.6b"
     
     with mlflow.start_run(nested=True):
-        # Loga os hiperparâmetros do Controller
-        mlflow.log_param("controller_learning_rate", controller_lr)
-        mlflow.log_param("entropy_beta", entropy_beta)
-        mlflow.log_param("gradient_clip_norm", grad_clip_norm)
-        mlflow.log_param("search_steps", SEARCH_STEPS)
-        mlflow.log_param("search_space_json", json.dumps(search_space)) # Log do search space completo
+        # Loga os hiperparâmetros do "controller" (LLM)
+        mlflow.log_param("controller_type", "LLM")
         mlflow.log_param("controller_llm_model_name", str(llm_model_name))
+        mlflow.log_param("search_steps", SEARCH_STEPS)
+        mlflow.log_param("search_space_json", json.dumps(search_space))
 
         for step in range(1, SEARCH_STEPS + 1):
-            reward = 0.0 # Inicializa reward para cada passo
+            reward = 0.0
+
+            # Monta o histórico ANTES do prompt
+            if history:
+                history_text = "\n".join([
+                    f"Step {i+1}: config={json.dumps(h['config'])}, BACC={h['reward']:.4f}"
+                    for i, h in enumerate(history)
+                ])
+            else:
+                history_text = "No history yet, start exploring."
 
             prompt = f"""
-                You are an AI NAS controller for skin lesion classification.
-                Your goal is to maximize Balanced Accuracy (BACC).
+You are an AI NAS controller for skin lesion classification.
+Your goal is to maximize Balanced Accuracy (BACC).
 
-                The Search Space has been defined by the possibles configurations:
-                -- {search_space}\n
-                Below is the history of past attempts:
+The Search Space has been defined by the possible configurations:
+{json.dumps(search_space, indent=2)}
 
-                {history_text if history else "No history yet, start exploring."}
+Below is the history of past attempts:
+{history_text}
 
-                Output only a JSON with the multidomodel attributtes:
-                {{
-                    'num_blocks': 2, 
-                    'initial_filters': 16, 
-                    'kernel_size': 3, 
-                    'layers_per_block': 1, 
-                    'use_pooling': True, 
-                    'common_dim': 128, 
-                    'attention_mecanism': 'concatenation', 
-                    'num_layers_text_fc': 2, 
-                    'neurons_per_layer_size_of_text_fc': 64, 
-                    'num_layers_fc_module': 1, 
-                    'neurons_per_layer_size_of_fc_module': 256}}
-                """
+Output only a JSON with the multidomodel attributes, for example:
+{{
+  "num_blocks": 2,
+  "initial_filters": 16,
+  "kernel_size": 3,
+  "layers_per_block": 1,
+  "use_pooling": true,
+  "common_dim": 128,
+  "attention_mecanism": "concatenation",
+  "num_layers_text_fc": 2,
+  "neurons_per_layer_size_of_text_fc": 64,
+  "num_layers_fc_module": 1,
+  "neurons_per_layer_size_of_fc_module": 256
+}}
+"""
 
-           
             try:
-                # Chama LLM
+                # Chama o LLM
                 response = request_to_ollama(prompt, model_name=llm_model_name)
                 config_llm = filter_generated_response(generated_sentence=response)
-            
                 config_llm = json.loads(config_llm)
-                print(f"Config filtrada: {config_llm}")
+                print(f"[Step {step}] Config filtrada: {config_llm}")
             except Exception as e:
                 print(f"[Step {step}] Erro no parsing do LLM: {e}")
                 continue
 
-            # Após obter os resultados do LLM
-            # Histórico para prompt
-            history_text = "\n".join([
-                f"Step {i}: config={json.dumps(h['config'])}, BACC={h['reward']:.4f}"
-                for i, h in enumerate(history)
-            ])
-
-            # Filtrar os dados que foram obtidos
-            attention_mecanism = config_llm["attention_mecanism"]
-            common_dim = config_llm["common_dim"]
+            # Filtrar os dados obtidos
+            try:
+                attention_mecanism_cfg = config_llm["attention_mecanism"]
+                common_dim_cfg = config_llm["common_dim"]
+            except KeyError as e:
+                print(f"[Step {step}] Config inválida (faltando chave {e}): {config_llm}")
+                continue
 
             try:
-                # Instancia o modelo dinâmico com a configuração amostrada
+                # Instancia o modelo dinâmico com a configuração amostrada pelo LLM
                 dynamic_model = dynamicMultimodalmodel.DynamicCNN(
-                    config_llm, num_classes=num_classes, device=device,
-                    common_dim=common_dim, num_heads=num_heads, vocab_size=num_metadata_features,
-                    attention_mecanism=attention_mecanism, 
-                    n=1 if attention_mecanism=="no-metadata" else 2
+                    config_llm,
+                    num_classes=num_classes,
+                    device=device,
+                    common_dim=common_dim_cfg,
+                    num_heads=num_heads,
+                    vocab_size=num_metadata_features,
+                    attention_mecanism=attention_mecanism_cfg,
+                    n=1 if attention_mecanism_cfg == "no-metadata" else 2
                 )
 
                 # Treina e avalia o modelo dinâmico
                 dynamic_model, model_save_path, metrics = train_process(
-                    config=config_llm, num_epochs=num_epochs, num_heads=num_heads, fold_num=step, train_loader=train_loader, val_loader=val_loader, 
-                    targets=dataset.targets, model=dynamic_model, device=device, weightes_per_category=class_weights, 
-                    common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path
+                    config=config_llm,
+                    num_epochs=num_epochs,
+                    num_heads=num_heads,
+                    fold_num=step,
+                    train_loader=train_loader,
+                    val_loader=val_loader,
+                    targets=dataset.targets,
+                    model=dynamic_model,
+                    device=device,
+                    weightes_per_category=class_weights,
+                    common_dim=common_dim_cfg,
+                    model_name=model_name,
+                    text_model_encoder=text_model_encoder,
+                    attention_mecanism=attention_mecanism_cfg,
+                    results_folder_path=results_folder_path
                 )
 
-                reward = metrics["balanced_accuracy"] # Usando balanced_accuracy como recompensa
-                dynamic_cnn_val_loss = metrics["val_loss"]
+                reward = float(metrics["balanced_accuracy"])  # recompensa
+                dynamic_cnn_val_loss = float(metrics["val_loss"])
 
             except Exception as e:
-                print(f"Erro ao treinar modelo com config {config_llm}: {e}")
-                reward = 0.0 # Penaliza modelos que falham no treinamento ou têm erro
+                print(f"[Step {step}] Erro ao treinar modelo com config {config_llm}: {e}")
+                reward = 0.0  # Penaliza modelos que falham
                 dynamic_cnn_val_loss = 1.0
-                
-            # Atualiza o melhor reward e configuração
+
+            # Atualiza melhor reward e configuração
             if reward > best_reward:
                 best_config = config_llm
                 best_reward = reward
                 best_step = step
                 print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f} no passo {best_step}")
 
-            # Atualiza a baseline para o algoritmo REINFORCE
+            # Atualiza baseline estilo REINFORCE (apenas para logging)
             baseline = reward if baseline is None else 0.5 * baseline + 0.5 * reward
-            advantage = reward - baseline
 
-            # --- MELHORIA: Registro de Métricas do Controller no MLFlow ---
+            # Atualiza histórico
+            history.append({
+                "config": config_llm,
+                "reward": reward
+            })
+
+            # Logging no MLflow
             mlflow.log_metric("controller_reward", reward, step=step)
             mlflow.log_metric("controller_baseline", baseline, step=step)
-            mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step)  
+            mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step)
             mlflow.log_param(f"config_step_{step}", json.dumps(config_llm))
 
-            print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Baseline: {baseline:.4f} | Config: {config_llm}")
+            print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Baseline: {baseline:.4f}")
 
         print("\n--- Busca Finalizada ---")
         print(f"Melhor Reward: {best_reward:.4f}")
         print(f"Melhor Arquitetura: {best_config}")
         print(f"Step da melhor arquitetura: {best_step}")
 
-        # **Registra as métricas finais da busca no MLFlow run do Controller**
-        mlflow.log_metric("final_best_reward", best_reward, step=SEARCH_STEPS)
-        mlflow.log_param("final_best_architecture_config", json.dumps(best_config)) 
+        # Registra as métricas finais da busca
+        mlflow.log_metric("final_best_reward", best_reward if best_reward != -float('inf') else 0.0, step=SEARCH_STEPS)
+        if best_config is not None:
+            mlflow.log_param("final_best_architecture_config", json.dumps(best_config))
         mlflow.log_param("final_best_architecture_step", best_step)
-        
+
         # Salva a melhor configuração em um arquivo JSON
-        with open(os.path.join(results_folder_path, "best_config.json"), "w") as f:
+        best_config_path = os.path.join(results_folder_path, "best_config.json")
+        with open(best_config_path, "w") as f:
             json.dump(best_config, f, indent=2)
+        print(f"Best config salva em: {best_config_path}")
 
-        # mlflow.end_run() # Finaliza o run MLFlow do Controller
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list, SEARCH_STEPS, search_space):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str,
+                    num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str,
+                    unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list,
+                    list_of_models: list, SEARCH_STEPS, search_space):
+
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
                 try:
-                    if (text_model_encoder in ['one-hot-encoder', "tab-transformer"]):
+                    if text_model_encoder in ['one-hot-encoder', "tab-transformer"]:
                         dataset = skinLesionDatasets.SkinLesionDataset(
-                        metadata_file=f"{dataset_folder_path}/metadata.csv",
-                        img_dir=f"{dataset_folder_path}/images",
-                        bert_model_name=text_model_encoder,
-                        image_encoder=model_name,
-                        drop_nan=False,
-                        size=(224,224))
-                    elif (text_model_encoder in ['gpt2', 'bert-base-uncased']):
+                            metadata_file=f"{dataset_folder_path}/metadata.csv",
+                            img_dir=f"{dataset_folder_path}/images",
+                            bert_model_name=text_model_encoder,
+                            image_encoder=model_name,
+                            drop_nan=False,
+                            size=(224,224)
+                        )
+                    elif text_model_encoder in ['gpt2', 'bert-base-uncased']:
                         dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
-                        metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
-                        img_dir=f"{dataset_folder_path}/images",
-                        bert_model_name=text_model_encoder,
-                        image_encoder=model_name,
-                        drop_nan=False,
-                        size=(224,224))
+                            metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
+                            img_dir=f"{dataset_folder_path}/images",
+                            bert_model_name=text_model_encoder,
+                            image_encoder=model_name,
+                            drop_nan=False,
+                            size=(224,224)
+                        )
                     else:
                         raise ValueError("Encoder de texto não implementado!\n")
                     
@@ -434,59 +467,72 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                     print(f"Número de features do metadados: {num_metadata_features}\n")
                     num_classes = len(dataset.metadata['diagnostic'].unique())
 
-                    pipeline(dataset, 
+                    # path específico deste experimento/modelo/mecanismo
+                    current_results_path = f"{results_folder_path}/{num_heads}/{attention_mecanism}"
+                    os.makedirs(current_results_path, exist_ok=True)
+
+                    pipeline(
+                        dataset, 
                         num_metadata_features=num_metadata_features, 
-                        num_epochs=num_epochs, batch_size=batch_size, 
-                        device=device, k_folds=-1, num_classes=num_classes, 
-                        model_name=model_name, common_dim=common_dim, 
+                        num_epochs=num_epochs,
+                        batch_size=batch_size, 
+                        device=device,
+                        k_folds=-1,
+                        num_classes=num_classes, 
+                        model_name=model_name,
+                        common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
-                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
-                        SEARCH_STEPS = SEARCH_STEPS, 
-                        search_space = search_space,
-                        num_workers=6, persistent_workers=True
+                        results_folder_path=current_results_path,
+                        SEARCH_STEPS=SEARCH_STEPS, 
+                        search_space=search_space,
+                        num_workers=6,
+                        persistent_workers=True
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
                     continue
 
+
 if __name__ == "__main__":
     # Carrega os dados localmente
     local_variables = load_local_variables.get_env_variables()
-    num_epochs = local_variables["num_epochs"] ## Treino com poucas épocas # local_variables["num_epochs"]
+    num_epochs = local_variables["num_epochs"]  # Treino com poucas épocas
     batch_size = local_variables["batch_size"]
-    k_folds = 1 ## Treino com poucas épocas # local_variables["k_folds"]
-    common_dim = -1 # local_variables["common_dim"]
+    k_folds = 1  # Treino com poucas épocas
+    common_dim = -1
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
     unfreeze_weights = bool(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["llm_model_name_sequence_generator"]
     results_folder_path = local_variables["results_folder_path"]
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    results_folder_path = f"{results_folder_path}/controller-{llm_model_name_sequence_generator}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
+    text_model_encoder = 'one-hot-encoder'  # "tab-transformer" # 'bert-base-uncased' # 'gpt2'
+    
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["custom-attention-mechanism"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["custom-attention-mechanism"]
     # Testar com todos os modelos
-    list_of_models = ["custom-cnn-with-NAS"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
+    list_of_models = ["custom-cnn-with-NAS"]
     
     # Treina todos modelos que podem ser usados no modelo multi-modal
     search_space = {
-        "num_blocks": [2, 5, 10],              # Número de blocos convolucionais
-        "initial_filters": [16, 32, 64],                # Filtros no primeiro bloco
-        "kernel_size": [3, 5],                          # Tamanho do Kernel para todas as convs
-        "layers_per_block": [1, 2],                     # Camadas conv por bloco
-        "use_pooling": [True, False],                   # Usar MaxPool após cada bloco
-        "common_dim": [64, 128, 256, 512],  # Tamanho do vetor
-        "attention_mecanism": ["concatenation", "crossattention", "metablock", "gfcam"], # Formas de fusão das features
-        "num_layers_text_fc": [1, 2, 3],          # Quantidade de layers no Embedding do One-Hot Encoding
-        "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],   # Quantidade de neurônios nos layers no Embedding do One-Hot Encoding
-        "num_layers_fc_module": [1, 2],        # Quantidade de layers no módulo MLP
-        "neurons_per_layer_size_of_fc_module": [256, 512] # Quantidade de neurônios nos layers do MLP
+        "num_blocks": [2, 5, 10],
+        "initial_filters": [16, 32, 64],
+        "kernel_size": [3, 5],
+        "layers_per_block": [1, 2],
+        "use_pooling": [True, False],
+        "common_dim": [64, 128, 256, 512],
+        "attention_mecanism": ["no-metadata", "concatenation", "crossattention", "metablock"],
+        "num_layers_text_fc": [1, 2, 3],
+        "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],
+        "num_layers_fc_module": [1, 2],
+        "neurons_per_layer_size_of_fc_module": [256, 512]
     }
 
     SEARCH_STEPS = 500
@@ -505,6 +551,6 @@ if __name__ == "__main__":
         list_num_heads=list_num_heads, 
         list_of_attention_mecanism=list_of_attention_mecanism, 
         list_of_models=list_of_models,
-        SEARCH_STEPS= SEARCH_STEPS, 
-        search_space= search_space
+        SEARCH_STEPS=SEARCH_STEPS, 
+        search_space=search_space
     )
