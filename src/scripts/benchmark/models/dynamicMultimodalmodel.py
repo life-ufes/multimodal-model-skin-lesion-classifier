@@ -216,12 +216,17 @@ class DynamicCNN(nn.Module):
         image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
         text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
         
-        if self.attention_mecanism=="metablock":
-            meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, num_channels, H', W']
-            # Pooling global e classificação
-            pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
-            pooled_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
+        if self.attention_mecanism == "metablock":
+            # Certifique-se de que ambas entradas têm a forma [B, D]
+            if image_features_before.dim() == 2:
+                # Adiciona uma dimensão extra para compatibilizar com operação de atenção: [B, C] → [B, C, 1]
+                image_features_before = image_features_before.unsqueeze(-1)  # [B, C, 1]
+
+            meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, C, 1]
+            pooled_features = meta_block_features.squeeze(-1)  # remove última dimensão → [B, C]
+            # Passa pelas camadas MLP após o MetaBlock
             return self.fc_no_mlp_to_visual_cls(pooled_features)
+
     
         elif self.attention_mecanism=="no-metadata":
             combined_features = projected_image_features
