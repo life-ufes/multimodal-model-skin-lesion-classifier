@@ -214,10 +214,7 @@ def train_process(config:dict, num_epochs:int,
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num_classes, model_name, 
              num_heads, common_dim, k_folds, text_model_encoder, unfreeze_weights, attention_mecanism, 
              results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=True, 
-             test_size=0.2, # Proporção da validação
-             controller_lr=1e-3, # (não usado agora, pode remover depois)
-             entropy_beta=0.01,  # (não usado agora, pode remover depois)
-             grad_clip_norm=1.0  # (não usado agora, pode remover depois)
+             test_size=0.2, llm_model_name_sequence_generator:str='qwen3:0.6b'
             ): 
              
     labels = [dataset.labels[i] for i in range(len(dataset))]
@@ -286,7 +283,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
     best_config = None
     best_step = -1
     history = []
-    llm_model_name = "qwen3:0.6b"
+    llm_model_name = llm_model_name_sequence_generator
     
     with mlflow.start_run(nested=True):
         # Loga os hiperparâmetros do "controller" (LLM)
@@ -489,7 +486,8 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         SEARCH_STEPS=SEARCH_STEPS, 
                         search_space=search_space,
                         num_workers=6,
-                        persistent_workers=True
+                        persistent_workers=True,
+                        llm_model_name_sequence_generator=llm_model_name_sequence_generator
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
