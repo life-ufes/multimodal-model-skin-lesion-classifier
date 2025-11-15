@@ -80,7 +80,7 @@ def train_process(config:dict, num_epochs:int,
     epoch_index = 0
 
     # usa variável global dataset_folder_name definida no main
-    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER"
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER - OPTIMIZATION TRAIN PROCESS"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -230,8 +230,6 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
         random_state=42
     )
     
-    print("Usando split simples (train/val)")
-
     # Criar dataset de treino
     train_dataset = type(dataset)(
         metadata_file=dataset.metadata_file,
@@ -304,38 +302,55 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
             else:
                 history_text = "No history yet, start exploring."
 
-            prompt = f"""
-You are an AI NAS controller for skin lesion classification.
-Your goal is to maximize Balanced Accuracy (BACC).
+                prompt = f"""
+                    You are an AI NAS controller for skin lesion classification.
+                    Your goal is to maximize Balanced Accuracy (BACC). Higher BACC is better (1.0 is perfect, 0.5 is random for binary).
 
-The Search Space has been defined by the possible configurations:
-{json.dumps(search_space, indent=2)}
+                    The search space of valid hyperparameters is:
+                    {json.dumps(search_space, indent=2)}
 
-Below is the history of past attempts:
-{history_text}
+                    Here is the search history so far:
+                    {history_text}
 
-Output only a JSON with the multidomodel attributes, for example:
-{{
-  "num_blocks": 2,
-  "initial_filters": 16,
-  "kernel_size": 3,
-  "layers_per_block": 1,
-  "use_pooling": true,
-  "common_dim": 128,
-  "attention_mecanism": "concatenation",
-  "num_layers_text_fc": 2,
-  "neurons_per_layer_size_of_text_fc": 64,
-  "num_layers_fc_module": 1,
-  "neurons_per_layer_size_of_fc_module": 256
-}}
-"""
+                    Based on this history, propose ONE new architecture configuration that is likely to IMPROVE BACC compared to the best so far.
+                    You should:
+                    - Prefer configurations similar to high-BACC ones, but with small changes (tweak 1–3 hyperparameters at a time).
+                    - Avoid repeating exactly the same configuration as past attempts.
+                    - Always keep hyperparameter values inside the given search_space.
+                    - If the history is bad (low BACC), you may explore more diverse configurations.
 
+                    Return ONLY ONE JSON OBJECT (not a list), with EXACTLY these keys:
+                    {{
+                    "num_blocks": <int>,
+                    "initial_filters": <int>,
+                    "kernel_size": <int>,
+                    "layers_per_block": <int>,
+                    "use_pooling": <true or false>,
+                    "common_dim": <int>,
+                    "attention_mecanism": <string>,
+                    "num_layers_text_fc": <int>,
+                    "neurons_per_layer_size_of_text_fc": <int>,
+                    "num_layers_fc_module": <int>,
+                    "neurons_per_layer_size_of_fc_module": <int>
+                    }}
+                    """
             try:
                 # Chama o LLM
                 response = request_to_ollama(prompt, model_name=llm_model_name)
                 config_llm = filter_generated_response(generated_sentence=response)
                 config_llm = json.loads(config_llm)
-                print(f"[Step {step}] Config filtrada: {config_llm}")
+                print(f"[Step {step}] Config filtrada (bruta): {config_llm}")
+
+                # Se vier uma lista de configs, escolhe UMA (ex.: a última)
+                if isinstance(config_llm, list):
+                    if len(config_llm) == 0:
+                        raise ValueError("LLM retornou uma lista vazia de configurações.")
+                    config_llm = config_llm[-1]  # ou [0], se preferir a primeira
+                    print(f"[Step {step}] Usando última config da lista: {config_llm}")
+
+                if not isinstance(config_llm, dict):
+                    raise TypeError(f"Configuração retornada não é um dict: {type(config_llm)}")
+
             except Exception as e:
                 print(f"[Step {step}] Erro no parsing do LLM: {e}")
                 continue
@@ -387,6 +402,7 @@ Output only a JSON with the multidomodel attributes, for example:
                 print(f"[Step {step}] Erro ao treinar modelo com config {config_llm}: {e}")
                 reward = 0.0  # Penaliza modelos que falham
                 dynamic_cnn_val_loss = 1.0
+                continue
 
             # Atualiza melhor reward e configuração
             if reward > best_reward:
