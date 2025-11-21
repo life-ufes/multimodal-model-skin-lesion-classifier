@@ -12,7 +12,7 @@ if __name__ == "__main__":
     print("Colunas metadata:", meta.columns.tolist())
     print("Colunas predições:", preds.columns.tolist())
 
-    # 🔥 Merge correto: img_id <-> image_name
+    # Merge correto: img_id <-> image_name
     merged = pd.merge(
         meta,
         preds,
