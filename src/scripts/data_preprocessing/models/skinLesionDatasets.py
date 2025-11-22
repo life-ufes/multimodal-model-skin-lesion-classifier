@@ -57,42 +57,68 @@ class SkinLesionDataset(Dataset):
 
         return image_name, image, metadata, label
 
-
     def load_transforms(self):
+        """
+        Define as transformações de imagem para treino/validação.
+
+        - Treino:
+            * Resize fixo
+            * Rotate moderado (±45°) – implementação própria do Albumentations (cv2), sem skimage.AffineTransform
+            * Flips horizontal/vertical
+            * Blur, dropout e variação de cor
+            * Normalização + ToTensorV2
+
+        - Val/Test:
+            * Apenas Resize + Normalize + ToTensorV2
+        """
         if self.is_train:
-            drop_prob = np.random.uniform(0.0, 0.05)
             return A.Compose([
-                A.Affine(scale={"x": (1.0, 2.0), "y": (1.0, 2.0)}, p=0.25),
+                # Ajuste de tamanho base
                 A.Resize(self.size[0], self.size[1]),
+
+                # Geométricas SEGURAS (sem Affine / ShiftScaleRotate)
+                A.Rotate(
+                    limit=45,
+                    border_mode=cv2.BORDER_REFLECT,
+                    p=0.5
+                ),
+
+                # Flips
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.2),
-                A.Affine(rotate=(-120, 120), mode=cv2.BORDER_REFLECT, p=0.25),
-                A.GaussianBlur(sigma_limit=(0, 3.0), p=0.25),
-                A.OneOf([
-                    A.PixelDropout(dropout_prob=drop_prob, p=1),
-                    A.CoarseDropout(
-                        num_holes_range=(int(0.00125 * self.size[0] * self.size[1]),
-                                        int(0.00125 * self.size[0] * self.size[1])),
-                        hole_height_range=(4, 4),
-                        hole_width_range=(4, 4),
-                        p=1),
-                ], p=0.1),
-                A.OneOf([
-                    A.OneOrOther(
-                        first=A.MultiplicativeNoise(multiplier=(0.9, 1.1), per_channel=False, elementwise=False, p=1),
-                        second=A.MultiplicativeNoise(multiplier=(0.9, 1.1), per_channel=True, elementwise=False, p=1),
-                        p=0.5),
-                    A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=0, p=1),
-                ], p=0.25),
+
+                # Blur
+                A.GaussianBlur(sigma_limit=(0, 2.0), p=0.25),
+
+                # Dropout leve (oclusões pequenas)
+                A.CoarseDropout(
+                    max_holes=5,
+                    max_height=8,
+                    max_width=8,
+                    p=0.15
+                ),
+
+                # Variações de cor/iluminação
+                A.HueSaturationValue(
+                    hue_shift_limit=10,
+                    sat_shift_limit=15,
+                    val_shift_limit=10,
+                    p=0.25
+                ),
+                A.RandomBrightnessContrast(p=0.25),
+
+                # Normalização + tensor
                 A.Normalize(mean=self.normalization[0], std=self.normalization[1]),
                 ToTensorV2(),
             ])
         else:
+            # Validação / teste: sem augmentations fortes
             return A.Compose([
                 A.Resize(self.size[0], self.size[1]),
                 A.Normalize(mean=self.normalization[0], std=self.normalization[1]),
-                ToTensorV2()
+                ToTensorV2(),
             ])
+
 
     def load_metadata(self):
         # Carregar o CSV
