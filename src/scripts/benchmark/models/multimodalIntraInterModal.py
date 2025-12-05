@@ -316,6 +316,24 @@ class MultimodalModel(nn.Module):
             return output
 
         # Com blocos residuais e gated
+        elif self.attention_mecanism=="only-with-att-intramodal+residual":
+            # Bloco residual
+            image_features_residual = self.image_residual(image_features, text_features, text_features)
+            text_features_residual = self.text_residual(text_features, image_features, image_features)
+            
+            # === Pooling das features finais 
+            image_features_residual = image_features_residual.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
+            text_features_residual = text_features_residual.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+
+            image_pooled = image_features_residual.mean(dim=1)  # (batch, common_dim)
+            text_pooled = text_features_residual.mean(dim=1)    # (batch, common_dim)
+            # === Fusão das features
+            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
+            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+            return output
+
+
+        # Com blocos residuais e gated
         elif self.attention_mecanism=="att-intramodal+residual":
             # === Self-Attention Intra-Modality ===
             image_features_att, _ = self.image_self_attention(

@@ -80,7 +80,34 @@ class loadModels():
                     *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
                     nn.Linear(cnn_dim_output, cnn_dim_output)  # Manter a dimensão
                 )
-       
+                
+            elif cnn_model_name == "efficientnet-b0":
+                image_encoder = models.efficientnet_b0(pretrained=True)
+                cnn_dim_output = 1280
+                # Congelar os pesos
+                for param in image_encoder.parameters():
+                    param.requires_grad = unfreeze_weights
+
+                # Ajustar a saída para manter a dimensão esperada (1280)
+                image_encoder.classifier = nn.Sequential(
+                    *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
+                    nn.Linear(cnn_dim_output, cnn_dim_output)  # Manter a dimensão
+                )
+
+            elif cnn_model_name == "efficientnet-b7":
+                image_encoder = models.efficientnet_b7(pretrained=True)
+                cnn_dim_output = 1280
+                # Congelar os pesos
+                for param in image_encoder.parameters():
+                    param.requires_grad = unfreeze_weights
+
+                # Ajustar a saída para manter a dimensão esperada (1280)
+                image_encoder.classifier = nn.Sequential(
+                    *list(image_encoder.classifier.children())[:-1],  # Remover a última camada (1000 classes)
+                    nn.Linear(cnn_dim_output, cnn_dim_output)  # Manter a dimensão
+                )
+
+
             elif cnn_model_name == "nextvit_small.bd_ssld_6m_in1k":
                 image_encoder = timm.create_model(cnn_model_name, pretrained=True)
 

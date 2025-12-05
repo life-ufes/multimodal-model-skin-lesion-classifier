@@ -134,8 +134,8 @@ def save_model_and_metrics(model,
 
     # Plotando curvas de loss
     plt.figure(figsize=(8, 6))
-    plt.plot(range(1, len(train_losses) + 1), train_losses, label="Train Loss", marker="o")
-    plt.plot(range(1, len(val_losses) + 1), val_losses, label="Validation Loss", marker="o")
+    plt.plot(range(0, len(train_losses)), train_losses, label="Train Loss", marker="o")
+    plt.plot(range(0, len(val_losses)), val_losses, label="Validation Loss", marker="o")
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
     plt.title("Training and Validation Loss")
