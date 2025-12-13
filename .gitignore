@@ -65,3 +65,7 @@ src/scripts/aggreation/results/PAD-20/att-intramodal+residual+cross-attention-me
 src/scripts/aggreation/results/PAD-20/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_4/roc_curve.png
 src/scripts/aggreation/results/PAD-20/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_5/confusion_matrix.png
 src/scripts/aggreation/results/PAD-20/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture/davit_tiny.msft_in1k_fold_5/roc_curve.png
+logs/nas_stderr.log
+src/scripts/benchmark/nas/logs/nas_stderr.log
+src/scripts/benchmark/nas/logs/nas_stdout.log
+logs/nas_stdout.log

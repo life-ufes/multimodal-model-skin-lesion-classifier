@@ -3,10 +3,12 @@ import torch.nn as nn
 import os
 import csv
 import sys
+from pydantic import ValidationError
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
+from models.pydantic_llm_response_formats import NASConfig
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, dynamicMultimodalmodel
 from models import skinLesionDatasets, skinLesionDatasetsWithBert
@@ -47,6 +49,7 @@ def train_process(config:dict, num_epochs:int,
                   model_name:str, 
                   text_model_encoder, 
                   attention_mecanism:str, 
+                  llm_model_name:str,
                   results_folder_path:str):
 
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
@@ -80,22 +83,23 @@ def train_process(config:dict, num_epochs:int,
     epoch_index = 0
 
     # usa variável global dataset_folder_name definida no main
-    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER - OPTIMIZATION TRAIN PROCESS"
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER WITH TRAIN PROCESS HISTORY AND PYDANTIC - OPTIMIZATION TRAIN PROCESS - 13/12/2025"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
         run_name=(
-            f"image_extractor_model_{model_name}_with_mecanism_"
+            f"image_extractor_model_{model_name}_with_mechanism_"
             f"{attention_mecanism}_step_{fold_num}_num_heads_{num_heads}"
         ), nested=True
     ):
         mlflow.log_param("step", fold_num)
         mlflow.log_param("batch_size", train_loader.batch_size)
         mlflow.log_param("model_name", model_name)
-        mlflow.log_param("attention_mecanism", attention_mecanism)
+        mlflow.log_param("attention_mechanism", attention_mecanism)
         mlflow.log_param("text_model_encoder", text_model_encoder)
         mlflow.log_param("criterion_type", "cross_entropy")
         mlflow.log_param("num_heads", num_heads)
+        mlflow.log_param("controller_llm_model_name", llm_model_name)
 
         # Loop de treinamento
         for epoch_index in range(num_epochs):
@@ -137,7 +141,7 @@ def train_process(config:dict, num_epochs:int,
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
             metrics["val_loss"] = float(val_loss)
-            metrics["attention_mecanism"] = str(attention_mecanism)
+            metrics["attention_mechanism"] = str(attention_mecanism)
             metrics["common_dim"]=int(common_dim)
 
             print(f"Metrics: {metrics}\n")
@@ -170,7 +174,7 @@ def train_process(config:dict, num_epochs:int,
     metrics["epoch"] = epoch_index
     metrics["train_loss"] = float(train_loss)
     metrics["val_loss"] = float(val_loss)
-    metrics["attention_mecanism"] = str(attention_mecanism)
+    metrics["attention_mechanism"] = str(attention_mecanism)
     metrics["common_dim"]=int(common_dim)
 
     print(f"Model saved at {model_save_path}")
@@ -210,53 +214,80 @@ def train_process(config:dict, num_epochs:int,
 
     return model, model_save_path, metrics
 
+def pipeline(
+    dataset,
+    num_metadata_features,
+    num_epochs,
+    batch_size,
+    device,
+    num_classes,
+    model_name,
+    num_heads,
+    common_dim,
+    k_folds,
+    text_model_encoder,
+    unfreeze_weights,
+    attention_mecanism,
+    results_folder_path,
+    SEARCH_STEPS,
+    search_space,
+    num_workers=5,
+    persistent_workers=True,
+    test_size=0.2,
+    llm_model_name_sequence_generator: str = "qwen3:0.6b"
+):
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num_classes, model_name, 
-             num_heads, common_dim, k_folds, text_model_encoder, unfreeze_weights, attention_mecanism, 
-             results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=True, 
-             test_size=0.2, llm_model_name_sequence_generator:str='qwen3:0.6b'
-            ): 
-             
+    # ============================================================
+    # Split estratificado
+    # ============================================================
     labels = [dataset.labels[i] for i in range(len(dataset))]
-    
-    # Garante que o diretório de resultados exista
     os.makedirs(results_folder_path, exist_ok=True)
-    
-    # Split simples com estratificação
+
     train_idx, val_idx = train_test_split(
         range(len(dataset)),
         test_size=test_size,
         stratify=labels,
         random_state=42
     )
-    
-    # Criar dataset de treino
+
+    # ============================================================
+    # Dataset de treino
+    # ============================================================
     train_dataset = type(dataset)(
         metadata_file=dataset.metadata_file,
         img_dir=dataset.img_dir,
-        size=(224,224),
+        size=(224, 224),
         drop_nan=dataset.is_to_drop_nan,
         bert_model_name=dataset.bert_model_name,
         image_encoder=dataset.image_encoder,
         is_train=True
     )
     train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
-    train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
+    train_dataset.features, train_dataset.labels, train_dataset.targets = (
+        train_dataset.one_hot_encoding()
+    )
 
-    # Criar dataset de validação
+    # ============================================================
+    # Dataset de validação
+    # ============================================================
     val_dataset = type(dataset)(
         metadata_file=dataset.metadata_file,
         img_dir=dataset.img_dir,
-        size=(224,224),
+        size=(224, 224),
         drop_nan=dataset.is_to_drop_nan,
         bert_model_name=dataset.bert_model_name,
         image_encoder=dataset.image_encoder,
         is_train=False
     )
     val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
-    val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
+    val_dataset.features, val_dataset.labels, val_dataset.targets = (
+        val_dataset.one_hot_encoding()
+    )
+    val_targets = val_dataset.targets
 
+    # ============================================================
     # Dataloaders
+    # ============================================================
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -264,6 +295,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
         num_workers=num_workers,
         persistent_workers=persistent_workers
     )
+
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
@@ -272,99 +304,110 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
         persistent_workers=persistent_workers
     )
 
+    # ============================================================
+    # Pesos de classe
+    # ============================================================
     train_labels = [labels[i] for i in train_idx]
     class_weights = compute_class_weights(train_labels, num_classes).to(device)
+
     print(f"Pesos das classes: {class_weights}")
-    
-    baseline = None
-    best_reward = -float('inf') # Inicializa com um valor muito baixo
+
+    # ============================================================
+    # NAS Controller
+    # ============================================================
+    history = []
+    tested_configs = set()
+    best_reward = -float("inf")
     best_config = None
     best_step = -1
-    history = []
+    baseline = None
+
     llm_model_name = llm_model_name_sequence_generator
-    
+
     with mlflow.start_run(nested=True):
-        # Loga os hiperparâmetros do "controller" (LLM)
         mlflow.log_param("controller_type", "LLM")
-        mlflow.log_param("controller_llm_model_name", str(llm_model_name))
+        mlflow.log_param("controller_llm_model_name", llm_model_name)
         mlflow.log_param("search_steps", SEARCH_STEPS)
         mlflow.log_param("search_space_json", json.dumps(search_space))
 
         for step in range(1, SEARCH_STEPS + 1):
-            reward = 0.0
+            print(f"Step: {step}")
 
-            # Monta o histórico ANTES do prompt
-            if history:
-                history_text = "\n".join([
-                    f"Step {i+1}: config={json.dumps(h['config'])}, BACC={h['reward']:.4f}"
+            history_text = (
+                "No history yet."
+                if not history
+                else "\n".join(
+                    f"Step {i+1}: BACC={h['reward']:.4f}, config={json.dumps(h['config'])}"
                     for i, h in enumerate(history)
-                ])
-            else:
-                history_text = "No history yet, start exploring."
+                )
+            )
 
-                prompt = f"""
-                    You are an AI NAS controller for skin lesion classification.
-                    Your goal is to maximize Balanced Accuracy (BACC). Higher BACC is better (1.0 is perfect, 0.5 is random for binary).
+            prompt = f"""
+                You are an AI NAS controller for skin lesion classification.
 
-                    The search space of valid hyperparameters is:
-                    {json.dumps(search_space, indent=2)}
+                Goal: maximize Balanced Accuracy (BACC).
 
-                    Here is the search history so far:
-                    {history_text}
+                Search space:
+                {json.dumps(search_space, indent=2)}
 
-                    Based on this history, propose ONE new architecture configuration that is likely to IMPROVE BACC compared to the best so far.
-                    You should:
-                    - Prefer configurations similar to high-BACC ones, but with small changes (tweak 1–3 hyperparameters at a time).
-                    - Avoid repeating exactly the same configuration as past attempts.
-                    - Always keep hyperparameter values inside the given search_space.
-                    - If the history is bad (low BACC), you may explore more diverse configurations.
+                History:
+                {history_text}
 
-                    Return ONLY ONE JSON OBJECT (not a list), with EXACTLY these keys:
-                    {{
-                    "num_blocks": <int>,
-                    "initial_filters": <int>,
-                    "kernel_size": <int>,
-                    "layers_per_block": <int>,
-                    "use_pooling": <true or false>,
-                    "common_dim": <int>,
-                    "attention_mecanism": <string>,
-                    "num_layers_text_fc": <int>,
-                    "neurons_per_layer_size_of_text_fc": <int>,
-                    "num_layers_fc_module": <int>,
-                    "neurons_per_layer_size_of_fc_module": <int>
-                    }}
-                    """
+                Based on this history, propose ONE new architecture configuration that is likely to IMPROVE BACC compared to the best so far.
+                You should:
+                - Prefer configurations similar to high-BACC ones, but with small changes (tweak 1–3 hyperparameters at a time).
+                - Avoid repeating exactly the same configuration as past attempts.
+                - Always keep hyperparameter values inside the given search_space.
+                - If the history is bad (low BACC), you may explore more diverse configurations.
+
+                Return ONLY ONE JSON OBJECT (not a list), with EXACTLY these keys:
+                {{
+                "num_blocks": <int>,
+                "initial_filters": <int>,
+                "kernel_size": <int>,
+                "layers_per_block": <int>,
+                "use_pooling": <true or false>,
+                "common_dim": <int>,
+                "attention_mechanism": <string>,
+                "num_layers_text_fc": <int>,
+                "neurons_per_layer_size_of_text_fc": <int>,
+                "num_layers_fc_module": <int>,
+                "neurons_per_layer_size_of_fc_module": <int>
+                }}
+                
+            """
+
+            # ====================================================
+            # LLM → JSON → PYDANTIC
+            # ====================================================
             try:
-                # Chama o LLM
-                response = request_to_ollama(prompt, model_name=llm_model_name)
-                config_llm = filter_generated_response(generated_sentence=response)
-                config_llm = json.loads(config_llm)
-                print(f"[Step {step}] Config filtrada (bruta): {config_llm}")
+                response = request_to_ollama(prompt, model_name=llm_model_name, thinking=True)
+                raw_json = filter_generated_response(generated_sentence=response)
+                parsed = json.loads(raw_json)
 
-                # Se vier uma lista de configs, escolhe UMA (ex.: a última)
-                if isinstance(config_llm, list):
-                    if len(config_llm) == 0:
-                        raise ValueError("LLM retornou uma lista vazia de configurações.")
-                    config_llm = config_llm[-1]  # ou [0], se preferir a primeira
-                    print(f"[Step {step}] Usando última config da lista: {config_llm}")
+                config_obj = NASConfig.model_validate(parsed)
+                config_llm = config_obj.model_dump()
 
-                if not isinstance(config_llm, dict):
-                    raise TypeError(f"Configuração retornada não é um dict: {type(config_llm)}")
+                print(f"[Step {step}] Config válida: {config_llm}\n")
 
-            except Exception as e:
-                print(f"[Step {step}] Erro no parsing do LLM: {e}")
+            except (json.JSONDecodeError, ValidationError) as e:
+                print(f"[Step {step}] Config inválida descartada:")
+                print(e)
                 continue
 
-            # Filtrar os dados obtidos
-            try:
-                attention_mecanism_cfg = config_llm["attention_mecanism"]
-                common_dim_cfg = config_llm["common_dim"]
-            except KeyError as e:
-                print(f"[Step {step}] Config inválida (faltando chave {e}): {config_llm}")
+            # Evita repetir arquitetura
+            cfg_key = json.dumps(config_llm, sort_keys=True)
+            if cfg_key in tested_configs:
                 continue
+            tested_configs.add(cfg_key)
 
+            attention_cfg = config_llm["attention_mechanism"]
+            common_dim_cfg = int(config_llm["common_dim"])
+
+            # ====================================================
+            # Instancia e treina modelo
+            # ====================================================
             try:
-                # Instancia o modelo dinâmico com a configuração amostrada pelo LLM
                 dynamic_model = dynamicMultimodalmodel.DynamicCNN(
                     config_llm,
                     num_classes=num_classes,
@@ -372,79 +415,82 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
                     common_dim=common_dim_cfg,
                     num_heads=num_heads,
                     vocab_size=num_metadata_features,
-                    attention_mecanism=attention_mecanism_cfg,
-                    n=1 if attention_mecanism_cfg == "no-metadata" else 2
+                    attention_mecanism=attention_cfg,
+                    n=1 if attention_cfg == "no-metadata" else 2
                 )
 
-                # Treina e avalia o modelo dinâmico
-                dynamic_model, model_save_path, metrics = train_process(
+                dynamic_model, _, metrics = train_process(
                     config=config_llm,
                     num_epochs=num_epochs,
                     num_heads=num_heads,
                     fold_num=step,
                     train_loader=train_loader,
                     val_loader=val_loader,
-                    targets=dataset.targets,
+                    targets=val_targets,
                     model=dynamic_model,
                     device=device,
                     weightes_per_category=class_weights,
                     common_dim=common_dim_cfg,
                     model_name=model_name,
                     text_model_encoder=text_model_encoder,
-                    attention_mecanism=attention_mecanism_cfg,
+                    attention_mecanism=attention_cfg,
+                    llm_model_name=llm_model_name,
                     results_folder_path=results_folder_path
                 )
 
-                reward = float(metrics["balanced_accuracy"])  # recompensa
-                dynamic_cnn_val_loss = float(metrics["val_loss"])
+                reward = float(metrics["balanced_accuracy"])
+                val_loss = float(metrics["val_loss"])
 
             except Exception as e:
-                print(f"[Step {step}] Erro ao treinar modelo com config {config_llm}: {e}")
-                reward = 0.0  # Penaliza modelos que falham
-                dynamic_cnn_val_loss = 1.0
+                print(f"[Step {step}] Erro ao treinar arquitetura:")
+                print(e)
                 continue
 
-            # Atualiza melhor reward e configuração
-            if reward > best_reward:
-                best_config = config_llm
-                best_reward = reward
-                best_step = step
-                print(f"🎉 Nova melhor arquitetura encontrada! Reward: {best_reward:.4f} no passo {best_step}")
+        # ================================
+        # Atualizações do controller
+        # ================================
+        if reward > best_reward:
+            best_reward = reward
+            best_config = config_llm
+            best_step = step
+            print(f"🏆 Nova melhor arquitetura! BACC={best_reward:.4f} (step {best_step})")
 
-            # Atualiza baseline estilo REINFORCE (apenas para logging)
-            baseline = reward if baseline is None else 0.5 * baseline + 0.5 * reward
+        history.append({"config": config_llm, "reward": reward})
 
-            # Atualiza histórico
-            history.append({
-                "config": config_llm,
-                "reward": reward
-            })
+        # Mantém apenas Top-K
+        history = sorted(history, key=lambda x: x["reward"], reverse=True)[:10]
 
-            # Logging no MLflow
-            mlflow.log_metric("controller_reward", reward, step=step)
-            mlflow.log_metric("controller_baseline", baseline, step=step)
-            mlflow.log_metric("dynamic-cnn-val_loss", float(dynamic_cnn_val_loss), step=step)
-            mlflow.log_param(f"config_step_{step}", json.dumps(config_llm))
+        # Logging seguro
+        mlflow.log_metric("controller_reward", reward, step=step)
+        mlflow.log_metric("dynamic_cnn_val_loss", val_loss, step=step)
+        mlflow.log_param(f"config_step_{step}", json.dumps(config_llm))
 
-            print(f"[{step}/{SEARCH_STEPS}] Reward: {reward:.4f} | Baseline: {baseline:.4f}")
 
-        print("\n--- Busca Finalizada ---")
-        print(f"Melhor Reward: {best_reward:.4f}")
-        print(f"Melhor Arquitetura: {best_config}")
-        print(f"Step da melhor arquitetura: {best_step}")
+        # ====================================================
+        # Final
+        # ====================================================
+        print("\n--- NAS FINALIZADO ---")
+        print(f"Melhor BACC: {best_reward:.4f}")
+        print(f"Step: {best_step}")
+        print(f"Arquitetura: {best_config}")
 
-        # Registra as métricas finais da busca
-        mlflow.log_metric("final_best_reward", best_reward if best_reward != -float('inf') else 0.0, step=SEARCH_STEPS)
+        mlflow.log_metric(
+            "final_best_reward",
+            best_reward if best_reward != -float("inf") else 0.0,
+            step=SEARCH_STEPS
+        )
+
         if best_config is not None:
-            mlflow.log_param("final_best_architecture_config", json.dumps(best_config))
-        mlflow.log_param("final_best_architecture_step", best_step)
+            mlflow.log_param(
+                "final_best_architecture_config",
+                json.dumps(best_config)
+            )
 
-        # Salva a melhor configuração em um arquivo JSON
         best_config_path = os.path.join(results_folder_path, "best_config.json")
         with open(best_config_path, "w") as f:
             json.dump(best_config, f, indent=2)
-        print(f"Best config salva em: {best_config_path}")
 
+        print(f"Best config salva em: {best_config_path}")
 
 def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str,
                     num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str,
@@ -542,7 +588,7 @@ if __name__ == "__main__":
         "layers_per_block": [1, 2],
         "use_pooling": [True, False],
         "common_dim": [64, 128, 256, 512],
-        "attention_mecanism": ["no-metadata", "concatenation", "crossattention", "metablock"],
+        "attention_mechanism": ["no-metadata", "concatenation", "crossattention", "metablock"],
         "num_layers_text_fc": [1, 2, 3],
         "neurons_per_layer_size_of_text_fc": [64, 128, 256, 512],
         "num_layers_fc_module": [1, 2],
