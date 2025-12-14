@@ -1,23 +1,22 @@
 import requests
-import json
 import re
+import logging
 
 def request_to_ollama(
-    prompt, model_name="qwen3:0.6b",
-    host="http://localhost:11434", thinking: bool = False):
+    prompt,
+    model_name="qwen:0.5b",
+    host="http://localhost:11434",
+    thinking: bool = False,
+    timeout: int = 120
+):
     url = f"{host}/api/generate"
     headers = {"Content-Type": "application/json"}
-
     payload = {
         "model": model_name,
         "prompt": prompt,
         "stream": False,
         "format": "json",
-        "think": thinking,
-        "options": {
-            "temperature": 0.3,
-            "top_p": 0.9
-        }
+        "think": thinking
     }
 
     try:
@@ -25,15 +24,17 @@ def request_to_ollama(
             url,
             headers=headers,
             json=payload,
-            timeout=120
+            timeout=timeout
         )
         response.raise_for_status()
         data = response.json()
         return data.get("response", "").strip()
-
+    except requests.Timeout:
+        logging.warning("Timeout ao consultar o Ollama.")
+        return None
     except Exception as e:
-        print(f"Erro ao consultar o modelo: {e}")
-        return ""
+        logging.error(f"Erro ao consultar o modelo: {e}")
+        return None
 
 def filter_generated_response(generated_sentence: str) -> str:
     """
@@ -42,7 +43,8 @@ def filter_generated_response(generated_sentence: str) -> str:
     """
 
     if not generated_sentence:
-        raise ValueError("Resposta vazia do LLM.")
+        logging.info("Resposta vazia do LLM.")
+        return None
 
     # Remove bloco <think> se existir
     if "</think>" in generated_sentence:
@@ -52,8 +54,10 @@ def filter_generated_response(generated_sentence: str) -> str:
     json_match = re.search(r"\{[\s\S]*\}", generated_sentence)
 
     if not json_match:
-        raise ValueError(
+        logging.info(
             "Nenhum objeto JSON encontrado na resposta do LLM."
         )
+        return None
+
 
     return json_match.group(0).strip()

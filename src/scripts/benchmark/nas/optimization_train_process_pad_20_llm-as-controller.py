@@ -318,6 +318,9 @@ def pipeline(
     history = []
     tested_configs = set()
     best_reward = -float("inf")
+    reward = -float("inf")
+    config_llm = {}
+    val_loss = 0.0
     best_config = None
     best_step = -1
     baseline = None
@@ -381,14 +384,19 @@ def pipeline(
             # LLM → JSON → PYDANTIC
             # ====================================================
             try:
-                response = request_to_ollama(prompt, model_name=llm_model_name, thinking=True)
-                raw_json = filter_generated_response(generated_sentence=response)
-                parsed = json.loads(raw_json)
+                response = request_to_ollama(prompt, model_name=llm_model_name, host="http://localhost:11434", thinking=True, timeout=300)
+                
+                if response is not None:
+                    raw_json = filter_generated_response(generated_sentence=response)
+                    parsed = json.loads(raw_json)
 
-                config_obj = NASConfig.model_validate(parsed)
-                config_llm = config_obj.model_dump()
+                    config_obj = NASConfig.model_validate(parsed)
+                    config_llm = config_obj.model_dump()
 
-                print(f"[Step {step}] Config válida: {config_llm}\n")
+                    print(f"[Step {step}] Config válida: {config_llm}\n")
+                else:
+                    print(f"[Step {step}] Resposta do LLM inválida! Resposta do LLM:{response}\n")
+                    continue
 
             except (json.JSONDecodeError, ValidationError) as e:
                 print(f"[Step {step}] Config inválida descartada:")
