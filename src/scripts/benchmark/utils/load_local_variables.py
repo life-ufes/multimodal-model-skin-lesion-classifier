@@ -20,5 +20,7 @@ def get_env_variables():
         "results_folder_path": os.getenv("RESULTS_FOLDER_PATH"),
         "num_workers": os.getenv("NUMBER_OF_WORKERS", 4),
         "unfreeze_weights": os.getenv("UNFREEZE_WEIGHTS", "False").lower() in ("true", "1", "yes"),
-        "llm_model_name_sequence_generator": os.getenv("LLM_MODEL_NAME_SEQUENCE_GENERATOR", None)
+        "LLM_MODEL_NAME": os.getenv("LLM_MODEL_NAME_SEQUENCE_GENERATOR", None),
+        "HISTORY_MODE": os.getenv("HISTORY_MODE", "full"),
+        "SEARCH_STEPS": os.getenv("SEARCH_STEPS", 500)
     }
