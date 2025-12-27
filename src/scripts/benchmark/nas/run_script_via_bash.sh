@@ -22,8 +22,9 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 # Sanitiza nome do modelo para nome de arquivo
 SAFE_LLM_NAME=$(echo "$LLM_MODEL_NAME_SEQUENCE_GENERATOR" | sed 's/[:\/]/_/g')
+HISTORY_MODE="last_k" # "full" # "top_k"
 
-LOG_FILE="$LOG_DIR/nas_${SAFE_LLM_NAME}_${TIMESTAMP}_history-mode-full.log"
+LOG_FILE="$LOG_DIR/nas_${SAFE_LLM_NAME}_${TIMESTAMP}_history-mode-${HISTORY_MODE}.log"
 
 echo "🧠 LLM: $LLM_MODEL_NAME_SEQUENCE_GENERATOR"
 echo "📄 Log: $LOG_FILE"

@@ -1,23 +1,32 @@
-import torch.nn as nn
 import torch
+import torch.nn as nn
 
 class MetaBlock(nn.Module):
     """
-    Implementing the Metadata Processing Block (MetaBlock)
+    Metadata Processing Block (MetaBlock)
+    Opera em vetores latentes [B, V]
     """
-    def __init__(self, V, U):
-        super(MetaBlock, self).__init__()
+    def __init__(self, V_dim, U_dim):
+        super().__init__()
+
         self.fb = nn.Sequential(
-            nn.Linear(U, V),
-            nn.LayerNorm(V)    # ✅ Corrigido
+            nn.Linear(U_dim, V_dim),
+            nn.LayerNorm(V_dim)
         )
+
         self.gb = nn.Sequential(
-            nn.Linear(U, V),
-            nn.LayerNorm(V)    # ✅ Corrigido
+            nn.Linear(U_dim, V_dim),
+            nn.LayerNorm(V_dim)
         )
 
     def forward(self, V, U):
-        t1 = self.fb(U)        # [B, V]
-        t2 = self.gb(U)        # [B, V]
-        V = torch.sigmoid(torch.tanh(V * t1.unsqueeze(-1)) + t2.unsqueeze(-1))
-        return V
+        """
+        V: features visuais   -> (B, V_dim)
+        U: features metadata  -> (B, U_dim)
+        """
+        t1 = self.fb(U)  # (B, V_dim)
+        t2 = self.gb(U)  # (B, V_dim)
+
+        # Modulação correta (element-wise)
+        out = torch.sigmoid(torch.tanh(V * t1) + t2)
+        return out

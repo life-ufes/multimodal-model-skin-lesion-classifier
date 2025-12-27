@@ -113,7 +113,7 @@ def train_process(
     )
     initial_time = time.time()
     # usa variável global dataset_folder_name definida no main
-    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER WITH TRAIN PROCESS HISTORY AND PYDANTIC - OPTIMIZATION TRAIN PROCESS - 19/12/2025"
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER WITH {str(HISTORY_MODE).upper()} TRAIN PROCESS HISTORY AND PYDANTIC - OPTIMIZATION TRAIN PROCESS - 19/12/2025"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -130,6 +130,9 @@ def train_process(
         mlflow.log_param("criterion_type", "cross_entropy")
         mlflow.log_param("num_heads", num_heads)
         mlflow.log_param("controller_llm_model_name", llm_model_name)
+        mlflow.log_param("history_mode", HISTORY_MODE)
+        mlflow.log_param("search_steps", SEARCH_STEPS)
+        mlflow.log_param("search_space", json.dumps(search_space))
 
         for epoch in range(num_epochs):
             model.train()
@@ -235,6 +238,10 @@ def train_process(
         targets=targets, 
         data_val="val"
     )
+    mlflow.log_param("search_space", json.dumps(search_space))
+    mlflow.log_metric("controller_reward", val_bacc, step=fold_num)
+    mlflow.log_metric("dynamic_cnn_val_loss", val_loss, step=fold_num)
+    mlflow.log_param(f"config_step_{fold_num}", json.dumps(config))
 
     # Salvar as métricas
     metrics_file = os.path.join(results_folder_path, "all_model_metrics.csv")
@@ -251,42 +258,33 @@ def train_process(
 
     return model, model_save_path, metrics
 
-
 # ============================================================
 # NAS Pipeline
 # ============================================================
 def pipeline(
-    dataset=None,
-    num_metadata_features:int=None,
-    num_epochs:int=None,
-    batch_size:int=None,
-    device:str=None,
-    num_classes:int=None,
-    model_name:str=None,
-    num_heads:int=None,
-    common_dim:int=None,
-    k_folds:int=None,
-    text_model_encoder:str=None,
-    unfreeze_weights=None,
-    attention_mechanism:str=None,
-    results_folder_path:str=None,
-    SEARCH_STEPS:int=100,
-    search_space=None,
-    num_workers:int=5,
-    persistent_workers:bool=True,
-    test_size:float=0.2,
-    llm_model_name: str = "qwen3:0.6b", 
-    history_mode:str="full",
-    history_k:int=10,
-    **kwargs
+    dataset,
+    num_metadata_features,
+    num_epochs,
+    batch_size,
+    device,
+    num_classes,
+    model_name,
+    num_heads,
+    text_model_encoder,
+    attention_mechanism,
+    results_folder_path,
+    SEARCH_STEPS,
+    search_space,
+    llm_model_name,
+    history_mode="full",
+    history_k=10,
+    num_workers=5,
+    persistent_workers=True,
+    test_size=0.2
 ):
 
-    # ============================================================
-    # Split estratificado
-    # ============================================================
+    # ================= DATA SPLIT =================
     labels = [dataset.labels[i] for i in range(len(dataset))]
-    os.makedirs(results_folder_path, exist_ok=True)
-
     train_idx, val_idx = train_test_split(
         range(len(dataset)),
         test_size=test_size,
@@ -294,9 +292,6 @@ def pipeline(
         random_state=42
     )
 
-    # ============================================================
-    # Dataset de treino
-    # ============================================================
     train_dataset = type(dataset)(
         metadata_file=dataset.metadata_file,
         img_dir=dataset.img_dir,
@@ -307,13 +302,8 @@ def pipeline(
         is_train=True
     )
     train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
-    train_dataset.features, train_dataset.labels, train_dataset.targets = (
-        train_dataset.one_hot_encoding()
-    )
+    train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
 
-    # ============================================================
-    # Dataset de validação
-    # ============================================================
     val_dataset = type(dataset)(
         metadata_file=dataset.metadata_file,
         img_dir=dataset.img_dir,
@@ -324,14 +314,8 @@ def pipeline(
         is_train=False
     )
     val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
-    val_dataset.features, val_dataset.labels, val_dataset.targets = (
-        val_dataset.one_hot_encoding()
-    )
-    val_targets = val_dataset.targets
+    val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
 
-    # ============================================================
-    # Dataloaders
-    # ============================================================
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -348,17 +332,11 @@ def pipeline(
         persistent_workers=persistent_workers
     )
 
-    # ============================================================
-    # Pesos de classe
-    # ============================================================
-    train_labels = [labels[i] for i in train_idx]
-    class_weights = compute_class_weights(train_labels, num_classes).to(device)
+    class_weights = compute_class_weights(
+        [labels[i] for i in train_idx], num_classes
+    ).to(device)
 
-    print(f"Pesos das classes: {class_weights}")
-
-    # ============================================================
-    # NAS Controller
-    # ============================================================
+    # ================= NAS STATE =================
     history = []
     tested_configs = set()
     best_reward = -float("inf")
@@ -367,16 +345,15 @@ def pipeline(
     val_loss = 0.0
     best_config = None
     best_step = -1
-    baseline = None
 
-    with mlflow.start_run():
-        mlflow.log_param("HISTORY_MODE", history_mode)
-        mlflow.log_param("llm_model", llm_model_name)
-        mlflow.log_param("controller_type", "LLM")
-        mlflow.log_param("controller_llm_model_name", llm_model_name)
-        mlflow.log_param("search_steps", SEARCH_STEPS)
-        mlflow.log_param("search_space_json", json.dumps(search_space))
+    experiment_name = (
+        f"NAS-{dataset_folder_name}-LLM-{llm_model_name}-"
+        f"HISTORY-{history_mode.upper()}"
+    )
+    mlflow.set_experiment(experiment_name)
 
+    # ================= RUN PAI =================
+    with mlflow.start_run(run_name="NAS_CONTROLLER"):
         for step in range(1, SEARCH_STEPS + 1):
             print(f"\n[STEP {step}]")
             history_text = build_history(history, history_mode=history_mode, k=history_k)
@@ -448,13 +425,9 @@ def pipeline(
 
             cfg_key = json.dumps(config_llm, sort_keys=True)
             if cfg_key in tested_configs:
-                print(f"[Step {step}] Config repetida. Pulando...")
+                print("Config repetida, pulando.")
                 continue
             tested_configs.add(cfg_key)
-
-            attention_cfg = config_llm["attention_mechanism"]
-            common_dim_cfg = int(config_llm["common_dim"])
-
             # ====================================================
             # Instancia e treina modelo
             # ====================================================
@@ -463,11 +436,11 @@ def pipeline(
                     config_llm,
                     num_classes=num_classes,
                     device=device,
-                    common_dim=common_dim_cfg,
+                    common_dim=config_llm["common_dim"],
                     num_heads=num_heads,
                     vocab_size=num_metadata_features,
-                    attention_mecanism=attention_cfg,
-                    n=1 if attention_cfg == "no-metadata" else 2
+                    attention_mecanism=config_llm["attention_mechanism"],
+                    n=1 if attention_mechanism == "no-metadata" else 2
                 )
 
                 dynamic_model, _, metrics = train_process(
@@ -477,14 +450,14 @@ def pipeline(
                     fold_num=step,
                     train_loader=train_loader,
                     val_loader=val_loader,
-                    targets=val_targets,
+                    targets=val_dataset.targets,
                     model=dynamic_model,
                     device=device,
                     class_weights=class_weights,
-                    common_dim=common_dim_cfg,
+                    common_dim=config_llm["common_dim"],
                     model_name=model_name,
                     text_model_encoder=text_model_encoder,
-                    attention_mechanism=attention_cfg,
+                    attention_mechanism=config_llm["attention_mechanism"],
                     llm_model_name=llm_model_name,
                     results_folder_path=results_folder_path
                 )
@@ -504,11 +477,6 @@ def pipeline(
                 print(f"🏆 New best BACC = {best_reward:.4f}")
             
             history.append({"config": config_llm, "reward": reward})
-            # Logging seguro
-            mlflow.log_metric("controller_reward", reward, step=step)
-            mlflow.log_metric("dynamic_cnn_val_loss", val_loss, step=step)
-            mlflow.log_param(f"config_step_{step}", json.dumps(config_llm))
-
         print("\nNAS FINISHED")
         print(f"Best BACC: {best_reward:.4f}")
         # ====================================================
@@ -519,23 +487,23 @@ def pipeline(
         print(f"Step: {best_step}")
         print(f"Arquitetura: {best_config}")
 
-        mlflow.log_metric(
-            "final_best_reward",
-            best_reward if best_reward != -float("inf") else 0.0,
-            step=SEARCH_STEPS
-        )
+        # mlflow.log_metric(
+        #     "final_best_reward",
+        #     best_reward if best_reward != -float("inf") else 0.0,
+        #     step=SEARCH_STEPS
+        # )
 
-        if best_config is not None:
-            mlflow.log_param(
-                "final_best_architecture_config",
-                json.dumps(best_config)
-            )
+        # if best_config is not None:
+        #     mlflow.log_param(
+        #         "final_best_architecture_config",
+        #         json.dumps(best_config)
+        #     )
 
-        best_config_path = os.path.join(results_folder_path, "best_config.json")
-        with open(best_config_path, "w") as f:
+        best_cfg_path = os.path.join(results_folder_path, "best_config.json")
+        with open(best_cfg_path, "w") as f:
             json.dump(best_config, f, indent=2)
 
-        print(f"Best config salva em: {best_config_path}")
+        print(f"Best config salva em: {best_cfg_path}")
 
 if __name__ == "__main__":
     # Carrega os dados localmente
@@ -556,7 +524,7 @@ if __name__ == "__main__":
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder'  # "tab-transformer" # 'bert-base-uncased' # 'gpt2'
-    
+    num_workers=int(local_variables["num_workers"])
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["custom-attention-mechanism"]
     # Testar com todos os modelos
@@ -596,6 +564,7 @@ if __name__ == "__main__":
         text_model_encoder="one-hot-encoder",
         attention_mechanism=list_of_attention_mecanism[0],
         results_folder_path=results_folder_path,
+        num_workers=num_workers,
         SEARCH_STEPS=int(SEARCH_STEPS),
         search_space=search_space,
         history_mode=HISTORY_MODE, 
