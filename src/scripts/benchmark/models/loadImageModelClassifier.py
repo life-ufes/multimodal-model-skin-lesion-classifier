@@ -96,7 +96,7 @@ class loadModels():
 
             elif cnn_model_name == "efficientnet-b7":
                 image_encoder = models.efficientnet_b7(pretrained=True)
-                cnn_dim_output = 1280
+                cnn_dim_output = 2560
                 # Congelar os pesos
                 for param in image_encoder.parameters():
                     param.requires_grad = unfreeze_weights

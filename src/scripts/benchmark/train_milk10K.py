@@ -167,12 +167,12 @@ def train_process(
     # Your EarlyStopping (kept as in your project)
     from utils.early_stopping import EarlyStopping
     early_stopping = EarlyStopping(
-        patience=20,
-        delta=0.005,  # less aggressive for bacc oscillation
+        patience=10,
+        delta=0.005,
         verbose=True,
         path=str(best_dir) + "/",
         save_to_disk=True,
-        early_stopping_metric_name="val_bacc"
+        early_stopping_metric_name="val_loss"
     )
 
     # ----------------------------
@@ -239,9 +239,9 @@ def train_process(
             val_losses.append(float(val_loss))
 
             # ------------------------
-            # Metrics (your evaluator)
+            # Metrics
             # ------------------------
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
                 model=model,
                 dataloader=val_loader,
                 device=device,
@@ -285,7 +285,7 @@ def train_process(
     model.eval()
 
     with torch.no_grad():
-        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+        metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
             model=model,
             dataloader=val_loader,
             device=device,
@@ -308,6 +308,7 @@ def train_process(
         fold_num=fold_num,
         all_labels=all_labels,
         all_predictions=all_predictions,
+        all_probabilities=all_probs,
         targets=targets,
         data_val="val",
         train_losses=train_losses,
@@ -491,13 +492,12 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     text_model_encoder = "one-hot-encoder"
-    type_of_problem="binaryclass"
+    type_of_problem="multiclass" # "binaryclass"
     image_type = "dermoscopic"  # or "clinical: close-up"
     
     attention_mecanism = "att-intramodal+residual+cross-attention-metadados"
 
-    # choose ONE backbone per run (you can loop outside if you want)
-    list_of_models = ["davit_tiny.msft_in1k"]
+    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"]  # ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
 
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{image_type}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
 

@@ -4,7 +4,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from gatedResidualBlock import GatedAlteredResidualBlock
+from gatedResidualBlock import GatedAlteredResidualBlock, StackedGatedResidualBlock
 from loadImageModelClassifier import loadModels
 from metablock import MetaBlock
 from metanet import MetaNet

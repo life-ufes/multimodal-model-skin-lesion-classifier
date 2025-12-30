@@ -134,7 +134,8 @@ def train_process(num_epochs,
             current_lr = [pg['lr'] for pg in optimizer.param_groups]
             print(f"Current Learning Rate(s): {current_lr}\n")
 
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+
                 model=model,
                 dataloader=val_loader,
                 device=device,
@@ -171,7 +172,8 @@ def train_process(num_epochs,
 
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
-        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+        metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+
             model=model,
             dataloader=val_loader,
             device=device,
@@ -186,15 +188,16 @@ def train_process(num_epochs,
     metrics["data_val"] = "val"
 
     save_model_and_metrics(
-        model=model, 
-        metrics=metrics, 
-        model_name=model_name, 
+        model=model,
+        metrics=metrics,
+        model_name=model_name,
         base_dir=model_save_path,
-        save_to_disk=False, 
-        fold_num=fold_num, 
-        all_labels=all_labels, 
-        all_predictions=all_predictions, 
-        targets=targets, 
+        save_to_disk=True,
+        fold_num=fold_num,
+        all_labels=all_labels,
+        all_predictions=all_predictions,
+        all_probabilities=all_probs,
+        targets=targets,
         data_val="val",
         train_losses=train_losses,
         val_losses=val_losses
@@ -474,7 +477,7 @@ if __name__ == "__main__":
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual+cross-attention-metadados"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]  # ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path,

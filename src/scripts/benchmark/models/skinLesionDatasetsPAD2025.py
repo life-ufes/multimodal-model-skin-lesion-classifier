@@ -73,7 +73,7 @@ class SkinLesionDataset(Dataset):
         if self.is_train:
             drop_prob = np.random.uniform(0.0, 0.05)
             return A.Compose([
-                A.Affine(scale={"x": (1.0, 2.0), "y": (1.0, 2.0)}, p=0.25),
+                A.Affine(scale={"x": (1.0, 1.25), "y": (1.0, 1.25)}, p=0.25),
                 A.Resize(self.size[0], self.size[1]),
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.2),

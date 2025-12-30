@@ -112,6 +112,8 @@ def train_process(
         early_stopping_metric_name="val_loss"
     )
     initial_time = time.time()
+    train_losses, val_losses = [], []
+
     # usa variável global dataset_folder_name definida no main
     experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER WITH {str(HISTORY_MODE).upper()} TRAIN PROCESS HISTORY AND PYDANTIC - OPTIMIZATION TRAIN PROCESS - 19/12/2025"
     mlflow.set_experiment(experiment_name)
@@ -147,6 +149,7 @@ def train_process(
                 running_loss += loss.item()
             
             train_loss = running_loss / len(train_loader)
+            train_losses.append(float(train_loss))
             print(f"\nTraining: Epoch {epoch}, Loss: {train_loss:.4f}")
 
             model.eval()
@@ -159,6 +162,7 @@ def train_process(
                     val_loss += loss.item()
 
             val_loss = val_loss / len(val_loader)
+            val_losses.append(float(val_loss))
             print(f"Validation Loss: {val_loss:.4f}")
 
             # scheduler.step(val_loss)
@@ -204,7 +208,7 @@ def train_process(
     model.eval()
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
-        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+        metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
             model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
     
@@ -227,16 +231,19 @@ def train_process(
     os.makedirs(folder_path, exist_ok=True)
 
     save_model_and_metrics(
-        model=model, 
-        metrics=metrics, 
-        model_name=model_name, 
-        base_dir=folder_path,
-        save_to_disk=False, 
-        fold_num=fold_num, 
-        all_labels=all_labels, 
-        all_predictions=all_predictions, 
-        targets=targets, 
-        data_val="val"
+        model=model,
+        metrics=metrics,
+        model_name=model_name,
+        base_dir=model_save_path,
+        save_to_disk=True,
+        fold_num=fold_num,
+        all_labels=all_labels,
+        all_predictions=all_predictions,
+        all_probabilities=all_probs,
+        targets=targets,
+        data_val="val",
+        train_losses=train_losses,
+        val_losses=val_losses
     )
     mlflow.log_param("search_space", json.dumps(search_space))
     mlflow.log_metric("controller_reward", val_bacc, step=fold_num)

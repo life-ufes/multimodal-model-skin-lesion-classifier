@@ -20,14 +20,14 @@ if __name__ == "__main__":
     all_results = []
 
     list_of_attention_mecanism = ["no-metadata", "concatenation", "metablock", "crossattention", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "only-with-att-intramodal+residual"]
-    dataset_name = "PAD-UFES-20" # "ISIC-2019" # "PAD-UFES-20"
+    dataset_name = "MILK10K" # "PAD-UFES-20" # "ISIC-2019" # "PAD-UFES-20"
     num_heads = 8
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/{dataset_name}/multiclass/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/stratifiedkfold/2/all-weights-unfroozen/for_test/PAD-UFES-20/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimensiond_of_projected_features/PAD-UFES-20/unfrozen_weights/8"
     # Path to your CSV file
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/RG-ATT-512-EXPERIMENTS-07112025/{dataset_name}/unfrozen_weights/{num_heads}"
-    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/NAS/benchmark_nas_llm-as-controller_trainning-optimized-model-architectures/{dataset_name}/unfrozen_weights/{num_heads}"
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/MILK10k/dermoscopic/unfrozen_weights/{num_heads}"
     ## base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/different_features_with_dimension_size/PAD-UFES-20/unfrozen_weights/8"
     
@@ -65,7 +65,7 @@ if __name__ == "__main__":
                     
                     # Adiciona o mecanismo de atenção e o nome do modelo para identificar os dados posteriormente
                     result_df['attention_mecanism'] = attention_mecanism
-                    # result_df['model_name'] = model_name
+                    result_df['model_name'] = model_name
                     # result_df['common_size'] = common_size
 
                     

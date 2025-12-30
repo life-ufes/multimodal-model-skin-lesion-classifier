@@ -72,6 +72,7 @@ def train_process(num_epochs,
 
     initial_time = time.time()
     epoch_index = 0
+    train_losses, val_losses = [],[]
 
     experiment_name = f"EXPERIMENTOS-{dataset_folder_name}"
     mlflow.set_experiment(experiment_name)
@@ -106,6 +107,7 @@ def train_process(num_epochs,
                 running_loss += loss.item()
             
             train_loss = running_loss / len(train_loader)
+            train_losses.append(float(train_loss))
             print(f"\nTraining: Epoch {epoch_index}, Loss: {train_loss:.4f}")
 
             model.eval()
@@ -119,13 +121,14 @@ def train_process(num_epochs,
                     val_loss += loss.item()
 
             val_loss = val_loss / len(val_loader)
+            val_losses.append(float(val_loss))
             print(f"Validation Loss: {val_loss:.4f}")
 
             scheduler.step(val_loss)
             current_lr = [pg['lr'] for pg in optimizer.param_groups]
             print(f"Current Learning Rate(s): {current_lr}\n")
 
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
                 model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
             )
             metrics["epoch"] = epoch_index
@@ -151,7 +154,8 @@ def train_process(num_epochs,
     model.eval()
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
-        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+        metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+
             model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
 
@@ -160,16 +164,19 @@ def train_process(num_epochs,
     metrics["data_val"] = "val"
 
     save_model_and_metrics(
-        model=model, 
-        metrics=metrics, 
-        model_name=model_name, 
+        model=model,
+        metrics=metrics,
+        model_name=model_name,
         base_dir=model_save_path,
-        save_to_disk=True, 
-        fold_num=fold_num, 
-        all_labels=all_labels, 
-        all_predictions=all_predictions, 
-        targets=targets, 
-        data_val="val"
+        save_to_disk=True,
+        fold_num=fold_num,
+        all_labels=all_labels,
+        all_predictions=all_predictions,
+        all_probabilities=all_probs,
+        targets=targets,
+        data_val="val",
+        train_losses=train_losses,
+        val_losses=val_losses
     )
     print(f"Model saved at {model_save_path}")
 

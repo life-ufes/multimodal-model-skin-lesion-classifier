@@ -135,7 +135,8 @@ def train_process(num_epochs,
             # -----------------------------
             # Evaluate Metrics
             # -----------------------------
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+
                 model, val_loader, device, fold_num, model_name=model_name
             )
             metrics["epoch"] = epoch_index

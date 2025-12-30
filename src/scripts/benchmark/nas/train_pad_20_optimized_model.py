@@ -129,7 +129,8 @@ def train_process(num_epochs,
             current_lr = [pg['lr'] for pg in optimizer.param_groups]
             print(f"Current Learning Rate(s): {current_lr}\n")
 
-            metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+            metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+
                 model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
             )
             metrics["epoch"] = epoch_index
@@ -159,7 +160,8 @@ def train_process(num_epochs,
     model.eval()
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
-        metrics, all_labels, all_predictions = model_metrics.evaluate_model(
+        metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+
             model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
         )
 
@@ -168,15 +170,16 @@ def train_process(num_epochs,
     metrics["data_val"] = "val"
 
     save_model_and_metrics(
-        model=model, 
-        metrics=metrics, 
-        model_name=model_name, 
+        model=model,
+        metrics=metrics,
+        model_name=model_name,
         base_dir=model_save_path,
-        save_to_disk=False, 
-        fold_num=fold_num, 
-        all_labels=all_labels, 
-        all_predictions=all_predictions, 
-        targets=targets, 
+        save_to_disk=True,
+        fold_num=fold_num,
+        all_labels=all_labels,
+        all_predictions=all_predictions,
+        all_probabilities=all_probs,
+        targets=targets,
         data_val="val",
         train_losses=train_losses,
         val_losses=val_losses
