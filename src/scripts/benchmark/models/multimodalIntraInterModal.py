@@ -3,45 +3,55 @@ import torch.nn as nn
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# from residualBlock import ResidualBlock
-# from residualBlockADeepBasedMultimodal import ResidualBlock
-from gatedResidualBlock import GatedAlteredResidualBlock, StackedGatedResidualBlock
+
+from gatedResidualBlock import GatedAlteredResidualBlock
 from loadImageModelClassifier import loadModels
 from metablock import MetaBlock
 from metanet import MetaNet
 
 class MultimodalModel(nn.Module):
-    def __init__(self, num_classes, num_heads, device, cnn_model_name, text_model_name, batch_size=32, common_dim=512, vocab_size=85, unfreeze_weights=False, attention_mecanism="combined", n=2):
-        super(MultimodalModel, self).__init__()
-        # Dimensões do modelo
-        self.common_dim = common_dim
-        self.text_encoder_dim_output = 512
-        self.cnn_dim_output = 512
-        self.batch_size = batch_size
+    def __init__(
+        self,
+        num_classes,
+        num_heads,
+        device,
+        cnn_model_name,
+        text_model_name,
+        batch_size=32,
+        common_dim=512,
+        text_encoder_dim_output=512,
+        vocab_size=91,
+        unfreeze_weights=False,
+        attention_mecanism="concatenation",
+        n=2
+    ):
+        super().__init__()
+
         self.device = device
-        self.cnn_model_name = cnn_model_name
-        self.text_model_name = text_model_name
+        self.common_dim = common_dim
+        self.num_heads = num_heads
         self.attention_mecanism = attention_mecanism
-        self.num_heads = num_heads  # para MultiheadAttention
-        self.n = n 
+        self.n = n
         self.num_classes = num_classes
-        self.unfreeze_weights_of_visual_feat_extractor = unfreeze_weights
-        # -------------------------
-        # 1) Image Encoder
-        # -------------------------
+        self.text_model_name = text_model_name
+
+        # =====================================================
+        # Image Encoder
+        # =====================================================
         self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
-            self.cnn_model_name,
-            self.common_dim,
-            unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor
+            cnn_model_name,
+            common_dim,
+            unfreeze_weights=unfreeze_weights
         )
 
-        # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
-        # -------------------------
-        # 2) Text Encoder
-        # -------------------------
-        if self.text_model_name == "one-hot-encoder":
-            # Metadados / one-hot -> FC
+
+        # =====================================================
+        # Text Encoder
+        # =====================================================
+        self.text_encoder_dim_output = text_encoder_dim_output
+
+        if text_model_name == "one-hot-encoder":
             self.text_fc = nn.Sequential(
                 nn.Linear(vocab_size, 256),
                 nn.ReLU(),
@@ -49,70 +59,71 @@ class MultimodalModel(nn.Module):
                 nn.ReLU(),
                 nn.Linear(512, self.text_encoder_dim_output)
             )
-
+            self.text_encoder = None
         else:
-            # Carrega BERT, Bart, etc., congelado
-            self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
-                text_model_encoder = text_model_name, unfreeze_weights = self.unfreeze_weights_of_visual_feat_extractor
+            self.text_encoder, self.text_encoder_dim_output, _ = loadModels.loadTextModelEncoder(
+                text_model_encoder=text_model_name,
+                unfreeze_weights=unfreeze_weights
             )
-            # Projeta 768 (ou 1024) -> 512
-            self.text_fc = nn.Sequential(
-                nn.Linear(vocab_size, self.text_encoder_dim_output),
-                nn.ReLU(),
-                nn.Dropout(0.3)
-            )
+            self.text_fc = None
 
-        # Projeção final p/ espaço comum
         self.text_projector = nn.Linear(self.text_encoder_dim_output, self.common_dim)
-        # -------------------------
-        # 3) Atenções Intra e Inter
-        # -------------------------
 
+        # =====================================================
+        # Attention blocks
+        # =====================================================
         self.image_self_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
+            embed_dim=self.common_dim,
             num_heads=self.num_heads,
             batch_first=False
         )
 
         self.text_self_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
+            embed_dim=self.common_dim,
             num_heads=self.num_heads,
             batch_first=False
         )
+
         self.image_cross_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
+            embed_dim=self.common_dim,
             num_heads=self.num_heads,
             batch_first=False
         )
 
         self.text_cross_attention = nn.MultiheadAttention(
-            embed_dim=self.common_dim, 
+            embed_dim=self.common_dim,
             num_heads=self.num_heads,
             batch_first=False
         )
-        # -------------------------
-        # 4) Gating Mechanisms
-        # -------------------------
+
+        # =====================================================
+        # Gating
+        # =====================================================
         self.img_gate = nn.Linear(self.common_dim, self.common_dim)
         self.txt_gate = nn.Linear(self.common_dim, self.common_dim)
-        # -------------------------
-        # 5) Camada de Fusão Final
-        # -------------------------
-        self.fc_fusion = self.fc_mlp_module(n=1 if self.attention_mecanism in ["no-metadata", "att-intramodal+residual+cross-attention-metadados+metablock", "metabock-se"] else self.n)
-        # 6) Residual Blocks
+
+        # =====================================================
+        # MetaBlock (vetorial)
+        # =====================================================
+        # Bloco do Metablock, caso queira usar 
+        self.meta_block = MetaBlock(
+            V_dim=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock"] else self.cnn_dim_output,
+            U_dim=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock", "metablock-se"] else self.text_encoder_dim_output 
+        )
+        # Residual Blocks
         # -------------------------
         self.image_residual = GatedAlteredResidualBlock(dim=self.common_dim)
         self.text_residual = GatedAlteredResidualBlock(dim=self.common_dim)
 
-        self.fc_no_mlp_to_visual_cls = nn.Sequential(
-            nn.Linear(self.cnn_dim_output, self.num_classes)
+        # =====================================================
+        # Fusion MLP
+        # =====================================================
+        self.fc_fusion = self.fc_mlp_module(
+            n=1 if attention_mecanism == "no-metadata" else self.n
         )
 
-        # Bloco do Metablock, caso queira usar
-        self.meta_block = MetaBlock(V=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock"] else self.cnn_dim_output,
-            U=self.common_dim if self.attention_mecanism in ["att-intramodal+residual+cross-attention-metadados+metablock", "metablock-se"] else self.text_encoder_dim_output
-        )
-        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # Usado no Metablock
+        self.fc_visual_only = nn.Linear(self.cnn_dim_output, self.num_classes)
 
         self.fc_mlp_module_after_metablock_fusion_module = self.fc_mlp_module_after_metablock()
 
@@ -121,11 +132,11 @@ class MultimodalModel(nn.Module):
             nn.Linear(self.common_dim * n, self.common_dim),
             nn.LayerNorm(self.common_dim),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.5),
             nn.Linear(self.common_dim, self.common_dim // 2),
             nn.LayerNorm(self.common_dim // 2),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.5),
             nn.Linear(self.common_dim // 2, self.num_classes)
         )
         return fc_fusion
@@ -145,359 +156,190 @@ class MultimodalModel(nn.Module):
         return fc_fusion
 
     def forward(self, image, text_metadata):
-        """
-        image: tensor de imagens (batch, C, H, W) se CNN 
-        ou lista PIL se ViTFeatureExtractor
-        text_metadata: dicionário c/ 'input_ids', 'attention_mask' (BERT/Bart)
-        ou tensor se "one-hot-encoder".
-        """
+        # =====================================================
+        # Image encoding → (B, D)
+        # =====================================================
         image = image.to(self.device)
-        # === [A] Image Feature Extraction ===
-        # CNN -> (batch, cnn_dim_output)
-        image_features = self.image_encoder(image) #.to(self.device)
-        # Dá forma (batch, 1, cnn_dim_output)
-        image_features_before = image_features.unsqueeze(1)
+        img_feat = self.image_encoder(image)
 
-        # Projeção p/ espaço comum
-        b_i, s_i, d_i = image_features_before.shape
-        image_features_before = image_features_before.view(b_i*s_i, d_i)
-        projected_image_features = self.image_projector(image_features_before)
-        image_features = projected_image_features.view(b_i, s_i, -1)
-        # -> (seq_len_img, batch, common_dim)
-        image_features = image_features.permute(1, 0, 2)
+        if img_feat.dim() == 4:
+            img_feat = img_feat.mean(dim=(-2, -1))
 
-        # === [B] Extrator de Texto ===
-        if self.text_model_name in ["one-hot-encoder", "tab-transformer"]:
-            text_features = self.text_fc(text_metadata)  # (batch, 512)
-            text_features = text_features.unsqueeze(1) # Adiciona uma dimensão às features
+        proj_img_feat = self.image_projector(img_feat)
 
-            # Projeção para espaço comum
-            b_tt, s_tt, d_tt = text_features.shape
-            before_project_text_features = text_features.view(b_tt*s_tt, d_tt)
-            projected_text_features = self.text_projector(before_project_text_features)
-            text_features = projected_text_features.view(b_tt, s_tt, -1)
-            text_features = text_features.permute(1, 0, 2)
-
-        elif (self.text_model_name in ["gpt2", "bert-base-uncased"]):
-            # Ajustar o formato de input_ids e attention_mask
-            input_ids = text_metadata['input_ids'].squeeze(1)
-            attention_mask = text_metadata['attention_mask'].squeeze(1)
-
-            # Extração de características textuais
-            if "gpt2" in self.text_model_name.lower():
-                text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
-                # A saída do GPT-2
-                text_features = text_outputs.last_hidden_state[:, -1, :]  # Último token da sequência
-                # Alternativamente, se você quiser usar a média de todos os tokens:
-                # text_features = text_outputs.last_hidden_state.mean(dim=1)
-            else:
-                text_outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
-                text_features = text_outputs.last_hidden_state[:, 0, :]  # Usar token [CLS] para BERT
-
-            # Movendo para o dispositivo correto
-            text_features = text_features.to(self.device)
-            text_features = text_features.unsqueeze(1)
-            before_project_text_features = text_features.permute(1, 0, 2)
-            # Projeção para espaço comum
-            projected_text_features = self.text_projector(before_project_text_features)
-            text_features = projected_text_features
-        elif (self.text_model_name in ['pubmedbert-base-embeddings-100K','pubmedbert-base-embeddings-500K',
-            'pubmedbert-base-embeddings-1M','pubmedbert-base-embeddings-2M']):
-            # metadata is precomputed embedding tensor
-            # Move and ensure float32
-            text_features = text_metadata.to(self.device).float()
-            text_features = text_features.unsqueeze(1)
-            before_project_text_features = text_features.permute(1, 0, 2)
-            projected_text_features = self.text_projector(before_project_text_features)
-            # Projeção para espaço comum
-            text_features = projected_text_features
-
+        # =====================================================
+        # Text encoding → (B, D)
+        # =====================================================
+        if self.text_model_name == "one-hot-encoder":
+            txt_feat = self.text_fc(text_metadata.to(self.device))
         else:
-            raise ValueError("Encoder de texto não implementado!\n")
-        
-        # === [C] Self-Attention Intra-Modality ===
-        image_features_att, _ = self.image_self_attention(
-            image_features, image_features, image_features
-        )
-        text_features_att, _ = self.text_self_attention(
-            text_features, text_features, text_features
-        )
+            input_ids = text_metadata["input_ids"].squeeze(1).to(self.device)
+            attention_mask = text_metadata["attention_mask"].squeeze(1).to(self.device)
+            outputs = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
+            txt_feat = outputs.last_hidden_state[:, 0, :]
 
-        # === [D] Cross-Attention Inter-Modality ===
-        # "Imagem assiste ao texto"
-        image_cross_att, _ = self.image_cross_attention(
-            query=image_features_att,
-            key=text_features_att,
-            value=text_features_att
-        )
-        # "Texto assiste à imagem"
-        text_cross_att, _ = self.text_cross_attention(
-            query=text_features_att,
-            key=image_features_att,
-            value=image_features_att
-        )
+        proj_txt_feat = self.text_projector(txt_feat)
 
-        # === [E] Pooling das atenções finais 
-        image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-        text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+        # =====================================================
+        # Attention (seq_len = 1)
+        # =====================================================
+        img_seq = proj_img_feat.unsqueeze(0)
+        txt_seq = proj_txt_feat.unsqueeze(0)
 
-        image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
-        text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
+        img_att, _ = self.image_self_attention(img_seq, img_seq, img_seq)
+        txt_att, _ = self.text_self_attention(txt_seq, txt_seq, txt_seq)
 
-        if self.attention_mecanism=="no-metadata":
-            combined_features = projected_image_features
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
+        img_cross, _ = self.image_cross_attention(img_att, txt_att, txt_att)
+        txt_cross, _ = self.text_cross_attention(txt_att, img_att, img_att)
 
-            return output
-        elif self.attention_mecanism=="no-metadata-without-mlp":
-            output = self.fc_no_mlp_to_visual_cls(image_features_before)
-            return output
-            
-        elif self.attention_mecanism == "metablock":
-            # Certifique-se de que ambas entradas têm a forma [B, D]
-            if image_features_before.dim() == 2:
-                # Adiciona uma dimensão extra para compatibilizar com operação de atenção: [B, C] → [B, C, 1]
-                image_features_before = image_features_before.unsqueeze(-1)  # [B, C, 1]
+        img_pooled = img_cross.squeeze(0)
+        txt_pooled = txt_cross.squeeze(0)
 
-            meta_block_features = self.meta_block(image_features_before, before_project_text_features)  # [B, C, 1]
-            pooled_features = meta_block_features.squeeze(-1)  # remove última dimensão → [B, C]
-            # Passa pelas camadas MLP após o MetaBlock
-            return self.fc_no_mlp_to_visual_cls(pooled_features)
+        # =====================================================
+        # Fusion strategies
+        # =====================================================
+        if self.attention_mecanism == "no-metadata":
+            return self.fc_fusion(img_feat)
 
-        
-        elif self.attention_mecanism == "weighted":
-            # # === [F] Gating: quanto usar de 'peso' para cada modal
-            projected_image_features = projected_image_features.squeeze(0)
-            projected_text_features = projected_text_features.squeeze(0)
-            alpha_img = torch.sigmoid(self.img_gate(projected_image_features))  # (batch, common_dim)
-            alpha_txt = torch.sigmoid(self.txt_gate(projected_text_features))   # (batch, common_dim)
+        elif self.attention_mecanism == "no-metadata-without-mlp":
+            return self.fc_visual_only(img_feat)
 
-            # Multiplicamos as features pela máscara gerada
-            image_pooled_gated = alpha_img * projected_image_features
-            text_pooled_gated = alpha_txt * projected_text_features
-            combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
-        
         elif self.attention_mecanism == "concatenation":
-            # # Apenas concatena as features projetadas
-            combined_features = torch.cat((projected_image_features.squeeze(0), projected_text_features.squeeze(0)), dim=-1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
-        
-        elif self.attention_mecanism == "gfcam":
-            # # === [F] Gating: quanto usar de cada modal?
-            #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
-            alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
-            alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
-            # Multiplicamos as features pela máscara gerada
-            image_pooled_gated = alpha_img * image_pooled
-            text_pooled_gated = alpha_txt * text_pooled
-            # === [G] Fusão e classificação
-            combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
-        
+            fused = torch.cat([img_feat, txt_feat], dim=1)
+            return self.fc_fusion(fused)
+
         elif self.attention_mecanism == "crossattention":
-            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
+            fused = torch.cat([img_pooled, txt_pooled], dim=1)
+            return self.fc_fusion(fused)
+
+        elif self.attention_mecanism == "weighted":
+            alpha_img = torch.sigmoid(self.img_gate(img_feat))
+            alpha_txt = torch.sigmoid(self.txt_gate(txt_feat))
+            fused = torch.cat([alpha_img * img_feat, alpha_txt * txt_feat], dim=1)
+            return self.fc_fusion(fused)
+
+        elif self.attention_mecanism == "gfcam":
+            alpha_img = torch.sigmoid(self.img_gate(img_pooled))
+            alpha_txt = torch.sigmoid(self.txt_gate(txt_pooled))
+            fused = torch.cat([alpha_img * img_pooled, alpha_txt * txt_pooled], dim=1)
+            return self.fc_fusion(fused)
 
         elif self.attention_mecanism == "cross-weights-after-crossattention":
-            #  Após o uso de cross-attention, as features são multiplicadas por cada fator individual de cada modalidade
-            alpha_img = torch.sigmoid(self.img_gate(image_pooled))  # (batch, common_dim)
-            alpha_txt = torch.sigmoid(self.txt_gate(text_pooled))   # (batch, common_dim)
-            # Multiplicamos as features pela máscara gerada
-            image_pooled_gated = alpha_txt * image_pooled
-            text_pooled_gated = alpha_img * text_pooled
-            # === [G] Fusão e classificação
-            combined_features = torch.cat([image_pooled_gated, text_pooled_gated], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
-
-        # Com blocos residuais e gated
-        elif self.attention_mecanism=="only-with-att-intramodal+residual":
-            # Bloco residual
-            image_features_residual = self.image_residual(image_features, text_features, text_features)
-            text_features_residual = self.text_residual(text_features, image_features, image_features)
-            
-            # === Pooling das features finais 
-            image_features_residual = image_features_residual.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-            text_features_residual = text_features_residual.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
-
-            image_pooled = image_features_residual.mean(dim=1)  # (batch, common_dim)
-            text_pooled = text_features_residual.mean(dim=1)    # (batch, common_dim)
-            # === Fusão das features
-            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
-
-
-        # Com blocos residuais e gated
-        elif self.attention_mecanism=="att-intramodal+residual":
-            # === Self-Attention Intra-Modality ===
-            image_features_att, _ = self.image_self_attention(
-                image_features, image_features, image_features
-            )
-
-            text_features_att, _ = self.text_self_attention(
-                text_features, text_features, text_features
-            )
-            # Bloco residual
-            image_features_residual_before_cross_attention = self.image_residual(image_features, image_features_att, image_features_att)
-            text_features_residual_before_cross_attention = self.text_residual(text_features, text_features_att, text_features_att)
-            
-            # === Pooling das features finais 
-            image_features_residual_before_cross_attention = image_features_residual_before_cross_attention.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-            text_features_residual_before_cross_attention = text_features_residual_before_cross_attention.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
-
-            image_pooled = image_features_residual_before_cross_attention.mean(dim=1)  # (batch, common_dim)
-            text_pooled = text_features_residual_before_cross_attention.mean(dim=1)    # (batch, common_dim)
-            # === Fusão das features
-            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
+            alpha_img = torch.sigmoid(self.img_gate(img_pooled))
+            alpha_txt = torch.sigmoid(self.txt_gate(txt_pooled))
+            fused = torch.cat([alpha_txt * img_pooled, alpha_img * txt_pooled], dim=1)
+            return self.fc_fusion(fused)
         
-        elif self.attention_mecanism=="att-intramodal+residual+cross-attention-metadados":
-            # === Self-Attention Intra-Modality ===
-            image_features_att, _ = self.image_self_attention(
-                image_features, image_features, image_features
+        elif self.attention_mecanism == "metablock":
+            meta_features = self.meta_block(
+                img_feat,      
+                txt_feat
             )
-
-            text_features_att, _ = self.text_self_attention(
-                text_features, text_features, text_features
-            )
-            # Bloco residual
-            image_features_residual_before_cross_attention = self.image_residual(image_features, image_features_att, image_features_att)
-            text_features_residual_before_cross_attention = self.text_residual(text_features, text_features_att, text_features_att)
-
-            # === Cross-Attention Inter-Modality ===
-            image_cross_att, _ = self.image_cross_attention(
-                query=image_features_residual_before_cross_attention,
-                key=text_features_residual_before_cross_attention,
-                value=text_features_residual_before_cross_attention
-            )
-            # "Texto assiste à imagem"
-            text_cross_att, _ = self.text_cross_attention(
-                query=text_features_residual_before_cross_attention,
-                key=image_features_residual_before_cross_attention,
-                value=image_features_residual_before_cross_attention
-            )
-            # === Pooling das features finais 
-            image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-            text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
-
-            image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
-            text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
-            # === Fusão das features
-            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
+            return self.fc_mlp_module_after_metablock_fusion_module(meta_features)
         
-        elif self.attention_mecanism=="att-intramodal+residual+cross-attention-metadados+metablock":
-            # === Self-Attention Intra-Modality ===
-            image_features_att, _ = self.image_self_attention(
-                image_features, image_features, image_features
-            )
+        # =====================================================
+        # Residual-based multimodal fusion
+        # =====================================================
 
-            text_features_att, _ = self.text_self_attention(
-                text_features, text_features, text_features
-            )
-            # Bloco residual
-            image_features_residual_before_cross_attention = self.image_residual(image_features, image_features_att, image_features_att)
-            text_features_residual_before_cross_attention = self.text_residual(text_features, text_features_att, text_features_att)
+                # =====================================================
+        # Residual-based multimodal fusion (corrigidos)
+        # =====================================================
 
-            # === Cross-Attention Inter-Modality ===
-            image_cross_att, _ = self.image_cross_attention(
-                query=image_features_residual_before_cross_attention,
-                key=text_features_residual_before_cross_attention,
-                value=text_features_residual_before_cross_attention
-            )
-            # "Texto assiste à imagem"
-            text_cross_att, _ = self.text_cross_attention(
-                query=text_features_residual_before_cross_attention,
-                key=image_features_residual_before_cross_attention,
-                value=image_features_residual_before_cross_attention
-            )
-            # === Pooling das features finais 
-            image_cross_att = image_cross_att.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-            text_cross_att = text_cross_att.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+        elif self.attention_mecanism == "only-with-att-intramodal+residual":
+            # Residual direto (sem self-att explícito)
+            # No nosso forward atual, a forma padrão é (seq_len=1, B, D) => img_seq/txt_seq
+            img_res = self.image_residual(img_seq, txt_seq, txt_seq)  # (1, B, D)
+            txt_res = self.text_residual(txt_seq, img_seq, img_seq)   # (1, B, D)
 
-            image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
-            text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
-            # === Fusão das features
-            meta_block_features = self.meta_block(image_pooled, text_pooled)  # [B, num_channels, H', W']
-            # Pooling global e classificação
-            pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
-            pooled_metablock_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
-            output = self.fc_fusion(pooled_metablock_features)  # (batch, num_classes)
-            return output
-        
-        elif self.attention_mecanism=="att-intramodal+residual+cross-attention-metadados+att-intramodal+residual":
-            # === Self-Attention Intra-Modality ===
-            image_features_att, _ = self.image_self_attention(
-                image_features, image_features, image_features
-            )
+            img_res = img_res.squeeze(0)  # (B, D)
+            txt_res = txt_res.squeeze(0)  # (B, D)
 
-            text_features_att, _ = self.text_self_attention(
-                text_features, text_features, text_features
-            )
-            # Bloco residual
-            image_features_residual_before_cross_attention = self.image_residual(image_features, image_features_att, image_features_att)
-            text_features_residual_before_cross_attention = self.text_residual(text_features, text_features_att, text_features_att)
+            fused = torch.cat([img_res, txt_res], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
 
-            # === Cross-Attention Inter-Modality ===
-            image_cross_att, _ = self.image_cross_attention(
-                query=image_features_residual_before_cross_attention,
-                key=text_features_residual_before_cross_attention,
-                value=text_features_residual_before_cross_attention
-            )
-            # "Texto assiste à imagem"
-            text_cross_att, _ = self.text_cross_attention(
-                query=image_features_residual_before_cross_attention,
-                key=image_features_residual_before_cross_attention,
-                value=text_features_residual_before_cross_attention
-            )
+        elif self.attention_mecanism == "att-intramodal+residual":
+            # Self-att já calculado acima: img_att, txt_att
+            # Residual usa (base, att, att)
+            img_res = self.image_residual(img_seq, img_att, img_att)  # (1, B, D)
+            txt_res = self.text_residual(txt_seq, txt_att, txt_att)   # (1, B, D)
 
-            # === Self-Attention Intra-Modality after cross-attention ===
-            image_features_att_after_cross_att, _ = self.image_self_attention(
-                image_cross_att, image_cross_att, image_cross_att
-            )
+            img_res = img_res.squeeze(0)  # (B, D)
+            txt_res = txt_res.squeeze(0)  # (B, D)
 
-            text_features_att_after_cross_att, _ = self.text_self_attention(
-                text_cross_att, text_cross_att, text_cross_att
-            )
-            # Bloco residual
-            image_features_residual_after_cross_attention = self.image_residual(image_features, image_features_att_after_cross_att, image_features_att_after_cross_att)
-            text_features_residual_after_cross_attention = self.text_residual(text_features, text_features_att_after_cross_att, text_features_att_after_cross_att)
-            
-            # === Pooling das features finais 
-            image_features_residual_after_cross_attention = image_features_residual_after_cross_attention.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-            text_features_residual_after_cross_attention = text_features_residual_after_cross_attention.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+            fused = torch.cat([img_res, txt_res], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
 
-            image_pooled = image_features_residual_after_cross_attention.mean(dim=1)  # (batch, common_dim)
-            text_pooled = text_features_residual_after_cross_attention.mean(dim=1)    # (batch, common_dim)
-            # === Fusão das features
-            combined_features = torch.cat([image_pooled, text_pooled], dim=1)
-            output = self.fc_fusion(combined_features)  # (batch, num_classes)
-            return output
+        elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados":
+            # Self-att já calculado: img_att, txt_att
+            # Residual antes do cross
+            img_res = self.image_residual(img_seq, img_att, img_att)  # (1, B, D)
+            txt_res = self.text_residual(txt_seq, txt_att, txt_att)   # (1, B, D)
 
-        elif self.attention_mecanism=="metablock-se":
-           # === Pooling das features finais 
-            image_features = image_features.permute(1, 0, 2)  # (batch, seq_len_img, common_dim)
-            text_features = text_features.permute(1, 0, 2)    # (batch, seq_len_text, common_dim)
+            # Cross-attention entre os residuais
+            img_cross2, _ = self.image_cross_attention(
+                query=img_res, key=txt_res, value=txt_res
+            )  # (1, B, D)
 
-            image_pooled = image_cross_att.mean(dim=1)  # (batch, common_dim)
-            text_pooled = text_cross_att.mean(dim=1)    # (batch, common_dim)
+            txt_cross2, _ = self.text_cross_attention(
+                query=txt_res, key=img_res, value=img_res
+            )  # (1, B, D)
 
-            # === Fusão das features
-            meta_block_features = self.meta_block(image_pooled, text_pooled)  # [B, num_channels, H', W']
-            # Pooling global e classificação
-            pooled_features = self.avg_pool(meta_block_features)  # [B, num_channels, 1, 1]
-            pooled_metablock_features = pooled_features.view(pooled_features.size(0), -1)  # [B, num_channels]
-            output = self.fc_no_mlp_to_visual_cls(pooled_metablock_features)  # (batch, num_classes)
-            return output
-        
+            img_pooled2 = img_cross2.squeeze(0)  # (B, D)
+            txt_pooled2 = txt_cross2.squeeze(0)  # (B, D)
+
+            fused = torch.cat([img_pooled2, txt_pooled2], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
+
+        elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados+metablock":
+            # Self-att já calculado: img_att, txt_att
+            # Residual antes do cross
+            img_res = self.image_residual(img_seq, img_att, img_att)  # (1, B, D)
+            txt_res = self.text_residual(txt_seq, txt_att, txt_att)   # (1, B, D)
+
+            # Cross-attention
+            img_cross2, _ = self.image_cross_attention(
+                query=img_res, key=txt_res, value=txt_res
+            )  # (1, B, D)
+
+            txt_cross2, _ = self.text_cross_attention(
+                query=txt_res, key=img_res, value=img_res
+            )  # (1, B, D)
+
+            img_pooled2 = img_cross2.squeeze(0)  # (B, D)
+            txt_pooled2 = txt_cross2.squeeze(0)  # (B, D)
+
+            # MetaBlock vetorial (B, D) + (B, D) -> (B, D)
+            fused_meta = self.meta_block(img_pooled2, txt_pooled2)  # (B, D)
+
+            # Classificador no espaço comum
+            return self.fc_visual_only(fused_meta)
+
+        elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual":
+            # Self-att inicial: img_att, txt_att
+            # Residual antes do cross
+            img_res1 = self.image_residual(img_seq, img_att, img_att)  # (1, B, D)
+            txt_res1 = self.text_residual(txt_seq, txt_att, txt_att)   # (1, B, D)
+
+            # Cross-attention
+            img_cross2, _ = self.image_cross_attention(
+                query=img_res1, key=txt_res1, value=txt_res1
+            )  # (1, B, D)
+
+            txt_cross2, _ = self.text_cross_attention(
+                query=txt_res1, key=img_res1, value=img_res1
+            )  # (1, B, D)
+
+            # Self-att depois do cross
+            img_att2, _ = self.image_self_attention(img_cross2, img_cross2, img_cross2)
+            txt_att2, _ = self.text_self_attention(txt_cross2, txt_cross2, txt_cross2)
+
+            # Residual final (base = cross2)
+            img_res2 = self.image_residual(img_cross2, img_att2, img_att2).squeeze(0)  # (B, D)
+            txt_res2 = self.text_residual(txt_cross2, txt_att2, txt_att2).squeeze(0)   # (B, D)
+
+            fused = torch.cat([img_res2, txt_res2], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
         else:
-            raise ValueError(f"Attention mechanism '{self.attention_mecanism}' not implemented!")
-            return None
+            raise ValueError(
+                f"Attention mechanism '{self.attention_mecanism}' not implemented."
+            )

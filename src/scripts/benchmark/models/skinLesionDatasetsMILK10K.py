@@ -84,11 +84,11 @@ class SkinLesionDataset(Dataset):
         if self.is_train:
             drop_prob = float(np.random.uniform(0.0, 0.05))
             return A.Compose([
-                A.Affine(scale={"x": (1.0, 2.0), "y": (1.0, 2.0)}, p=0.25),
+                A.Affine(scale={"x": (1.0, 1.25), "y": (1.0, 1.25)}, p=0.25),
                 A.Resize(self.size[0], self.size[1]),
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.2),
-                A.Affine(rotate=(-120, 120), mode=cv2.BORDER_REFLECT, p=0.25),
+                A.Affine(rotate=(-45, 45), mode=cv2.BORDER_REFLECT, p=0.25),
                 A.GaussianBlur(sigma_limit=(0, 3.0), p=0.25),
                 A.OneOf([
                     A.PixelDropout(dropout_prob=drop_prob, p=1),
@@ -125,7 +125,6 @@ class SkinLesionDataset(Dataset):
         metadata = pd.read_csv(self.metadata_file, dtype=str)
         metadata = metadata.fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").replace("NÃO  ENCONTRADO", "EMPTY")
         
-        # 💡 [CORREÇÃO AQUI] FILTRAGEM MOVIDA
         # Filtrar pelo tipo de imagem ANTES do merge
         metadata = metadata[metadata['image_type'] == self.image_type].reset_index(drop=True)
 
@@ -192,7 +191,7 @@ class SkinLesionDataset(Dataset):
                 ohe = pickle.load(f)
             categorical_data = ohe.transform(self.metadata[categorical_cols])
         else:
-            ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
+            ohe = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
             categorical_data = ohe.fit_transform(self.metadata[categorical_cols])
             with open(ohe_path, 'wb') as f:
                 pickle.dump(ohe, f)
@@ -211,7 +210,9 @@ class SkinLesionDataset(Dataset):
 
         processed_data = np.hstack((categorical_data, numerical_data)).astype(np.float32)
 
-        # ⚠️ Colunas de diagnóstico = todas do ground truth
+        # ============================================================
+        # Colunas de diagnóstico (ground truth)
+        # ============================================================
         diagnosis_cols = [c for c in self.metadata.columns if c not in (
             ['lesion_id', 'isic_id', 'image_type'] + categorical_cols + numerical_cols
         )]
@@ -219,11 +220,54 @@ class SkinLesionDataset(Dataset):
         if len(diagnosis_cols) == 0:
             raise KeyError("Nenhuma coluna de diagnóstico encontrada no ground truth!")
 
-        # Labels (argmax no one-hot)
+        # Ground truth one-hot original
         y_onehot = self.metadata[diagnosis_cols].astype(float).values
-        encoded_labels = np.argmax(y_onehot, axis=1)
 
-        # Lista de classes
-        targets = diagnosis_cols
 
-        return processed_data, encoded_labels.astype(np.int64), targets
+        # ============================================================
+        # 🔁 CONTROLE PELO type_of_problem
+        # ============================================================
+        if self.type_of_problem == "multiclass":
+            # ----------------------------
+            # MULTICLASS (11 classes)
+            # ----------------------------
+            encoded_labels = np.argmax(y_onehot, axis=1).astype(np.int64)
+            targets = diagnosis_cols
+
+        elif self.type_of_problem == "binaryclass":
+            # ----------------------------
+            # BINÁRIO (BENIGN vs MALIGNANT)
+            # ----------------------------
+            malignant_classes = {
+                "MEL", "BCC", "SCCKA", "AKIEC", "MAL_OTH"
+            }
+
+            benign_classes = {
+                "NV", "BKL", "DF", "VASC", "BEN_OTH", "INF"
+            }
+
+            # Sanity check (reviewer-safe)
+            unknown = set(diagnosis_cols) - malignant_classes - benign_classes
+            if len(unknown) > 0:
+                raise ValueError(f"Classes não mapeadas para binário: {unknown}")
+
+            malignant_idx = [
+                diagnosis_cols.index(c)
+                for c in diagnosis_cols
+                if c in malignant_classes
+            ]
+
+            # Se qualquer classe maligna == 1 → MALIGNANT (1)
+            encoded_labels = (y_onehot[:, malignant_idx].sum(axis=1) > 0).astype(np.int64)
+
+            # Ordem importa!
+            targets = ["BENIGN", "MALIGNANT"]
+
+        else:
+            raise ValueError(
+                f"type_of_problem inválido: {self.type_of_problem}. "
+                f"Use 'multiclass' ou 'binaryclass'."
+            )
+
+
+        return processed_data, encoded_labels, targets

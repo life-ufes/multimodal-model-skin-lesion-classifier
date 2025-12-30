@@ -1,331 +1,523 @@
-import torch
-import torch.nn as nn
-from utils import model_metrics, save_predictions
-from utils.early_stopping import EarlyStopping
-import models.focalLoss as focalLoss
-from models import multimodalIntraInterModal
-from models import skinLesionDatasetsMILK10K
-from utils import load_local_variables
-from utils.save_model_and_metrics import save_model_and_metrics
-from collections import Counter
-from sklearn.model_selection import StratifiedKFold
+#!/usr/bin/env python3
+# ============================================================
+# MILK10K - Multimodal training script (paper-safe CV)
+# Fixes:
+#  - Correct StratifiedKFold application (Subset)
+#  - Train/Val datasets with different transforms (is_train True/False)
+#  - Safe class weights (always num_classes length)
+#  - Choose ONE imbalance strategy (recommended defaults below)
+#  - Scheduler aligned with balanced_accuracy
+#  - EarlyStopping aligned and less aggressive
+# ============================================================
+
+import os
+import time
 import numpy as np
 from collections import Counter
-import time
-import os
-from torch.utils.data import DataLoader, Subset
-# Importações do MLflow
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from sklearn.model_selection import StratifiedKFold
+
 import mlflow
 from tqdm import tqdm
 
+# ------------------------------------------------------------
+# Your project imports
+# ------------------------------------------------------------
+from utils import model_metrics, save_predictions
+from utils.save_model_and_metrics import save_model_and_metrics
+from utils import load_local_variables
+from models import multimodalIntraInterModal
+from models import skinLesionDatasetsMILK10K
 
-def compute_class_weights(labels):
-    class_counts = Counter(labels)
-    total_samples = len(labels)
-    class_weights = {cls: total_samples / (len(class_counts) * count) for cls, count in class_counts.items()}
-    return torch.tensor([class_weights[cls] for cls in sorted(class_counts.keys())], dtype=torch.float)
+
+# ============================================================
+# CONFIG: choose ONE imbalance strategy (recommended)
+# ============================================================
+
+# Strategy A (recommended first): sampler + CrossEntropy (no class weights)
+USE_WEIGHTED_SAMPLER = True
+USE_CLASS_WEIGHTS_IN_LOSS = False
+USE_FOCAL_LOSS = False
+
+# Strategy B: FocalLoss (alpha capped) + no sampler
+# USE_WEIGHTED_SAMPLER = False
+# USE_CLASS_WEIGHTS_IN_LOSS = False
+# USE_FOCAL_LOSS = True
+
+FOCAL_GAMMA = 1.5
+ALPHA_SQRT = True          # alpha := sqrt(weights)
+ALPHA_CLAMP_MIN = 0.25
+ALPHA_CLAMP_MAX = 5.0      # keep it sane
 
 
-def train_process(num_epochs, 
-                  num_heads, 
-                  fold_num, 
-                  train_loader, 
-                  val_loader, 
-                  targets, 
-                  model, 
-                  device, 
-                  weightes_per_category, 
-                  common_dim, 
-                  model_name, 
-                  text_model_encoder, 
-                  attention_mecanism, 
-                  results_folder_path):
+# ============================================================
+# Utilities
+# ============================================================
 
-    criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
+def compute_class_weights(labels: np.ndarray, num_classes: int) -> torch.Tensor:
+    """
+    Always returns a vector of length num_classes.
+    Handles folds where some classes may be absent.
+    """
+    counts = np.bincount(labels, minlength=num_classes).astype(np.float64)
+    total = counts.sum()
+    weights = total / (num_classes * np.maximum(counts, 1.0))
+    return torch.tensor(weights, dtype=torch.float32)
+
+
+class FocalLoss(nn.Module):
+    """
+    Multiclass Focal Loss on logits.
+    alpha: Tensor[num_classes] or None
+    gamma: float
+    """
+    def __init__(self, alpha=None, gamma=2.0, reduction="mean"):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, logits, targets):
+        # logits: [B, C], targets: [B]
+        ce = nn.functional.cross_entropy(logits, targets, reduction="none")
+        pt = torch.exp(-ce)  # pt = softmax prob of true class
+
+        loss = (1 - pt) ** self.gamma * ce
+        if self.alpha is not None:
+            at = self.alpha[targets]
+            loss = at * loss
+
+        if self.reduction == "mean":
+            return loss.mean()
+        if self.reduction == "sum":
+            return loss.sum()
+        return loss
+
+
+# ============================================================
+# Training
+# ============================================================
+
+def train_process(
+    num_epochs,
+    num_heads,
+    fold_num,
+    train_loader,
+    val_loader,
+    targets,
+    model,
+    device,
+    class_weights,          # Tensor[num_classes]
+    common_dim,
+    model_name,
+    text_model_encoder,
+    attention_mecanism,
+    results_folder_path
+):
+    # ----------------------------
+    # Loss
+    # ----------------------------
+    if USE_FOCAL_LOSS:
+        alpha = class_weights.clone().to(device)
+        if ALPHA_SQRT:
+            alpha = torch.sqrt(alpha)
+        alpha = torch.clamp(alpha, ALPHA_CLAMP_MIN, ALPHA_CLAMP_MAX)
+        criterion = FocalLoss(alpha=alpha, gamma=FOCAL_GAMMA, reduction="mean")
+        criterion_name = f"focal(alpha={'sqrt' if ALPHA_SQRT else 'raw'} clamp[{ALPHA_CLAMP_MIN},{ALPHA_CLAMP_MAX}], gamma={FOCAL_GAMMA})"
+    else:
+        if USE_CLASS_WEIGHTS_IN_LOSS:
+            w = torch.clamp(class_weights.to(device), 0.25, 10.0)
+            criterion = nn.CrossEntropyLoss(weight=w)
+            criterion_name = "cross_entropy(weighted_clamped)"
+        else:
+            criterion = nn.CrossEntropyLoss()
+            criterion_name = "cross_entropy"
+
+    # ----------------------------
+    # Optimizer + Scheduler
+    # ----------------------------
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
 
-    # ReduceLROnPlateau
+    # Scheduler aligned with Balanced Accuracy
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        mode='min',
-        factor=0.1,
-        patience=2,
+        mode="max",
+        factor=0.5,
+        patience=3,
         verbose=True
     )
+
     model.to(device)
 
-    # Save the final (or best) model
+    # ----------------------------
+    # Save paths
+    # ----------------------------
     model_save_path = os.path.join(
-        results_folder_path, 
+        results_folder_path,
         f"model_{model_name}_with_{text_model_encoder}_{common_dim}_with_best_architecture"
     )
-
     os.makedirs(model_save_path, exist_ok=True)
-    print(model_save_path)
 
-    # Instantiate EarlyStopping
+    best_dir = os.path.join(model_save_path, f"{model_name}_fold_{fold_num}", "best-model")
+    os.makedirs(best_dir, exist_ok=True)
+
+    # Your EarlyStopping (kept as in your project)
+    from utils.early_stopping import EarlyStopping
     early_stopping = EarlyStopping(
-        patience=5, 
-        delta=0.01, 
+        patience=20,
+        delta=0.005,  # less aggressive for bacc oscillation
         verbose=True,
-        path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
+        path=str(best_dir) + "/",
         save_to_disk=True,
-        early_stopping_metric_name="val_loss"
+        early_stopping_metric_name="val_bacc"
     )
 
-    initial_time = time.time()
-    epoch_index = 0  # Track the epoch
-
-    # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-MILK10K - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK"
+    # ----------------------------
+    # MLflow
+    # ----------------------------
+    experiment_name = "EXPERIMENTOS-MILK10K - MULTIMODAL (Sampler/Focal) - 2025-12-19"
     mlflow.set_experiment(experiment_name)
 
+    train_losses, val_losses = [], []
+    initial_time = time.time()
+
     with mlflow.start_run(
-        run_name=(
-            f"image_extractor_model_{model_name}_with_mecanism_"
-            f"{attention_mecanism}_fold_{fold_num}_num_heads_{num_heads}"
-        )
+        run_name=f"{model_name}_{attention_mecanism}_fold_{fold_num}_heads_{num_heads}"
     ):
-        # Log MLflow parameters
         mlflow.log_param("fold_num", fold_num)
         mlflow.log_param("batch_size", train_loader.batch_size)
         mlflow.log_param("model_name", model_name)
         mlflow.log_param("attention_mecanism", attention_mecanism)
         mlflow.log_param("text_model_encoder", text_model_encoder)
-        mlflow.log_param("criterion_type", "cross_entropy")
+        mlflow.log_param("criterion_type", criterion_name)
+        mlflow.log_param("use_weighted_sampler", USE_WEIGHTED_SAMPLER)
+        mlflow.log_param("use_focal_loss", USE_FOCAL_LOSS)
         mlflow.log_param("num_heads", num_heads)
 
-        # -----------------------------
-        # Training Loop
-        # -----------------------------
-        for epoch_index in range(num_epochs):
+        for epoch in range(num_epochs):
+            # ------------------------
+            # Train
+            # ------------------------
             model.train()
             running_loss = 0.0
 
-            # Adicionando barra de progresso para o loop de batches
-            for batch_index, (_, image, metadata, label) in enumerate(
-                    tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
-                image, metadata, label = (
-                    image.to(device),
-                    metadata.to(device),
-                    label.to(device)
-                )
+            for _, image, metadata, label in tqdm(train_loader, desc=f"Fold {fold_num} Epoch {epoch+1}/{num_epochs}", leave=False):
+                image = image.to(device, non_blocking=True)
+                metadata = metadata.to(device, non_blocking=True)
+                label = label.to(device, non_blocking=True)
 
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 outputs = model(image, metadata)
                 loss = criterion(outputs, label)
                 loss.backward()
                 optimizer.step()
 
                 running_loss += loss.item()
-            
-            train_loss = running_loss / len(train_loader)
-            print(f"\nTraining: Epoch {epoch_index}, Loss: {train_loss:.4f}")
 
-            # -----------------------------
-            # Validation Loop
-            # -----------------------------
+            train_loss = running_loss / max(len(train_loader), 1)
+            train_losses.append(float(train_loss))
+
+            # ------------------------
+            # Validate
+            # ------------------------
             model.eval()
-            val_loss = 0.0
+            val_running_loss = 0.0
             with torch.no_grad():
-                for (_, image, metadata, label) in val_loader:
-                    image, metadata, label = (
-                        image.to(device),
-                        metadata.to(device),
-                        label.to(device)
-                    )
+                for _, image, metadata, label in val_loader:
+                    image = image.to(device, non_blocking=True)
+                    metadata = metadata.to(device, non_blocking=True)
+                    label = label.to(device, non_blocking=True)
+
                     outputs = model(image, metadata)
                     loss = criterion(outputs, label)
-                    val_loss += loss.item()
+                    val_running_loss += loss.item()
 
-            val_loss = val_loss / len(val_loader)
-            print(f"Validation Loss: {val_loss:.4f}")
+            val_loss = val_running_loss / max(len(val_loader), 1)
+            val_losses.append(float(val_loss))
 
-            # Step the scheduler with validation loss
-            scheduler.step(val_loss)
-            current_lr = [pg['lr'] for pg in optimizer.param_groups]
-            print(f"Current Learning Rate(s): {current_lr}\n")
-
-            # -----------------------------
-            # Evaluate Metrics
-            # -----------------------------
+            # ------------------------
+            # Metrics (your evaluator)
+            # ------------------------
             metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
+                model=model,
+                dataloader=val_loader,
+                device=device,
+                fold_num=fold_num,
+                targets=targets,
+                base_dir=model_save_path,
+                model_name=model_name
             )
-            metrics["epoch"] = epoch_index
+
+            metrics["epoch"] = int(epoch)
             metrics["train_loss"] = float(train_loss)
             metrics["val_loss"] = float(val_loss)
+
+            bacc = float(metrics.get("balanced_accuracy", 0.0))
+            scheduler.step(bacc)
+
+            current_lr = [pg["lr"] for pg in optimizer.param_groups]
+
+            print(
+                f"\n[Fold {fold_num}] Epoch {epoch+1}/{num_epochs} | "
+                f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} bacc={bacc:.4f} lr={current_lr}"
+            )
             print(f"Metrics: {metrics}")
 
-            # Log metrics to MLflow
-            for metric_name, metric_value in metrics.items():
-                if isinstance(metric_value, (int, float)):
-                    mlflow.log_metric(metric_name, metric_value, step=epoch_index + 1)
+            # MLflow log
+            for k, v in metrics.items():
+                if isinstance(v, (int, float, np.floating)):
+                    mlflow.log_metric(k, float(v), step=epoch + 1)
                 else:
-                    mlflow.log_param(metric_name, metric_value)
+                    mlflow.log_param(k, str(v))
 
-            # -----------------------------
-            # Early Stopping
-            # -----------------------------
-            early_stopping(val_loss=val_loss, val_bacc=float(metrics["balanced_accuracy"]), model=model)
-
-            # Check if we should stop early
+            # Early stopping on bacc (aligned with scheduler objective)
+            early_stopping(val_loss=val_loss, val_bacc=bacc, model=model)
             if early_stopping.early_stop:
                 print("Early stopping triggered!")
                 break
 
-    # End of training
+    # Load best weights and final eval
     train_process_time = time.time() - initial_time
-    
-    # Carrega o melhor modelo encontrado
     model = early_stopping.load_best_weights(model)
     model.eval()
-    # Inferência para validação com o melhor modelo
+
     with torch.no_grad():
         metrics, all_labels, all_predictions = model_metrics.evaluate_model(
-            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
+            model=model,
+            dataloader=val_loader,
+            device=device,
+            fold_num=fold_num,
+            targets=targets,
+            base_dir=model_save_path,
+            model_name=model_name
         )
 
     metrics["train process time"] = str(train_process_time)
-    metrics["epochs"] = str(int(epoch_index))
+    metrics["epochs"] = str(int(epoch))
     metrics["data_val"] = "val"
 
     save_model_and_metrics(
-        model=model, 
-        metrics=metrics, 
-        model_name=model_name, 
+        model=model,
+        metrics=metrics,
+        model_name=model_name,
         base_dir=model_save_path,
-        save_to_disk=True, 
-        fold_num=fold_num, 
-        all_labels=all_labels, 
-        all_predictions=all_predictions, 
-        targets=targets, 
-        data_val="val"
+        save_to_disk=True,
+        fold_num=fold_num,
+        all_labels=all_labels,
+        all_predictions=all_predictions,
+        targets=targets,
+        data_val="val",
+        train_losses=train_losses,
+        val_losses=val_losses
     )
-    print(f"Model saved at {model_save_path}")
 
+    print(f"Model saved at {model_save_path}")
     return model, model_save_path
 
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
-    # Obter os rótulos para validação estratificada (se necessário)
-    labels = [dataset.labels[i] for i in range(len(dataset))]
-    targets = dataset.targets
-    # Configurar o StratifiedKFold
-    stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+# ============================================================
+# Pipeline (paper-safe)
+# ============================================================
 
-    for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
-        print(f"Fold {fold+1}/{k_folds}")
+def pipeline(
+    dataset_folder_path,
+    image_type,
+    num_epochs,
+    batch_size,
+    device,
+    k_folds,
+    common_dim,
+    text_model_encoder,
+    unfreeze_weights,
+    attention_mecanism,
+    model_name,
+    num_heads,
+    results_folder_path,
+    num_workers=10,
+    persistent_workers=True,
+    type_of_problem:str = "multiclass"
+):
+    # Create two datasets: train has aug, val doesn't.
+    # IMPORTANT: val will load the already-fitted OHE/scaler pickles (created by train).
+    train_dataset = skinLesionDatasetsMILK10K.SkinLesionDataset(
+        metadata_file=f"{dataset_folder_path}/MILK10k_Training_Metadata.csv",
+        train_ground_truth=f"{dataset_folder_path}/MILK10k_Training_GroundTruth.csv",
+        img_dir=f"{dataset_folder_path}/MILK10k_Training_Input",
+        bert_model_name=text_model_encoder,
+        image_encoder=model_name,
+        drop_nan=False,
+        random_undersampling=False,
+        size=(224, 224),
+        type_of_problem = type_of_problem,
+        image_type=image_type,
+        is_train=True
+    )
 
-        train_dataset = type(dataset)(
-            metadata_file=dataset.metadata_file,
-            img_dir=dataset.img_dir,
-            size=dataset.size,
-            drop_nan=dataset.is_to_drop_nan,
-            train_ground_truth=dataset.train_ground_truth,
-            image_type= dataset.image_type,
-            bert_model_name=dataset.bert_model_name,
-            image_encoder=dataset.image_encoder
+    val_dataset = skinLesionDatasetsMILK10K.SkinLesionDataset(
+        metadata_file=f"{dataset_folder_path}/MILK10k_Training_Metadata.csv",
+        train_ground_truth=f"{dataset_folder_path}/MILK10k_Training_GroundTruth.csv",
+        img_dir=f"{dataset_folder_path}/MILK10k_Training_Input",
+        bert_model_name=text_model_encoder,
+        image_encoder=model_name,
+        drop_nan=False,
+        random_undersampling=False,
+        size=(224, 224),
+        type_of_problem = type_of_problem,
+        image_type=image_type,
+        is_train=False
+    )
+
+    labels = np.array(train_dataset.labels, dtype=np.int64)
+    targets = train_dataset.targets
+    num_classes = len(targets)
+    num_metadata_features = train_dataset.features.shape[1] if text_model_encoder == "one-hot-encoder" else 512
+
+    print(f"Número de features do metadados: {num_metadata_features}\n")
+    print(f"Classes presentes: {targets}\n")
+    print(f"Número de classes: {num_classes}\n")
+
+    cv = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+
+    for fold, (train_idx, val_idx) in enumerate(cv.split(np.zeros(len(labels)), labels), start=1):
+        print(f"\n==============================")
+        print(f"Fold {fold}/{k_folds}")
+        print(f"Train samples: {len(train_idx)} | Val samples: {len(val_idx)}")
+        print(f"==============================\n")
+
+        train_subset = Subset(train_dataset, train_idx)
+        val_subset = Subset(val_dataset, val_idx)
+
+        # WeightedRandomSampler (Strategy A)
+        sampler = None
+        if USE_WEIGHTED_SAMPLER:
+            fold_train_labels = labels[train_idx]
+            counts = np.bincount(fold_train_labels, minlength=num_classes)
+            weights_per_class = 1.0 / np.maximum(counts, 1)
+            sample_weights = weights_per_class[fold_train_labels]
+
+            sampler = WeightedRandomSampler(
+                weights=torch.DoubleTensor(sample_weights),
+                num_samples=len(fold_train_labels),
+                replacement=True
+            )
+
+        train_loader = DataLoader(
+            train_subset,
+            batch_size=batch_size,
+            shuffle=(sampler is None),
+            sampler=sampler,
+            num_workers=num_workers,
+            persistent_workers=persistent_workers,
+            pin_memory=True
         )
-        
 
-        val_dataset = type(dataset)(
-            metadata_file=dataset.metadata_file,
-            img_dir=dataset.img_dir,
-            size=dataset.size,
-            drop_nan = dataset.is_to_drop_nan,
-            train_ground_truth =dataset.train_ground_truth,
-            image_type = dataset.image_type,
-            bert_model_name=dataset.bert_model_name,
-            image_encoder=dataset.image_encoder  
+        val_loader = DataLoader(
+            val_subset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            persistent_workers=persistent_workers,
+            pin_memory=True
         )
-        
-        # train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
-        # train_dataset.features, train_dataset.labels, train_dataset.targets = train_dataset.one_hot_encoding()
 
-        # val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
-        # val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
+        # class weights (always safe length)
+        fold_train_labels = labels[train_idx]
+        class_weights = compute_class_weights(fold_train_labels, num_classes=num_classes).to(device)
+        print(f"Pesos das classes (fold {fold}): {class_weights}")
 
-        # Criar DataLoaders
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=persistent_workers)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
+        model = multimodalIntraInterModal.MultimodalModel(
+            num_classes=num_classes,
+            num_heads=num_heads,
+            device=device,
+            cnn_model_name=model_name,
+            text_model_name=text_model_encoder,
+            common_dim=common_dim,
+            vocab_size=num_metadata_features,
+            unfreeze_weights=unfreeze_weights,
+            attention_mecanism=attention_mecanism,
+            n=1 if attention_mecanism == "no-metadata" else 2
+        )
 
-        # Calcular pesos das classes com base no conjunto de treino
-        train_labels = [labels[i] for i in train_idx]
-        class_weights = compute_class_weights(train_labels).to(device)
-        print(f"Pesos das classes no fold {fold+1}: {class_weights}")
-
-        # Criar o modelo
-        model = multimodalIntraInterModal.MultimodalModel(num_classes, num_heads, device, cnn_model_name=model_name, text_model_name=text_model_encoder, common_dim=common_dim, vocab_size=num_metadata_features, unfreeze_weights=unfreeze_weights, attention_mecanism=attention_mecanism, n=1 if attention_mecanism=="no-metadata" else 2)
-        # Treinar o modelo no fold atual
         model, model_save_path = train_process(
-            num_epochs=num_epochs, num_heads=num_heads, fold_num=fold+1, train_loader=train_loader, val_loader=val_loader, targets=targets, model=model, device=device,
-            weightes_per_category=class_weights, common_dim=common_dim, model_name=model_name, text_model_encoder=text_model_encoder, attention_mecanism=attention_mecanism, results_folder_path=results_folder_path)
-        # Salvar as predições em um arquivo csv
-        save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
+            num_epochs=num_epochs,
+            num_heads=num_heads,
+            fold_num=fold,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            targets=targets,
+            model=model,
+            device=device,
+            class_weights=class_weights,
+            common_dim=common_dim,
+            model_name=model_name,
+            text_model_encoder=text_model_encoder,
+            attention_mecanism=attention_mecanism,
+            results_folder_path=os.path.join(results_folder_path, str(num_heads), attention_mecanism)
+        )
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, num_workers:int, persistent_workers:bool, type_of_problem:str, image_type:str, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
-    for attention_mecanism in list_of_attention_mecanism:
-        for model_name in list_of_models:
-            for num_heads in list_num_heads:
-                try:
-                    dataset = skinLesionDatasetsMILK10K.SkinLesionDataset(
-                    metadata_file=f"{dataset_folder_path}/MILK10k_Training_Metadata.csv",
-                    train_ground_truth=f"{dataset_folder_path}/MILK10k_Training_GroundTruth.csv", # Inclui o 'lesion_id' e a sinalização do possível diagnostico/nome da classe (em one-hot encode)
-                    img_dir=f"{dataset_folder_path}/MILK10k_Training_Input",
-                    bert_model_name=text_model_encoder,
-                    image_encoder=model_name,
-                    drop_nan=False,
-                    random_undersampling=False,
-                    size=(224,224),
-                    image_type=image_type)
+        save_predictions.model_val_predictions(
+            model=model,
+            dataloader=val_loader,
+            device=device,
+            fold_num=fold,
+            targets=targets,
+            base_dir=model_save_path,
+            model_name=model_name
+        )
 
-                    num_metadata_features = dataset.features.shape[1] if text_model_encoder== 'one-hot-encoder' else 512
-                    
-                    print(f"Número de features do metadados: {num_metadata_features}\n")
-                    print(f"Classes presentes: {dataset.targets}\n")
-                    num_classes = len(dataset.targets)
-                    print(f"Número de classes: {num_classes}\n")
-                    pipeline(dataset, 
-                        num_metadata_features=num_metadata_features, 
-                        num_epochs=num_epochs, batch_size=batch_size, 
-                        device=device, k_folds=k_folds, 
-                        num_classes=num_classes, 
-                        model_name=model_name, common_dim=common_dim, 
-                        text_model_encoder=text_model_encoder,
-                        num_heads=num_heads,
-                        unfreeze_weights=unfreeze_weights,
-                        attention_mecanism=attention_mecanism, 
-                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=num_workers, persistent_workers=True
-                    )
-                except Exception as e:
-                    print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
-                    continue
+
+# ============================================================
+# Main
+# ============================================================
 
 if __name__ == "__main__":
-    # Carrega os dados localmente
     local_variables = load_local_variables.get_env_variables()
+
     num_epochs = int(local_variables["num_epochs"])
     batch_size = int(local_variables["batch_size"])
     k_folds = int(local_variables["k_folds"])
     common_dim = int(local_variables["common_dim"])
-    num_workers=int(local_variables["num_workers"])    
+    num_workers = int(local_variables["num_workers"])
     list_num_heads = local_variables["list_num_heads"]
-    dataset_folder_name = local_variables["dataset_folder_name"]
-    dataset_folder_path= local_variables["dataset_folder_path"]
-    unfreeze_weights = bool(local_variables["unfreeze_weights"]) # Caso queira descongelar os pesos da CNN desejada
 
-    text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
-    type_of_problem = "multiclass" #"binaryclass" #"multiclass"
-    image_type="dermoscopic" #"clinical: close-up"
+    dataset_folder_name = local_variables["dataset_folder_name"]
+    dataset_folder_path = local_variables["dataset_folder_path"]
     results_folder_path = local_variables["results_folder_path"]
+
+    unfreeze_weights = bool(local_variables["unfreeze_weights"])
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    text_model_encoder = "one-hot-encoder"
+    type_of_problem="binaryclass"
+    image_type = "dermoscopic"  # or "clinical: close-up"
+    
+    attention_mecanism = "att-intramodal+residual+cross-attention-metadados"
+
+    # choose ONE backbone per run (you can loop outside if you want)
+    list_of_models = ["davit_tiny.msft_in1k"]
+
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{image_type}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
-    # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
-    # Testar com todos os modelos
-    list_of_models = ["mobilenet-v2"] # ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
-    # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, image_type=image_type, num_workers=num_workers, persistent_workers=True, num_epochs=num_epochs, type_of_problem=type_of_problem, batch_size=batch_size, k_folds=k_folds,
-                    common_dim = common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
+
+    for model_name in list_of_models:
+        for num_heads in list_num_heads:
+            pipeline(
+                dataset_folder_path=dataset_folder_path,
+                image_type=image_type,
+                num_epochs=num_epochs,
+                batch_size=batch_size,
+                device=device,
+                k_folds=k_folds,
+                common_dim=common_dim,
+                text_model_encoder=text_model_encoder,
+                unfreeze_weights=unfreeze_weights,
+                attention_mecanism=attention_mecanism,
+                model_name=model_name,
+                num_heads=int(num_heads),
+                results_folder_path=results_folder_path,
+                num_workers=num_workers,
+                persistent_workers=True,
+                type_of_problem=type_of_problem
+            )

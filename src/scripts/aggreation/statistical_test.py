@@ -42,7 +42,7 @@ if __name__ == "__main__":
     list_all_models_metrics_all_lists = []
     method_names = []
     num_heads = 8
-    dataset_name = "PAD-UFES-20" # "ISIC-2019
+    dataset_name = "MILK10k" # "PAD-UFES-20" # "ISIC-2019
     # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/residual-block/frozen-weights/2"
     # base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8"
     base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/different_features_with_dimension_size/PAD-UFES-20/unfrozen_weights/{num_heads}/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture"
