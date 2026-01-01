@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 from sklearn.model_selection import StratifiedKFold
+from models.multimodalMDNet import MDNet
 
 import mlflow
 from tqdm import tqdm
@@ -429,18 +430,27 @@ def pipeline(
         class_weights = compute_class_weights(fold_train_labels, num_classes=num_classes).to(device)
         print(f"Pesos das classes (fold {fold}): {class_weights}")
 
-        model = multimodalIntraInterModal.MultimodalModel(
-            num_classes=num_classes,
-            num_heads=num_heads,
-            device=device,
-            cnn_model_name=model_name,
-            text_model_name=text_model_encoder,
-            common_dim=common_dim,
-            vocab_size=num_metadata_features,
-            unfreeze_weights=unfreeze_weights,
-            attention_mecanism=attention_mecanism,
-            n=1 if attention_mecanism == "no-metadata" else 2
-        )
+        if attention_mecanism=="md-net":
+            model = MDNet(
+                meta_dim=num_metadata_features, 
+                num_classes=num_classes, 
+                unfreeze_weights=unfreeze_weights, 
+                cnn_model_name=model_name,
+                device=device
+            )
+        else:    
+            model = multimodalIntraInterModal.MultimodalModel(
+                num_classes=num_classes,
+                num_heads=num_heads,
+                device=device,
+                cnn_model_name=model_name,
+                text_model_name=text_model_encoder,
+                common_dim=common_dim,
+                vocab_size=num_metadata_features,
+                unfreeze_weights=unfreeze_weights,
+                attention_mecanism=attention_mecanism,
+                n=1 if attention_mecanism == "no-metadata" else 2
+            )
 
         model, model_save_path = train_process(
             num_epochs=num_epochs,
@@ -495,9 +505,9 @@ if __name__ == "__main__":
     type_of_problem="multiclass" # "binaryclass"
     image_type = "dermoscopic"  # or "clinical: close-up"
     
-    attention_mecanism = "att-intramodal+residual+cross-attention-metadados"
+    attention_mecanism = "md-net"
 
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"]  # ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["densenet169"]  # ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
 
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{image_type}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
 

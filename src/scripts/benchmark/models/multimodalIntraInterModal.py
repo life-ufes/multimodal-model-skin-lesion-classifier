@@ -8,6 +8,7 @@ from gatedResidualBlock import GatedAlteredResidualBlock, StackedGatedResidualBl
 from loadImageModelClassifier import loadModels
 from metablock import MetaBlock
 from metanet import MetaNet
+from multimodalMDNet import MDNet
 
 class MultimodalModel(nn.Module):
     def __init__(
@@ -32,28 +33,30 @@ class MultimodalModel(nn.Module):
         self.num_heads = num_heads
         self.attention_mecanism = attention_mecanism
         self.n = n
+        self.vocab_size = vocab_size 
         self.num_classes = num_classes
+        self.cnn_model_name = cnn_model_name
         self.text_model_name = text_model_name
-
-        # =====================================================
-        # Image Encoder
-        # =====================================================
-        self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
-            cnn_model_name,
-            common_dim,
-            unfreeze_weights=unfreeze_weights
-        )
-
-        self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
-
+        self.unfreeze_weights = unfreeze_weights
         # =====================================================
         # Text Encoder
         # =====================================================
         self.text_encoder_dim_output = text_encoder_dim_output
 
+        # =====================================================
+        # Image Encoder
+        # =====================================================
+        self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
+            cnn_model_name=self.cnn_model_name,
+            common_dim=self.common_dim,
+            unfreeze_weights=self.unfreeze_weights
+        )
+
+        self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
+
         if text_model_name == "one-hot-encoder":
             self.text_fc = nn.Sequential(
-                nn.Linear(vocab_size, 256),
+                nn.Linear(self.vocab_size, 256),
                 nn.ReLU(),
                 nn.Linear(256, 512),
                 nn.ReLU(),
@@ -62,8 +65,8 @@ class MultimodalModel(nn.Module):
             self.text_encoder = None
         else:
             self.text_encoder, self.text_encoder_dim_output, _ = loadModels.loadTextModelEncoder(
-                text_model_encoder=text_model_name,
-                unfreeze_weights=unfreeze_weights
+                text_model_encoder=self.text_model_name,
+                unfreeze_weights=self.unfreeze_weights
             )
             self.text_fc = None
 
