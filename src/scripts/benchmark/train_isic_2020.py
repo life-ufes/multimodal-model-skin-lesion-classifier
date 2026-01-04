@@ -326,7 +326,7 @@ if __name__ == "__main__":
 
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
+    llm_model_name_sequence_generator=local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     type_of_problem = "multiclass" #"binaryclass" #"multiclass"
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"

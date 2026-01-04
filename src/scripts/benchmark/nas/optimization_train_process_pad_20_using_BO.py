@@ -292,7 +292,7 @@ if __name__ == "__main__":
     # k_folds = 1 # Para a BO, geralmente não usamos k-folds para a avaliação interna
     TEXT_MODEL_ENCODER = 'one-hot-encoder'
     UNFREEZE_WEIGHTS = bool(local_variables["unfreeze_weights"])
-    LLM_MODEL_NAME_SEQUENCE_GENERATOR = local_variables["llm_model_name_sequence_generator"]
+    LLM_MODEL_NAME_SEQUENCE_GENERATOR = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     RESULTS_FOLDER_PATH = local_variables["results_folder_path"]
     RESULTS_FOLDER_PATH = f"{RESULTS_FOLDER_PATH}/{local_variables['dataset_folder_name']}/{'unfrozen_weights' if UNFREEZE_WEIGHTS else 'frozen_weights'}"
     NUM_WORKERS = 4

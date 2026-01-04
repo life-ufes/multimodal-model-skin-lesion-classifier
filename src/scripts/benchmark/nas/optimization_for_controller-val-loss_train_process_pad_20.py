@@ -440,7 +440,7 @@ if __name__ == "__main__":
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
     unfreeze_weights = bool(local_variables["unfreeze_weights"])
-    llm_model_name_sequence_generator = local_variables["llm_model_name_sequence_generator"]
+    llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Métricas para o experimento

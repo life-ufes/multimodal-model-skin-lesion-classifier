@@ -9,6 +9,9 @@ from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDat
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
+from models.multimodalMDNet import MDNet
+from models.liwtermModel import LiwTERM
+from models.metanet import MetaNetModel
 import time
 import os
 from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
@@ -71,7 +74,7 @@ def train_process(num_epochs,
 
     early_stopping = EarlyStopping(
         patience=10, 
-        delta=0.00, 
+        delta=0.01, 
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=False,
@@ -83,7 +86,7 @@ def train_process(num_epochs,
     train_losses=[]
     val_losses=[]
 
-    experiment_name = f"EXPERIMENTOS-{dataset_folder_name} - MULTIMODAL MODEL USING ONLY WITH RESIDUAL BLOCK"
+    experiment_name = "EXPERIMENTOS-PAD-UFES-20 - RESIDUAL BLOCK USAGE - 2026-01-01"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -207,22 +210,22 @@ def train_process(num_epochs,
     return model, model_save_path
 
 
-def pipeline(dataset,
-             num_metadata_features,
-             num_epochs,
-             batch_size,
-             device,
-             k_folds,
-             num_classes,
-             model_name,
-             num_heads,
-             common_dim,
-             text_model_encoder,
-             unfreeze_weights,
-             attention_mecanism,
-             results_folder_path,
-             num_workers=10,
-             persistent_workers=True):
+def pipeline(dataset: any,
+             num_metadata_features:int,
+             num_epochs:int,
+             batch_size:int,
+             device:str,
+             k_folds:int,
+             num_classes:int,
+             model_name:str,
+             num_heads:int,
+             common_dim:int,
+             text_model_encoder:str,
+             unfreeze_weights:list,
+             attention_mecanism:str,
+             results_folder_path:str,
+             num_workers:int=10,
+             persistent_workers:bool=True):
 
     # # Separação por paciente
     # labels = dataset.labels                      # diagnóstico codificado
@@ -234,9 +237,10 @@ def pipeline(dataset,
     # ):
 
     labels = [dataset.labels[i] for i in range(len(dataset))]
-    stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+    groups = dataset.metadata["patient_id"].values  # agrupa por paciente
+    stratifiedKFold = StratifiedGroupKFold(n_splits=k_folds, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
+    for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels, groups=groups)):
         print(f"Fold {fold+1}/{k_folds}")
 
         # Labels para este fold
@@ -333,14 +337,35 @@ def pipeline(dataset,
             )
 
         # --- Modelo multimodal ---
-        if text_model_encoder in [
-            "one-hot-encoder", "tab-transformer",
-            "gpt2", "bert-base-uncased",
-            "pubmedbert-base-embeddings-100K", "pubmedbert-base-embeddings-500K",
-            "pubmedbert-base-embeddings-1M", "pubmedbert-base-embeddings-2M"
-        ]:
+        if attention_mecanism=="md-net":
+            model = MDNet(
+                meta_dim=num_metadata_features, 
+                num_classes=num_classes, 
+                unfreeze_weights=unfreeze_weights, 
+                cnn_model_name=model_name,
+                device=device
+            )
+        elif attention_mecanism == "liwterm":
+            model = LiwTERM(
+                num_classes=num_classes,
+                meta_dim=num_metadata_features,
+                image_encoder="vit_large_patch16_224",
+                pretrained=True,
+                unfreeze_backbone=unfreeze_weights
+            )
+        elif attention_mecanism=="metanet":
+            model = MetaNetModel(
+                meta_dim=num_metadata_features,
+                num_classes=num_classes,
+                image_encoder=str(model_name).replace("-",""),
+                unfreeze_weights=unfreeze_weights
+            )
+
+        else:    
             model = multimodalIntraInterModal.MultimodalModel(
-                num_classes, num_heads, device,
+                num_classes=num_classes,
+                num_heads=num_heads,
+                device=device,
                 cnn_model_name=model_name,
                 text_model_name=text_model_encoder,
                 common_dim=common_dim,
@@ -349,9 +374,7 @@ def pipeline(dataset,
                 attention_mecanism=attention_mecanism,
                 n=1 if attention_mecanism == "no-metadata" else 2
             )
-        else:
-            raise ValueError("Encoder de texto não implementado!\n")
-
+        
         # Treino do modelo carregado
         model, model_save_path = train_process(
             num_epochs, num_heads, fold+1,
@@ -466,7 +489,7 @@ if __name__ == "__main__":
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
     unfreeze_weights = bool(local_variables["unfreeze_weights"])
-    llm_model_name_sequence_generator = local_variables["llm_model_name_sequence_generator"]
+    llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
 
@@ -475,9 +498,9 @@ if __name__ == "__main__":
     text_model_encoder = 'one-hot-encoder'  # ou 'bert-base-uncased', 'gpt2', etc.
 
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual+cross-attention-metadados"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["metanet"] # ["att-intramodal+residual+cross-attention-metadados"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]  # ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["resnet-50"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path,

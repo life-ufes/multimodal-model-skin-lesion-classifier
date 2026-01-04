@@ -7,7 +7,7 @@ from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDat
 from utils.save_model_and_metrics import save_model_and_metrics
 from utils import load_local_variables
 from collections import Counter
-from sklearn.model_selection import KFold, train_test_split, StratifiedKFold
+from sklearn.model_selection import KFold, train_test_split, StratifiedKFold, StratifiedGroupKFold
 import numpy as np
 import time
 import os
@@ -69,14 +69,14 @@ def train_process(num_epochs,
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=True,
-        early_stopping_metric_name="val_bacc"
+        early_stopping_metric_name="val_loss"
     )
 
     initial_time = time.time()
     epoch_index = 0  # Track the epoch
     train_losses, val_losses = [], []
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-PAD-UFES25 - RESIDUAL BLOCK USAGE"
+    experiment_name = "EXPERIMENTOS-PAD-UFES-25 - RESIDUAL BLOCK USAGE - 2025-12-19"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -187,13 +187,21 @@ def train_process(num_epochs,
     return model, model_save_path
 
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
-    # Obter os rótulos para validação estratificada (se necessário)
-    labels = [dataset.labels[i] for i in range(len(dataset))]
+    # # Obter os rótulos para validação estratificada (se necessário)
+    # labels = [dataset.labels[i] for i in range(len(dataset))]
 
-    # Configurar o K-Fold
-    stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+    # # Configurar o K-Fold
+    # stratifiedKFold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
+    # for fold, (train_idx, val_idx) in enumerate(stratifiedKFold.split(range(len(dataset)), labels)):
+    # Separação por paciente
+    labels = dataset.labels                      # diagnóstico codificado
+    groups = dataset.metadata["patient-id"].values  # agrupa por paciente
+    stratifiedKFold = StratifiedGroupKFold(n_splits=k_folds, shuffle=True, random_state=42)
+
+    for fold, (train_idx, val_idx) in enumerate(
+        stratifiedKFold.split(X=np.zeros(len(labels)), y=labels, groups=groups)
+    ):
         print(f"Fold {fold+1}/{k_folds}")
         # Criar datasets para treino e validação do fold atualAdd comment
 
@@ -268,13 +276,13 @@ if __name__ == "__main__":
 
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    llm_model_name_sequence_generator=local_variables["llm_model_name_sequence_generator"]
+    llm_model_name_sequence_generator=local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["gfcam"] # ["concatenation"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos
-    list_of_models = ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, num_epochs=num_epochs,
         batch_size=batch_size, k_folds=k_folds, common_dim=common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

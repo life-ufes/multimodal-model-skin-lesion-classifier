@@ -202,13 +202,13 @@ class MultimodalModel(nn.Module):
         # Fusion strategies
         # =====================================================
         if self.attention_mecanism == "no-metadata":
-            return self.fc_fusion(img_feat)
+            return self.fc_fusion(proj_img_feat)
 
         elif self.attention_mecanism == "no-metadata-without-mlp":
-            return self.fc_visual_only(img_feat)
+            return self.fc_visual_only(img_seq)
 
         elif self.attention_mecanism == "concatenation":
-            fused = torch.cat([img_feat, txt_feat], dim=1)
+            fused = torch.cat([proj_img_feat, proj_txt_feat], dim=1)
             return self.fc_fusion(fused)
 
         elif self.attention_mecanism == "crossattention":

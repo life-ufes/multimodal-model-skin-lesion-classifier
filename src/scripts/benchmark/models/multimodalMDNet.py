@@ -39,8 +39,8 @@ class MetaBlock(nn.Module):
         U: dimensão dos metadados (ex.: 85)
         """
         super(MetaBlock, self).__init__()
-        self.fb = nn.Sequential(nn.Linear(U, V), nn.BatchNorm1d(V))
-        self.gb = nn.Sequential(nn.Linear(U, V), nn.BatchNorm1d(V))
+        self.fb = nn.Sequential(nn.Linear(U, V), nn.LayerNorm(V))
+        self.gb = nn.Sequential(nn.Linear(U, V), nn.LayerNorm(V))
 
     def forward(self, img_features, metadata):
         # img_features: tensor de features da imagem com forma [B, V, H, W]
