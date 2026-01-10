@@ -1,148 +1,143 @@
 import os
-import stats
 import numpy as np
 import pandas as pd
+import stats  # módulo local com statistical_test
 
+
+# =====================================================
+# Utils
+# =====================================================
 def load_dataset(file_path):
     """Loads dataset from the given file path"""
     try:
-        dataset = pd.read_csv(file_path, sep=",")
-        return dataset
+        return pd.read_csv(file_path)
     except Exception as e:
-        print(f"Error loading file: {e}")
+        print(f"Error loading file {file_path}: {e}")
         return None
 
-def get_metric_values(file_folder_path, file_name='model_metrics.csv', metric_names=['acc', 'bacc', 'auc']):
+
+def get_metric_values(
+    file_folder_path,
+    file_name="model_metrics.csv",
+    metric_names=("accuracy", "balanced_accuracy", "f1_score", "auc")
+):
     """
-    Retrieves specified metric values from the 'model_metrics.csv' file in the given folder.
-    Handles multiple metric names.
+    Retrieves metric values from CSV.
+    Returns a 1D numpy array with all requested metrics concatenated.
     """
-    list_of_values_wanted_metrics = []  # A list to store values for all metrics
     csv_file = os.path.join(file_folder_path, file_name)
-    
-    if os.path.exists(csv_file):  # Check if the CSV file exists
-        data = load_dataset(csv_file)
-        
-        if data is not None:  # Ensure data is successfully loaded
-            for metric_name in metric_names:
-                # Check if the requested metric exists in the columns
-                if metric_name in data.columns:
-                    # Exclude the last row and append the values to the list
-                    list_of_values_wanted_metrics.append(data[metric_name].iloc[:].values)
-                else:
-                    print(f"{metric_name} not found in {csv_file}")
-        else:
-            print("Failed to load data from the CSV file.")
-    else:
+    collected = []
+
+    if not os.path.exists(csv_file):
         print(f"CSV file not found: {csv_file}")
-    
-    # Return the list of metrics' values flattened
-    return np.array(list_of_values_wanted_metrics).ravel()
+        return None
 
-def load_models_metrics(file_folder_path, wanted_metric_list):
-    list_of_values_wanted_metric = []
-    if os.path.exists(file_folder_path):
-        csv_file = os.path.join(file_folder_path, 'cv-results.csv')
-        if os.path.exists(csv_file):  # Verifica se o arquivo CSV existe
-            data = load_dataset(csv_file)
-            for metric_name in wanted_metric_list:
-                if metric_name in data.columns:
-                    # Exclui as duas últimas linhas
-                    aux = data[metric_name].iloc[:-2].values
-                    list_of_values_wanted_metric.append(aux)
-                else:
-                    print(f"{metric_name} não encontrada no arquivo {csv_file}\n")
+    data = load_dataset(csv_file)
+    if data is None:
+        return None
+
+    for metric in metric_names:
+        if metric in data.columns:
+            collected.append(data[metric].values)
         else:
-            print(f"Arquivo CSV não encontrado: {csv_file}\n")
-    else:
-        print(f"Pasta não encontrada: {file_folder_path}\n")
-        
-    return np.array(list_of_values_wanted_metric).ravel()
+            print(f"Metric '{metric}' not found in {csv_file}")
+
+    if len(collected) == 0:
+        return None
+
+    return np.concatenate(collected)
 
 
-def save_statistics_tests(test_results:str, file_folder_path: str):
-    '''
-        Função para salvar os resultados dos testes estatísticos
-    '''
+def save_statistics_tests(test_results, file_path_prefix):
+    """
+    Save statistical test results to CSV.
+    """
     try:
-        dataframe = pd.DataFrame(data=test_results)
-        dataframe.to_csv(file_folder_path+f"_statistics_tests_results.csv")
+        df = pd.DataFrame(test_results)
+        out_path = f"{file_path_prefix}_statistics_tests_results.csv"
+        df.to_csv(out_path, index=False)
+        print(f"Statistics saved to {out_path}")
     except Exception as e:
-        print(f"Erro salvar os dados. Erro: {e}\n")
+        print(f"Error saving statistics: {e}")
 
+
+# =====================================================
+# Main
+# =====================================================
 if __name__ == "__main__":
-    # Onde os dados do teste serão salvos
-    base_file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results"
-    wanted_metric_list = ['accuracy','balanced_accuracy','f1_score','recall','auc']
-    
-    
-    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/PAD-UFES-20/unfrozen_weights/2/att-intramodal+residual+cross-attention-metadados/model_davit_tiny.msft_in1k_with_one-hot-encoder_512_with_best_architecture"
-    # Variáveis a serem selecionadas
-    # Load dataset (though not used directly here)
-    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
-    # Carregar os dados do modelo multimodal - PAD-UFES-20
-    # Get metric values for the specified metrics
-    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
+
+    base_file_folder_path = (
+        "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/"
+        "src/tests/results"
+    )
+
+    wanted_metric_list = [
+        "accuracy",
+        "balanced_accuracy",
+        "f1_score",
+        "auc"
+    ]
+
+    # Nosso método (baseline principal)
+    base_model_path = (
+        # "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/"
+        # "src/results/testes-da-implementacao-final_2/01012026/"
+        # "PAD-UFES-20/unfrozen_weights/8/"
+        # "att-intramodal+residual+cross-attention-metadados/"
+        # "model_caformer_b36.sail_in22k_ft_in1k_with_one-hot-encoder_512_with_best_architecture"
+        "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/NAS/benchmark_nas_llm-as-controller_trainning-optimized-model-architectures/PAD-UFES-20/unfrozen_weights/8/model_nas_multimodal_model_id-21_with_one-hot-encoder_512_with_best_architecture"
+    )
+
     list_of_used_algs = []
-    list_all_models_metrics_all_lists=[]
-    list_of_used_algs.append("our-method")
-    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
-    
-    # Path to the folder containing the results
-    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/unfrozen-weights/2/gfcam/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
-    # Variáveis a serem selecionadas
-    # Load dataset (though not used directly here)
-    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
-    # Carregar os dados do modelo multimodal - PAD-UFES-20
-    # Get metric values for the specified metrics
-    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
-    # list_of_used_algs = []
-    # list_all_models_metrics_all_lists=[]
-    list_of_used_algs.append("gated-cross-attention")
-    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
-    
-    # MD-Net results
-    file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/MD-Net/PAD-UFES-20/frozen_weights/0/md-net/model_densenet169_with_one-hot-encoder_512_with_best_architecture"
-    # Variáveis a serem selecionadas
-    # Load dataset (though not used directly here)
-    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
-    # Carregar os dados do modelo multimodal - PAD-UFES-20
-    # Get metric values for the specified metrics
-    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
-    list_of_used_algs.append("md-net")
-    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+    list_all_models_metrics = []
 
-    # ## Add dos dados do do trabalho 'A deep learning based multimodal ....'
-    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/a-deep-learning-based-multimodal/PAD-UFES-20/frozen_weights/2/concatenation/model_resnet-50_with_one-hot-encoder_512_with_best_architecture"
-    # Load dataset (though not used directly here)
-    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
-    # Carregar os dados do modelo multimodal - PAD-UFES-20
-    # Get metric values for the specified metrics
-    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
-    list_of_used_algs.append("a-deep-learning-based-multimodal")
-    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+    our_metrics = get_metric_values(
+        file_folder_path=base_model_path,
+        metric_names=wanted_metric_list
+    )
+    if our_metrics is not None:
+        list_of_used_algs.append("our-method")
+        list_all_models_metrics.append(our_metrics)
 
-    file_folder_path="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results/PAD-20/lighterm"
-    # Load dataset (though not used directly here)
-    file_content = load_dataset(file_folder_path+"/model_metrics.csv")
-    # Carregar os dados do modelo multimodal - PAD-UFES-20
-    # Get metric values for the specified metrics
-    aux_metric_values_multimodal_model = get_metric_values(file_folder_path, metric_names=wanted_metric_list)
-    list_of_used_algs.append("lightwer")
-    list_all_models_metrics_all_lists.append(aux_metric_values_multimodal_model)
+    # =====================================================
+    # Baselines
+    # =====================================================
+    lista_modelos_e_backbones = {
+        "no-metadata": "resnet-50",
+        "concatenation": "resnet-50",
+        # "metanet": "resnet-50",
+        # "md-net": "resnet-50",
+        "metablock": "efficientnet-b0",
+        "crossattention": "densenet169"
+#        "liwterm": "vit_large_patch16_224"
+    }
 
+    for alg, backbone in lista_modelos_e_backbones.items():
+        # model_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/01012026/PAD-UFES-20/unfrozen_weights/8/{alg}/model_{backbone}_with_one-hot-encoder_512_with_best_architecture"
+        model_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/NAS/benchmark_nas_llm-as-controller_trainning-optimized-model-architectures/PAD-UFES-20/unfrozen_weights/8/{alg}/model_{backbone}_with_one-hot-encoder_512_with_best_architecture"
+        metrics = get_metric_values(
+            file_folder_path=model_path,
+            metric_names=wanted_metric_list
+        )
 
-    for alg in ["no-metadata", "concatenation", "metanet", "metablock"]:
-        file_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results/PAD-20/{alg}"
-        # Concat, Metablock, MetaNet
-        list_of_used_algs.append(alg)
-        wanted_metric_list = ['acc', 'bacc', 'weighted avg f1-score', 'weighted avg recall', 'auc']
-        all_models_metrics=load_models_metrics(file_folder_path=file_folder_path, wanted_metric_list=wanted_metric_list)
-        list_all_models_metrics_all_lists.append(all_models_metrics)
+        if metrics is not None:
+            list_of_used_algs.append(alg)
+            list_all_models_metrics.append(metrics)
+        else:
+            print(f"Metrics not found for {alg}")
 
-
-    out=stats.statistical_test(data=list_all_models_metrics_all_lists, alg_names=list_of_used_algs)
-    # Salvar os resultados
-    save_statistics_tests(test_results={out}, file_folder_path=base_file_folder_path)
-
-    
+    # =====================================================
+    # Statistical test
+    # =====================================================
+    out = stats.statistical_test(
+        data=list_all_models_metrics,
+        alg_names=list_of_used_algs
+    )
+    print(out)
+    # =====================================================
+    # Save results
+    # =====================================================
+    save_statistics_tests(
+        test_results=out,
+        file_path_prefix=base_file_folder_path
+    )

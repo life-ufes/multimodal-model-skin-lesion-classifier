@@ -25,13 +25,13 @@ class SkinLesionDataset(Dataset):
         self.random_undersampling = random_undersampling
         self.image_encoder = image_encoder
         self.is_train = is_train
-
+        self.targets = None
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.transform = self.load_transforms()
 
         # Load metadata and process
         self.metadata = self.load_metadata()
-        self.features, self.labels, self.classes = self.one_hot_encoding()
+        self.features, self.labels, self.targets = self.one_hot_encoding()
 
 
     def __len__(self):
@@ -130,21 +130,6 @@ class SkinLesionDataset(Dataset):
 
         return metadata
 
-    def split_dataset(self, dataset, batch_size, test_size):
-       # Dividir os índices do dataset
-        indices = list(range(len(dataset)))
-        train_indices, val_test_indices = train_test_split(indices, test_size=test_size, random_state=42, shuffle=True)
-
-        # Criar Subconjuntos
-        train_dataset = torch.utils.data.Subset(dataset, train_indices)
-        val_dataset = torch.utils.data.Subset(dataset, val_test_indices)
-
-        # Criar DataLoaders
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
-        return train_loader, val_loader
-
     def one_hot_encoding(self):
         dataset_features = self.metadata.drop(
             columns=['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic']
@@ -167,11 +152,11 @@ class SkinLesionDataset(Dataset):
 
 
         # Caminho base
-        base_dir = os.path.join("../data", "preprocess_data")
+        base_dir = os.path.join("./data", "preprocess_data")
         os.makedirs(base_dir, exist_ok=True)
 
         # OneHotEncoder
-        ohe_path = os.path.join(base_dir, "ohe.pickle")
+        ohe_path = os.path.join(base_dir, "ohe_pad_20.pickle")
         if os.path.exists(ohe_path):
             with open(ohe_path, "rb") as f:
                 ohe = pickle.load(f)
@@ -183,7 +168,7 @@ class SkinLesionDataset(Dataset):
                 pickle.dump(ohe, f)
 
         # StandardScaler
-        scaler_path = os.path.join(base_dir, "scaler.pickle")
+        scaler_path = os.path.join(base_dir, "scaler_pad_20.pickle")
         if os.path.exists(scaler_path):
             with open(scaler_path, "rb") as f:
                 scaler = pickle.load(f)
@@ -199,7 +184,7 @@ class SkinLesionDataset(Dataset):
 
         # Labels
         labels = self.metadata['diagnostic'].values
-        le_path = os.path.join(base_dir, "label_encoder.pickle")
+        le_path = os.path.join(base_dir, "label_encoder_pad_20.pickle")
         if os.path.exists(le_path):
             with open(le_path, "rb") as f:
                 label_encoder = pickle.load(f)

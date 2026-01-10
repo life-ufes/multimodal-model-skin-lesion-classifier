@@ -28,11 +28,11 @@ if __name__ == "__main__":
     # Path to your CSV file
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/RG-ATT-512-EXPERIMENTS-07112025/{dataset_name}/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/MILK10k/dermoscopic/unfrozen_weights/{num_heads}"
-    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/01012026/{dataset_name}/unfrozen_weights/{num_heads}"
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/01012026/different_features_with_dimension_size/{dataset_name}/unfrozen_weights/{num_heads}"
     ## base_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/PAD-UFES-20/unfrozen_weights/8"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/different_features_with_dimension_size/PAD-UFES-20/unfrozen_weights/8"
     
-    for common_size in [512]:
+    for common_size in [64, 128, 256, 512, 1024, 2048, 4096]:
         for attention_mecanism in list_of_attention_mecanism:
             # Testar com todos os modelos
             list_of_models = ["vit_large_patch16_224", "caformer_b36.sail_in22k_ft_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "efficientnet-b0", "densenet169", "vgg16", "mobilenet-v2", "resnet-50"]

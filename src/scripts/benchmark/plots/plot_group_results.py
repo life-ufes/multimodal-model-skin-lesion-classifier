@@ -2,8 +2,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
+import os
 
-def main(csv_file_path, use_legend, dataset_name):
+def main(csv_file_path, output_dir, use_legend, dataset_name):
     # Carregar CSV
     df = pd.read_csv(csv_file_path)
 
@@ -46,10 +47,10 @@ def main(csv_file_path, use_legend, dataset_name):
         plt.legend(title="Attention mechanism", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
 
-    plt.savefig(f"./images/bacc_all_common_sizes_grouped_{dataset_name}.png", dpi=400, bbox_inches='tight')
+    plt.savefig(f"{output_dir}/bacc_all_common_sizes_grouped_{dataset_name}.png", dpi=400, bbox_inches='tight')
     plt.show()
 
-    print(f"Gráfico salvo como './images/bacc_all_common_sizes_grouped_{dataset_name}.png'")
+    print(f"Gráfico salvo como 'bacc_all_common_sizes_grouped_{dataset_name}.png'")
 
 
 if __name__=="__main__":
@@ -57,6 +58,10 @@ if __name__=="__main__":
     # Caminho para o arquivo CSV
     # csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
     # csv_file_path ="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/ISIC-2019/unfrozen_weights/8/all_metric_values.csv"
-    csv_file_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/PAD-UFES-20/unfrozen_weights/8/all_metric_values.csv"
+    # csv_file_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/PAD-UFES-20/unfrozen_weights/8/all_metric_values.csv"
     # csv_file_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimension_of_projected_features/{dataset_name}/unfrozen_weights/8/all_metric_values.csv"
-    main(csv_file_path=csv_file_path, use_legend=False, dataset_name=dataset_name)
+    csv_file_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/01012026/different_features_with_dimension_size/PAD-UFES-20/unfrozen_weights/8/all_metric_values.csv"
+    output_dir = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/01012026/different_features_with_dimension_size/PAD-UFES-20/bacc_plots"
+    os.makedirs(output_dir, exist_ok=True)
+
+    main(csv_file_path=csv_file_path, output_dir=output_dir, use_legend=False, dataset_name=dataset_name)
