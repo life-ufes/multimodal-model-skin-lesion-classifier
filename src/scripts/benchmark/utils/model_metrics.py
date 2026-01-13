@@ -22,7 +22,7 @@ def evaluate_model(
     model_name: str = "None"
 ):
     """
-    Single-source-of-truth evaluation.
+    Universal evaluation for binary and multiclass classification.
 
     Returns:
         metrics : dict
@@ -68,8 +68,14 @@ def evaluate_model(
     all_preds  = torch.cat(all_preds).numpy()
     all_probs  = torch.cat(all_probs).numpy()
 
-    targets = np.array(targets)
-    num_classes = len(targets)
+    # >>> SINGLE SOURCE OF TRUTH <<<
+    num_classes = all_probs.shape[1]
+
+    # Align targets with model output
+    if targets is None:
+        targets = np.arange(num_classes)
+    else:
+        targets = np.array(targets)[:num_classes]
 
     # ------------------------------------------------------------
     # SAVE RAW ARRAYS (AUDIT TRAIL)
@@ -84,27 +90,24 @@ def evaluate_model(
     # ------------------------------------------------------------
     accuracy = accuracy_score(all_labels, all_preds)
     balanced_accuracy = balanced_accuracy_score(all_labels, all_preds)
-    precision = precision_score(
-        all_labels, all_preds, average="weighted", zero_division=0
-    )
-    recall = recall_score(
-        all_labels, all_preds, average="weighted", zero_division=0
-    )
-    f1score = f1_score(
-        all_labels, all_preds, average="weighted", zero_division=0
-    )
+
+    if num_classes == 2:
+        precision = precision_score(all_labels, all_preds, zero_division=0)
+        recall    = recall_score(all_labels, all_preds, zero_division=0)
+        f1score   = f1_score(all_labels, all_preds, zero_division=0)
+    else:
+        precision = precision_score(all_labels, all_preds, average="weighted", zero_division=0)
+        recall    = recall_score(all_labels, all_preds, average="weighted", zero_division=0)
+        f1score   = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
 
     # ------------------------------------------------------------
-    # AUC (CONSISTENT WITH PROBS)
+    # AUC (SAFE)
     # ------------------------------------------------------------
     try:
         if num_classes == 2:
             auc = roc_auc_score(all_labels, all_probs[:, 1])
         else:
-            y_true_bin = label_binarize(
-                all_labels,
-                classes=np.arange(num_classes)
-            )
+            y_true_bin = label_binarize(all_labels, classes=np.arange(num_classes))
             auc = roc_auc_score(
                 y_true_bin,
                 all_probs,
@@ -115,6 +118,9 @@ def evaluate_model(
         print(f"[WARN] AUC computation failed: {e}")
         auc = None
 
+    # ------------------------------------------------------------
+    # METRICS DICT
+    # ------------------------------------------------------------
     metrics = {
         "fold": fold_num,
         "accuracy": float(accuracy),

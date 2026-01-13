@@ -29,12 +29,12 @@ def save_model_and_metrics(
     val_losses: np.ndarray = None
 ):
     """
-    FINAL, PAPER-SAFE VERSION
+    FINAL, ROBUST VERSION (Binary + Multiclass Safe)
 
     Assumptions:
-    - all_labels        : shape [N] (int)
-    - all_predictions  : shape [N] (int, argmax)
-    - all_probabilities: shape [N, C] (softmax)
+    - all_labels        : shape [N]
+    - all_predictions  : shape [N]
+    - all_probabilities: shape [N, C]
     """
 
     # ------------------------------------------------------------
@@ -43,9 +43,15 @@ def save_model_and_metrics(
     all_labels = np.asarray(all_labels)
     all_predictions = np.asarray(all_predictions)
     all_probabilities = np.asarray(all_probabilities)
-    targets = list(targets)
 
-    num_classes = len(targets)
+    # 🔑 Real number of classes comes from model output
+    num_classes = all_probabilities.shape[1]
+
+    # 🔒 Make targets compatible with model
+    if targets is None:
+        targets = [str(i) for i in range(num_classes)]
+    else:
+        targets = list(targets)[:num_classes]
 
     folder_name = f"{model_name}_fold_{fold_num}"
     folder_path = os.path.join(base_dir, folder_name)
@@ -74,12 +80,11 @@ def save_model_and_metrics(
     print(f"✔ Metrics saved at: {metrics_file}")
 
     # ------------------------------------------------------------
-    # CONFUSION MATRIX (NORMALIZED, DETERMINISTIC)
+    # CONFUSION MATRIX (NORMALIZED)
     # ------------------------------------------------------------
     cm = confusion_matrix(
         all_labels,
         all_predictions,
-        labels=np.arange(num_classes),
         normalize="true"
     )
 
@@ -97,12 +102,12 @@ def save_model_and_metrics(
     plt.close(fig)
 
     # ------------------------------------------------------------
-    # ROC CURVE (BINÁRIO OU MULTICLASS OVR)
+    # ROC CURVE
     # ------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(10, 9))
 
     if num_classes == 2:
-        # Binary
+        # Binary ROC
         y_true = all_labels
         y_scores = all_probabilities[:, 1]
 
@@ -111,13 +116,14 @@ def save_model_and_metrics(
         ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.3f}")
 
     else:
-        # Multiclass One-vs-Rest
+        # Multiclass One-vs-Rest ROC
         y_true_bin = label_binarize(
             all_labels,
             classes=np.arange(num_classes)
         )
 
-        for i, label in enumerate(targets):
+        for i in range(num_classes):
+            label = targets[i]
             fpr, tpr, _ = roc_curve(
                 y_true_bin[:, i],
                 all_probabilities[:, i]
@@ -144,7 +150,7 @@ def save_model_and_metrics(
     plt.close(fig)
 
     # ------------------------------------------------------------
-    # LOSS CURVES (OPTIONAL)
+    # LOSS CURVES
     # ------------------------------------------------------------
     if train_losses is not None and val_losses is not None:
         plt.figure(figsize=(8, 6))
