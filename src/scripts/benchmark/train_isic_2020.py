@@ -273,7 +273,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         # Salvar as predições em um arquivo csv
         save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1, targets= dataset.targets, base_dir=model_save_path)    
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, num_workers:int, persistent_workers:bool, type_of_problem:str, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, num_workers:int, persistent_workers:bool, type_of_problem:str, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -322,14 +322,19 @@ if __name__ == "__main__":
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path= local_variables["dataset_folder_path"]
-    unfreeze_weights = bool(local_variables["unfreeze_weights"]) # Caso queira descongelar os pesos da CNN desejada
-
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    llm_model_name_sequence_generator=local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     type_of_problem = "multiclass" #"binaryclass" #"multiclass"
-    results_folder_path = local_variables["results_folder_path"]
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    unfreeze_weights = str(local_variables["unfreeze_weights"])
+    llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
+    results_folder_path = str(local_variables["results_folder_path"])
+    TRAIN_MODE_FOLDER = {
+        "full_unfrozen": "unfrozen_weights",
+        "partial_unfrozen": "partial_weights",
+        "totally_frozen": "frozen_weights"
+    }
+    train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["concatenation", "no-metadata", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual"] # ["gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted"]
     # Testar com todos os modelos

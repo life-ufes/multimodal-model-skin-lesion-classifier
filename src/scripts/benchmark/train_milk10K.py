@@ -496,9 +496,15 @@ if __name__ == "__main__":
 
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
-    results_folder_path = local_variables["results_folder_path"]
-
-    unfreeze_weights = bool(local_variables["unfreeze_weights"])
+    unfreeze_weights = str(local_variables["unfreeze_weights"])
+    results_folder_path = str(local_variables["results_folder_path"])
+    TRAIN_MODE_FOLDER = {
+        "full_unfrozen": "unfrozen_weights",
+        "partial_unfrozen": "partial_weights",
+        "totally_frozen": "frozen_weights"
+    }
+    train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     text_model_encoder = "one-hot-encoder"
@@ -508,8 +514,6 @@ if __name__ == "__main__":
     attention_mecanism = "md-net"
 
     list_of_models = ["densenet169"]  # ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
-
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{image_type}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
 
     for model_name in list_of_models:
         for num_heads in list_num_heads:

@@ -385,7 +385,7 @@ def run_expirements(dataset_folder_path: str,
                     k_folds: int,
                     common_dim: int,
                     text_model_encoder: str,
-                    unfreeze_weights: bool,
+                    unfreeze_weights: str,
                     device,
                     list_num_heads: list,
                     list_of_attention_mecanism: list,
@@ -443,7 +443,7 @@ if __name__ == "__main__":
     num_workers = int(local_variables["num_workers"])
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
-    unfreeze_weights = bool(local_variables["unfreeze_weights"])
+    unfreeze_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"

@@ -65,12 +65,12 @@ def train_process(num_epochs,
     # Instantiate EarlyStopping
     # Make sure EarlyStopping stores model.state_dict(), not the entire model.
     early_stopping = EarlyStopping(
-        patience=3, 
+        patience=10, 
         delta=0.00, 
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=True,
-        early_stopping_metric_name="val_bacc"
+        early_stopping_metric_name="val_loss"
     )
 
     initial_time = time.time()
@@ -79,7 +79,7 @@ def train_process(num_epochs,
     val_losses = [] 
 
     # Set your MLflow experiment
-    experiment_name = "EXPERIMENTOS-ISIC-2019 - NEW GATED ATTENTION BASED AND RESIDUAL BLOCK - 2025-12-19"
+    experiment_name = "EXPERIMENTOS-ISIC-2019 - GFCAM - 07/02/2026"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -280,7 +280,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
             targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, num_workers:int, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_workers:int, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -323,17 +323,24 @@ if __name__ == "__main__":
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = "ISIC-2019" # local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"] # f"/data/{dataset_folder_name}" # local_variables["dataset_folder_path"]
-    unfreeze_weights = bool(local_variables["unfreeze_weights"]) # Caso queira descongelar os pesos da CNN desejada
-
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    llm_model_name_sequence_generator=local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
-    results_folder_path = local_variables["results_folder_path"]
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    unfreeze_weights = str(local_variables["unfreeze_weights"])
+    llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
+    results_folder_path = str(local_variables["results_folder_path"])
+    TRAIN_MODE_FOLDER = {
+        "full_unfrozen": "unfrozen_weights",
+        "partial_unfrozen": "partial_weights",
+        "totally_frozen": "frozen_weights"
+    }
+
+    train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
+
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"]
+    list_of_attention_mecanism = ["gfcam"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"]
+    list_of_models = ["densenet169"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, num_epochs=num_epochs, batch_size=
                     batch_size, k_folds=k_folds, common_dim=common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

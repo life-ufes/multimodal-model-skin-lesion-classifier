@@ -22,7 +22,7 @@ class MultimodalModel(nn.Module):
         common_dim=512,
         text_encoder_dim_output=512,
         vocab_size=91,
-        unfreeze_weights=False,
+        unfreeze_weights="frozen",
         attention_mecanism="concatenation",
         n=2
     ):
@@ -48,8 +48,7 @@ class MultimodalModel(nn.Module):
         # =====================================================
         self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
             cnn_model_name=self.cnn_model_name,
-            common_dim=self.common_dim,
-            unfreeze_weights=self.unfreeze_weights
+            backbone_train_mode=self.unfreeze_weights
         )
 
         self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
@@ -66,7 +65,7 @@ class MultimodalModel(nn.Module):
         else:
             self.text_encoder, self.text_encoder_dim_output, _ = loadModels.loadTextModelEncoder(
                 text_model_encoder=self.text_model_name,
-                unfreeze_weights=self.unfreeze_weights
+                train_mode=self.unfreeze_weights
             )
             self.text_fc = None
 
@@ -216,9 +215,9 @@ class MultimodalModel(nn.Module):
             return self.fc_fusion(fused)
 
         elif self.attention_mecanism == "weighted":
-            alpha_img = torch.sigmoid(self.img_gate(img_feat))
-            alpha_txt = torch.sigmoid(self.txt_gate(txt_feat))
-            fused = torch.cat([alpha_img * img_feat, alpha_txt * txt_feat], dim=1)
+            alpha_img = torch.sigmoid(self.img_gate(proj_img_feat))
+            alpha_txt = torch.sigmoid(self.txt_gate(proj_txt_feat))
+            fused = torch.cat([alpha_img * proj_img_feat, alpha_txt * proj_txt_feat], dim=1)
             return self.fc_fusion(fused)
 
         elif self.attention_mecanism == "gfcam":
@@ -244,7 +243,7 @@ class MultimodalModel(nn.Module):
         # Residual-based multimodal fusion
         # =====================================================
 
-                # =====================================================
+        # =====================================================
         # Residual-based multimodal fusion (corrigidos)
         # =====================================================
 

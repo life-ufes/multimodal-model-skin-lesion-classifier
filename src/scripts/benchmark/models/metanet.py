@@ -65,7 +65,7 @@ class MetaNetModel(nn.Module):
         dropout_fraction: float = 0.3,
         image_encoder: str = "resnet50",
         pretrained: bool = True,
-        unfreeze_weights: bool = False
+        unfreeze_weights: str = False
     ):
         super().__init__()
 

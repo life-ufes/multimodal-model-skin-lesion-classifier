@@ -390,7 +390,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
 
         # mlflow.end_run() # Finaliza o run MLFlow do Controller
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: bool, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list, SEARCH_STEPS, search_space):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list, SEARCH_STEPS, search_space):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -446,7 +446,7 @@ if __name__ == "__main__":
     list_num_heads = local_variables["list_num_heads"]
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
-    unfreeze_weights = bool(local_variables["unfreeze_weights"])
+    unfreeze_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = local_variables["results_folder_path"]
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"

@@ -49,11 +49,7 @@ def train_process(num_epochs,
                   results_folder_path):
 
     # Loss: FocalLoss com pesos por classe
-    criterion = focalLoss.FocalLoss(
-        alpha=weightes_per_category,  # pesos das classes
-        gamma=2.0,
-        reduction="mean"
-    )
+    criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -86,7 +82,7 @@ def train_process(num_epochs,
     train_losses=[]
     val_losses=[]
 
-    experiment_name = "EXPERIMENTOS-PAD-UFES-20 - RESIDUAL BLOCK USAGE - 2026-01-01"
+    experiment_name = "EXPERIMENTOS-PAD-UFES-20 - GFCAM - 07/02/2026"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -195,7 +191,7 @@ def train_process(num_epochs,
         metrics=metrics,
         model_name=model_name,
         base_dir=model_save_path,
-        save_to_disk=True,
+        save_to_disk=False,
         fold_num=fold_num,
         all_labels=all_labels,
         all_predictions=all_predictions,
@@ -405,7 +401,7 @@ def run_expirements(dataset_folder_path: str,
                     k_folds: int,
                     common_dim: int,
                     text_model_encoder: str,
-                    unfreeze_weights: bool,
+                    unfreeze_weights: str,
                     device,
                     list_num_heads: list,
                     list_of_attention_mecanism: list,
@@ -488,19 +484,27 @@ if __name__ == "__main__":
     num_workers = int(local_variables["num_workers"])
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
-    unfreeze_weights = bool(local_variables["unfreeze_weights"])
+    unfreeze_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
-    results_folder_path = local_variables["results_folder_path"]
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    results_folder_path = str(local_variables["results_folder_path"])
+    TRAIN_MODE_FOLDER = {
+        "full_unfrozen": "unfrozen_weights",
+        "partial_unfrozen": "partial_weights",
+        "totally_frozen": "frozen_weights"
+    }
+
+    train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
+
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
 
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder'  # ou 'bert-base-uncased', 'gpt2', etc.
 
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["liwterm"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["resnet-50"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path,

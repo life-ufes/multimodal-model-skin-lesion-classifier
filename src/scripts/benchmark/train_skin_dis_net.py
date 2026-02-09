@@ -497,10 +497,15 @@ def run_experiments():
     num_workers = int(local_variables["num_workers"])
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
-    unfreeze_weights = bool(local_variables["unfreeze_weights"])
-    results_folder_path = local_variables["results_folder_path"]
-
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    unfreeze_weights = str(local_variables["unfreeze_weights"])
+    results_folder_path = str(local_variables["results_folder_path"])
+    TRAIN_MODE_FOLDER = {
+        "full_unfrozen": "unfrozen_weights",
+        "partial_unfrozen": "partial_weights",
+        "totally_frozen": "frozen_weights"
+    }
+    train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = "one-hot-encoder"
