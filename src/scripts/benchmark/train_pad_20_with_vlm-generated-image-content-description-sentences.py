@@ -204,7 +204,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
                 text_model_name=text_model_encoder, 
                 common_dim=common_dim, 
                 vocab_size=num_metadata_features, 
-                unfreeze_weights=unfreeze_weights, 
+                unfreeze_weights=status_weights, 
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
@@ -253,7 +253,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=unfreeze_weights,
+                        unfreeze_weights=status_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
                     )
@@ -274,9 +274,9 @@ if __name__ == "__main__":
     unfreeze_weights = str(local_variables["unfreeze_weights"])
     results_folder_path = str(local_variables["results_folder_path"])
     TRAIN_MODE_FOLDER = {
-        "full_unfrozen": "unfrozen_weights",
-        "partial_unfrozen": "partial_weights",
-        "totally_frozen": "frozen_weights"
+        "unfrozen_weights": "unfrozen_weights",
+        "last_layer_unfrozen_weights": "partial_weights",
+        "frozen_weights": "frozen_weights"
     }
     train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"

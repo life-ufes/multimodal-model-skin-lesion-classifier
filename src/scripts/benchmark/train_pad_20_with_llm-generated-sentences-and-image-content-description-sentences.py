@@ -205,7 +205,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
                 text_model_name=text_model_encoder, 
                 common_dim=common_dim, 
                 vocab_size=num_metadata_features, 
-                unfreeze_weights=unfreeze_weights, 
+                unfreeze_weights=status_weights, 
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
@@ -255,7 +255,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=unfreeze_weights,
+                        unfreeze_weights=status_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
                     )
@@ -276,15 +276,7 @@ if __name__ == "__main__":
     unfreeze_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = str(local_variables["results_folder_path"])
-    TRAIN_MODE_FOLDER = {
-        "full_unfrozen": "unfrozen_weights",
-        "partial_unfrozen": "partial_weights",
-        "totally_frozen": "frozen_weights"
-    }
-
-    train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
-
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{status_weights}"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
         for llm_model_name_sequence_generator in ["gemma3:27b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:

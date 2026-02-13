@@ -12,16 +12,16 @@ class loadModels:
     # Utilitário: controle de fine-tuning do backbone
     # ======================================================
     @staticmethod
-    def set_backbone_train_mode(model, mode="totally_frozen", last_n_layers=1):
-        if mode == "totally_frozen":
+    def set_backbone_train_mode(model, mode="frozen_weights", last_n_layers=1):
+        if mode == "frozen_weights":
             for p in model.parameters():
                 p.requires_grad = False
 
-        elif mode == "full_unfrozen":
+        elif mode == "unfrozen_weights":
             for p in model.parameters():
                 p.requires_grad = True
 
-        elif mode == "partial_unfrozen":
+        elif mode == "last_layer_unfrozen_weights":
             for p in model.parameters():
                 p.requires_grad = False
 
@@ -38,7 +38,7 @@ class loadModels:
     @staticmethod
     def loadModelImageEncoder(
         cnn_model_name: str,
-        backbone_train_mode: str = "totally_frozen"
+        backbone_train_mode: str = "frozen_weights"
     ):
 
         # ------------------------------
@@ -67,7 +67,7 @@ class loadModels:
             cnn_dim = 1664
             model.classifier = nn.Identity()
 
-            if backbone_train_mode == "partial_unfrozen":
+            if backbone_train_mode == "last_layer_unfrozen_weights":
                 for p in model.parameters():
                     p.requires_grad = False
                 for p in model.features.denseblock4.parameters():
@@ -119,7 +119,7 @@ class loadModels:
             model.reset_classifier(0)
             cnn_dim = model.num_features
 
-            if backbone_train_mode == "partial_unfrozen":
+            if backbone_train_mode == "last_layer_unfrozen_weights":
                 for p in model.parameters():
                     p.requires_grad = False
 
@@ -144,7 +144,7 @@ class loadModels:
     @staticmethod
     def loadTextModelEncoder(
         text_model_encoder: str,
-        train_mode: str = "totally_frozen"
+        train_mode: str = "frozen_weights"
     ):
 
         # ------------------------------
@@ -154,7 +154,7 @@ class loadModels:
             model = AutoModel.from_pretrained(text_model_encoder)
             output_dim = model.config.hidden_size
 
-            if train_mode == "full_unfrozen":
+            if train_mode == "unfrozen_weights":
                 for p in model.parameters():
                     p.requires_grad = True
             else:

@@ -434,7 +434,7 @@ def pipeline(
             model = MDNet(
                 meta_dim=num_metadata_features, 
                 num_classes=num_classes, 
-                unfreeze_weights=unfreeze_weights, 
+                unfreeze_weights=status_weights, 
                 cnn_model_name=model_name,
                 device=device
             )
@@ -447,7 +447,7 @@ def pipeline(
                 text_model_name=text_model_encoder,
                 common_dim=common_dim,
                 vocab_size=num_metadata_features,
-                unfreeze_weights=unfreeze_weights,
+                unfreeze_weights=status_weights,
                 attention_mecanism=attention_mecanism,
                 n=1 if attention_mecanism == "no-metadata" else 2
             )
@@ -499,9 +499,9 @@ if __name__ == "__main__":
     unfreeze_weights = str(local_variables["unfreeze_weights"])
     results_folder_path = str(local_variables["results_folder_path"])
     TRAIN_MODE_FOLDER = {
-        "full_unfrozen": "unfrozen_weights",
-        "partial_unfrozen": "partial_weights",
-        "totally_frozen": "frozen_weights"
+        "unfrozen_weights": "unfrozen_weights",
+        "last_layer_unfrozen_weights": "partial_weights",
+        "frozen_weights": "frozen_weights"
     }
     train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
@@ -526,7 +526,7 @@ if __name__ == "__main__":
                 k_folds=k_folds,
                 common_dim=common_dim,
                 text_model_encoder=text_model_encoder,
-                unfreeze_weights=unfreeze_weights,
+                unfreeze_weights=status_weights,
                 attention_mecanism=attention_mecanism,
                 model_name=model_name,
                 num_heads=int(num_heads),

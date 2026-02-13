@@ -20,9 +20,9 @@ if __name__ == "__main__":
     all_results = []
 
     list_of_attention_mecanism = ["no-metadata", "concatenation", "weighted", "liwterm", "metablock", "crossattention", "gfcam","md-net", "metanet"]
-    dataset_name = "ISIC-2019" # "PAD-UFES-20" # "PAD-UFES-25" # "ISIC-2019" # "MILK10K" # 
+    dataset_name = "PAD-UFES-20" # "PAD-UFES-20" # "PAD-UFES-25" # "ISIC-2019" # "MILK10K" # 
     num_heads = 8
-    list_state_of_weights = ["frozen_weights", "partial_weights", "unfrozen_weights"]
+    list_state_of_weights = ["unfrozen_weights"]
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/{dataset_name}/multiclass/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/stratifiedkfold/2/all-weights-unfroozen/for_test/PAD-UFES-20/unfrozen_weights/{num_heads}"
     # base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes/testes-da-implementacao-final/differents_dimensiond_of_projected_features/PAD-UFES-20/unfrozen_weights/8"
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     for status_of_weigths in list_state_of_weights:
         for common_size in [512]:
             for attention_mecanism in list_of_attention_mecanism:
-                base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/artigo_1_GFCAM/07022026/{dataset_name}"
+                base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/artigo_1_GFCAM/10022026/{dataset_name}"
                 # Testar com todos os modelos
                 list_of_models = ["caformer_b36.sail_in22k_ft_in1k", "coat_lite_small.in1k", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "efficientnet-b4", "densenet169", "mobilenet-v2", "resnet-50"]
                 # list_of_models = [f"nas_multimodal_model_id-{int(i)}" for i in range(24)]

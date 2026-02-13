@@ -111,7 +111,7 @@ def evaluate_model(
             auc = roc_auc_score(
                 y_true_bin,
                 all_probs,
-                average="macro",
+                average="weighted",
                 multi_class="ovr"
             )
     except Exception as e:

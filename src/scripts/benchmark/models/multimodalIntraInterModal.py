@@ -22,7 +22,7 @@ class MultimodalModel(nn.Module):
         common_dim=512,
         text_encoder_dim_output=512,
         vocab_size=91,
-        unfreeze_weights="frozen",
+        unfreeze_weights="frozen_weights",
         attention_mecanism="concatenation",
         n=2
     ):

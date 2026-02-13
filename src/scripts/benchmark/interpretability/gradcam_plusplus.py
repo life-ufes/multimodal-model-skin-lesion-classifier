@@ -268,7 +268,7 @@ if __name__ == "__main__":
     # Load and preprocess image
     image_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/PAD-UFES-20/images/PAT_10_18_830.png" # "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/ISIC2019/ISIC_2019_Training_Input/ISIC_2019_Training_Input/ISIC_0000001.jpg"
     image_pil = Image.open(image_path)
-    processed_image = process_image(image_pil, image_encoder="resnet-50")
+    processed_image = process_image(image_pil, image_encoder="densenet169")
     processed_image = processed_image.unsqueeze(0).to(device)  # Add batch dimension
     
     dataset_name="PAD-UFES-20"

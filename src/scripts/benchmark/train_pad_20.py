@@ -46,7 +46,8 @@ def train_process(num_epochs,
                   model_name, 
                   text_model_encoder, 
                   attention_mecanism, 
-                  results_folder_path):
+                  results_folder_path,
+                  save_to_disk=False):
 
     # Loss: FocalLoss com pesos por classe
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
@@ -66,15 +67,14 @@ def train_process(num_epochs,
         f"model_{model_name}_with_{text_model_encoder}_{common_dim}_with_best_architecture"
     )
     os.makedirs(model_save_path, exist_ok=True)
-    print(model_save_path)
 
     early_stopping = EarlyStopping(
         patience=10, 
         delta=0.01, 
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
-        save_to_disk=False,
-        early_stopping_metric_name="val_bacc"
+        save_to_disk=save_to_disk,
+        early_stopping_metric_name="val_loss"
     )
 
     initial_time = time.time()
@@ -191,7 +191,7 @@ def train_process(num_epochs,
         metrics=metrics,
         model_name=model_name,
         base_dir=model_save_path,
-        save_to_disk=False,
+        save_to_disk=save_to_disk,
         fold_num=fold_num,
         all_labels=all_labels,
         all_predictions=all_predictions,
@@ -206,22 +206,25 @@ def train_process(num_epochs,
     return model, model_save_path
 
 
-def pipeline(dataset: any,
-             num_metadata_features:int,
-             num_epochs:int,
-             batch_size:int,
-             device:str,
-             k_folds:int,
-             num_classes:int,
-             model_name:str,
-             num_heads:int,
-             common_dim:int,
-             text_model_encoder:str,
-             unfreeze_weights:list,
-             attention_mecanism:str,
-             results_folder_path:str,
-             num_workers:int=10,
-             persistent_workers:bool=True):
+def pipeline(
+        dataset: any,
+        num_metadata_features:int,
+        num_epochs:int,
+        batch_size:int,
+        device:str,
+        k_folds:int,
+        num_classes:int,
+        model_name:str,
+        num_heads:int,
+        common_dim:int,
+        text_model_encoder:str,
+        unfreeze_weights:list,
+        attention_mecanism:str,
+        results_folder_path:str,
+        num_workers:int=10,
+        persistent_workers:bool=True,
+        save_to_disk:bool=True
+    ):
 
     # # Separação por paciente
     # labels = dataset.labels                      # diagnóstico codificado
@@ -337,7 +340,7 @@ def pipeline(dataset: any,
             model = MDNet(
                 meta_dim=num_metadata_features, 
                 num_classes=num_classes, 
-                unfreeze_weights=unfreeze_weights, 
+                unfreeze_weights=True, 
                 cnn_model_name=model_name,
                 device=device
             )
@@ -347,14 +350,14 @@ def pipeline(dataset: any,
                 meta_dim=num_metadata_features,
                 image_encoder="vit_large_patch16_224",
                 pretrained=True,
-                unfreeze_backbone=unfreeze_weights
+                unfreeze_backbone=True
             )
         elif attention_mecanism=="metanet":
             model = MetaNetModel(
                 meta_dim=num_metadata_features,
                 num_classes=num_classes,
                 image_encoder=str(model_name).replace("-",""),
-                unfreeze_weights=unfreeze_weights
+                unfreeze_weights=True
             )
 
         else:    
@@ -366,18 +369,28 @@ def pipeline(dataset: any,
                 text_model_name=text_model_encoder,
                 common_dim=common_dim,
                 vocab_size=num_metadata_features,
-                unfreeze_weights=unfreeze_weights,
+                unfreeze_weights=status_weights,
                 attention_mecanism=attention_mecanism,
                 n=1 if attention_mecanism == "no-metadata" else 2
             )
         
         # Treino do modelo carregado
         model, model_save_path = train_process(
-            num_epochs, num_heads, fold+1,
-            train_loader, val_loader,
-            dataset.targets, model, device, class_weights,
-            common_dim, model_name, text_model_encoder,
-            attention_mecanism, results_folder_path
+            num_epochs=num_epochs, 
+            num_heads=num_heads, 
+            fold_num=fold+1,
+            train_loader=train_loader, 
+            val_loader=val_loader,
+            targets=dataset.targets, 
+            model=model, 
+            device=device, 
+            weightes_per_category=class_weights,
+            common_dim=common_dim, 
+            model_name=model_name, 
+            text_model_encoder=text_model_encoder,
+            attention_mecanism=attention_mecanism, 
+            results_folder_path=results_folder_path, 
+            save_to_disk=save_to_disk
         )
 
         # Salvar as predições em um arquivo csv
@@ -391,21 +404,23 @@ def pipeline(dataset: any,
             model_name=model_name
         )
 
-
-def run_expirements(dataset_folder_path: str,
-                    results_folder_path: str,
-                    llm_model_name_sequence_generator: str,
-                    num_workers: str,
-                    num_epochs: int,
-                    batch_size: int,
-                    k_folds: int,
-                    common_dim: int,
-                    text_model_encoder: str,
-                    unfreeze_weights: str,
-                    device,
-                    list_num_heads: list,
-                    list_of_attention_mecanism: list,
-                    list_of_models: list):
+def run_expirements(
+        dataset_folder_path: str,
+        results_folder_path: str,
+        llm_model_name_sequence_generator: str,
+        num_workers: str,
+        num_epochs: int,
+        batch_size: int,
+        k_folds: int,
+        common_dim: int,
+        text_model_encoder: str,
+        unfreeze_weights: str,
+        device,
+        list_num_heads: list,
+        list_of_attention_mecanism: list,
+        list_of_models: list,
+        save_to_disk:bool=True
+    ):
 
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
@@ -462,11 +477,12 @@ def run_expirements(dataset_folder_path: str,
                         common_dim=common_dim,
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=unfreeze_weights,
+                        unfreeze_weights=status_weights,
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,
-                        persistent_workers=True
+                        persistent_workers=True,
+                        save_to_disk=save_to_disk
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -484,27 +500,20 @@ if __name__ == "__main__":
     num_workers = int(local_variables["num_workers"])
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
-    unfreeze_weights = str(local_variables["unfreeze_weights"])
+    status_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = str(local_variables["results_folder_path"])
-    TRAIN_MODE_FOLDER = {
-        "full_unfrozen": "unfrozen_weights",
-        "partial_unfrozen": "partial_weights",
-        "totally_frozen": "frozen_weights"
-    }
-
-    train_mode_folder = TRAIN_MODE_FOLDER.get(unfreeze_weights, "frozen_weights")
-
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{train_mode_folder}"
+    save_to_disk=bool(local_variables["save_to_disk"])
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{status_weights}"
 
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder'  # ou 'bert-base-uncased', 'gpt2', etc.
 
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["liwterm"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["gfcam"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["resnet-50"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["densenet169"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path,
@@ -516,9 +525,10 @@ if __name__ == "__main__":
         k_folds=k_folds,
         common_dim=common_dim,
         text_model_encoder=text_model_encoder,
-        unfreeze_weights=unfreeze_weights,
+        unfreeze_weights=status_weights,
         device=device,
         list_num_heads=list_num_heads,
         list_of_attention_mecanism=list_of_attention_mecanism,
-        list_of_models=list_of_models
+        list_of_models=list_of_models,
+        save_to_disk=save_to_disk
     )
