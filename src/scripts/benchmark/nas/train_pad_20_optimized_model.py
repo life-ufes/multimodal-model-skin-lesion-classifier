@@ -291,7 +291,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}",
                         num_workers=5, persistent_workers=True
@@ -339,7 +339,7 @@ if __name__ == "__main__":
             k_folds=k_folds, 
             common_dim=common_dim, 
             text_model_encoder=text_model_encoder, 
-            unfreeze_weights=status_weights, 
+            unfreeze_weights=unfreeze_weights, 
             device=device, 
             list_num_heads=list_num_heads, 
             list_of_attention_mecanism=list_of_attention_mecanism, 

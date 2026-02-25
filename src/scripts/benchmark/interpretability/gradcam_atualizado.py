@@ -352,7 +352,7 @@ if __name__ == "__main__":
     image_path = "./data/PAD-UFES-20/images/PAT_46_881_14.png"
     encoder_dir = "./data/preprocess_data"
     class_list = ["NEV", "BCC", "ACK", "SEK", "SCC", "MEL"]
-    out_dir = "./results/XAI"
+    out_dir = "./results/XAI/24022026/"
     os.makedirs(out_dir, exist_ok=True)
 
     img_pil, image_tensor = process_image(image_path, device)
@@ -441,7 +441,7 @@ if __name__ == "__main__":
                 })
 
             # Salvar mosaico por weight_status
-            mosaic_name = f"mosaic_{cam_type}_pad20_{weight_status}.png"
+            mosaic_name = f"mosaic_{cam_type}_pad20_{weight_status}_24022026.png"
             mosaic_path = os.path.join(out_dir, mosaic_name)
 
             # ordem consistente (a do dict)
