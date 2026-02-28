@@ -8,7 +8,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pickle
-
+from sklearn.metrics import confusion_matrix
+import seaborn as sns # Para plotar a matriz de confusão
 from PIL import Image
 from torchvision import transforms
 
@@ -88,7 +89,7 @@ def process_metadata_row(row_dict):
 # ==========================================================
 from models import multimodalIntraInterModal
 
-def load_model(model_path):
+def load_model(model_path, attention_mecanism="gfcam", unfreeze_weights="unfrozen_weights"):
     model = multimodalIntraInterModal.MultimodalModel(
         num_classes=K,
         device=DEVICE,
@@ -96,9 +97,9 @@ def load_model(model_path):
         text_model_name="one-hot-encoder",
         vocab_size=91,
         num_heads=8,
-        attention_mecanism="gfcam",
+        attention_mecanism=attention_mecanism,
         n=2,
-        unfreeze_weights="unfrozen_weights"
+        unfreeze_weights=unfreeze_weights
     )
 
     ckpt = torch.load(model_path, map_location=DEVICE)
@@ -117,19 +118,27 @@ def mutate_metadata(row, feature):
 
     if feature in ["itch","grew","bleed","changed","hurt","elevation",
                    "smoke","drink","skin_cancer_history","cancer_history"]:
-        r[feature] = not bool(r[feature])
+        val = r[feature]
+        # Toggle seguro para strings ou booleanos/ints
+        if isinstance(val, str):
+            r[feature] = "False" if val.strip().lower() in ["true", "1"] else "True"
+        else:
+            r[feature] = not bool(val)
 
     elif feature in ["diameter_1","diameter_2"]:
-        r[feature] = float(r[feature]) + 5
+        # Cuidado com NaNs/nulos convertidos para float
+        current_val = float(r[feature]) if pd.notnull(r[feature]) else 0.0
+        r[feature] = current_val + 5.0
     
-    elif feature=="age":
+    elif feature == "age":
         r[feature] = 80
 
     elif feature == "gender":
-        r[feature] = "MALE" if r[feature]=="FEMALE" else "FEMALE"
+        # Considerando que a base PAD-UFES-20 geralmente usa FEMALE/MALE
+        r[feature] = "MALE" if r[feature] == "FEMALE" else "FEMALE"
 
     elif feature == "region":
-        r[feature] = "FACE" if r[feature]!="FACE" else "FOREARM"
+        r[feature] = "FACE" if r[feature] != "FACE" else "FOREARM"
 
     return r
 
@@ -141,11 +150,11 @@ def predict_class(model, image_tensor, metadata_tensor):
         logits = model(image_tensor, metadata_tensor)
         probs = torch.softmax(logits, dim=1)
         return int(torch.argmax(probs, dim=1).item())
-
+        
 # ==========================================================
-# FLIP PER FOLD
+# FLIP PER FOLD E COLETA DE PREDIÇÕES
 # ==========================================================
-def run_fold(fold_number):
+def run_fold(fold_number, unfreeze_weights):
 
     print(f"\nRunning Fold {fold_number}")
 
@@ -153,7 +162,7 @@ def run_fold(fold_number):
     model_path = os.path.join(fold_dir,"model.pth")
     pred_path = os.path.join(fold_dir,f"predictions_eval_fold_{fold_number}.csv")
 
-    model = load_model(model_path)
+    model = load_model(model_path=model_path, unfreeze_weights=unfreeze_weights)
 
     df_val = pd.read_csv(pred_path)
     used_images = df_val["image_name"].tolist()
@@ -162,9 +171,12 @@ def run_fold(fold_number):
 
     flip_counts = {f:0 for f in FEATURE_LIST}
     total = 0
+    
+    # Listas para a matriz de confusão deste fold
+    y_true_fold = []
+    y_pred_fold = []
 
     for _, row in df_meta.iterrows():
-
         image_path = os.path.join(IMAGE_DIR,row["img_id"])
         if not os.path.exists(image_path):
             continue
@@ -173,8 +185,18 @@ def run_fold(fold_number):
         meta_dict = row.to_dict()
 
         baseline_tensor = process_metadata_row(meta_dict)
-        c0 = predict_class(model,image_tensor,baseline_tensor)
+        
+        # Predição base (c0)
+        c0 = predict_class(model, image_tensor, baseline_tensor)
+        
+        # Coleta de Real vs Predito
+        # Pega a string do diagnóstico real e converte para o índice de classe
+        true_label_str = row["diagnostic"]
+        if true_label_str in CLASS_LIST:
+            y_true_fold.append(CLASS_LIST.index(true_label_str))
+            y_pred_fold.append(c0)
 
+        # Mutações
         for f in FEATURE_LIST:
             mutated = mutate_metadata(meta_dict,f)
             mutated_tensor = process_metadata_row(mutated)
@@ -186,19 +208,29 @@ def run_fold(fold_number):
         total+=1
 
     flip_rates = {f:flip_counts[f]/total for f in FEATURE_LIST}
-    return flip_rates
+    
+    # Retorna também as predições
+    return flip_rates, y_true_fold, y_pred_fold
 
 # ==========================================================
 # MAIN
 # ==========================================================
 def main():
-
     all_fold_results = []
-
-    for fold in range(1,6):
-        fold_result = run_fold(fold)
+    all_y_true = []
+    all_y_pred = []
+    
+    unfreeze_weights = "unfrozen_weights"
+    
+    for fold in range(1, 6):
+        fold_result, y_true_fold, y_pred_fold = run_fold(fold_number=fold, unfreeze_weights=unfreeze_weights)
         all_fold_results.append(fold_result)
+        
+        # Agrega as predições e valores reais de todos os folds
+        all_y_true.extend(y_true_fold)
+        all_y_pred.extend(y_pred_fold)
 
+    # --- 1. RESUMO DAS MUTAÇÕES (FLIP RATE) ---
     df = pd.DataFrame(all_fold_results)
     df_mean = df.mean()
     df_std = df.std()
@@ -207,20 +239,35 @@ def main():
         "feature": df_mean.index,
         "mean_flip_rate": df_mean.values,
         "std_flip_rate": df_std.values
-    }).sort_values("mean_flip_rate",ascending=False)
+    }).sort_values("mean_flip_rate", ascending=False)
 
-    summary.to_csv(os.path.join(OUT_DIR,"flip_summary_all_folds.csv"),index=False)
+    summary.to_csv(os.path.join(OUT_DIR, f"flip_summary_all_folds_{unfreeze_weights}.csv"), index=False)
 
-    plt.figure(figsize=(8,6))
-    plt.barh(summary["feature"],summary["mean_flip_rate"])
+    plt.figure(figsize=(10, 6))
+    plt.barh(summary["feature"], summary["mean_flip_rate"], xerr=summary["std_flip_rate"], capsize=5, color='skyblue', edgecolor='black')
     plt.xlabel("Mean Flip Rate (5 folds)")
+    plt.title("Impacto da Mutação de Features na Predição do Modelo")
     plt.gca().invert_yaxis()
     plt.tight_layout()
-    plt.savefig(os.path.join(OUT_DIR,"flip_rate_all_folds.png"),dpi=400)
+    plt.savefig(os.path.join(OUT_DIR, f"flip_rate_all_folds_{unfreeze_weights}.png"), dpi=400)
+    plt.close()
+
+    # --- 2. MATRIZ DE CONFUSÃO (TODOS OS FOLDS) ---
+    cm = confusion_matrix(all_y_true, all_y_pred)
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=CLASS_LIST, yticklabels=CLASS_LIST)
+    plt.title("Matriz de Confusão Agregada (5 Folds)")
+    plt.ylabel('Classe Real')
+    plt.xlabel('Classe Predita')
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT_DIR, f"confusion_matrix_all_folds_{unfreeze_weights}.png"), dpi=400)
     plt.close()
 
     print("\nFINAL SUMMARY")
     print(summary)
+    print("\nMatriz de confusão salva no diretório de resultados!")
 
 if __name__=="__main__":
     main()
