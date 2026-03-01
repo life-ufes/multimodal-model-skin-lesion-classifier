@@ -46,3 +46,4 @@ src/scripts/api/docker/env/.env.example
 *.png
 *.log
 results/XAI/FDS/global_fds.txt
+*pkl
