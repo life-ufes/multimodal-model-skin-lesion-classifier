@@ -302,7 +302,7 @@ def plot_matrix(cm: np.ndarray, title: str, out_file: str,
     cm_plot = normalize_confusion_matrix(cm) if normalize else cm.copy()
 
     fig, ax = plt.subplots(figsize=(7, 6))
-    im = ax.imshow(cm_plot, cmap="Blues")
+    im = ax.imshow(X=cm_plot, cmap=plt.cm.Blues)
     plt.colorbar(im)
 
     ax.set_xticks(range(K))
