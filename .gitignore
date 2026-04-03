@@ -18,7 +18,7 @@ heatmaps
 .gitignore
 teste_CLINICAL
 processed_data_one_hot_CLINICAL
-
+venv
 /src/tests/results
 src/src
 /home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests

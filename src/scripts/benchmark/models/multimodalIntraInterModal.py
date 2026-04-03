@@ -48,6 +48,7 @@ class MultimodalModel(nn.Module):
         # =====================================================
         self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
             cnn_model_name=self.cnn_model_name,
+            common_dim=self.common_dim,
             backbone_train_mode=self.unfreeze_weights
         )
 
@@ -126,6 +127,7 @@ class MultimodalModel(nn.Module):
 
         # Usado no Metablock
         self.fc_visual_only = nn.Linear(self.cnn_dim_output, self.num_classes)
+        self.fc_fusion_proj_feat2output = nn.Linear(self.common_dim, self.num_classes)
 
         self.fc_mlp_module_after_metablock_fusion_module = self.fc_mlp_module_after_metablock()
 
@@ -204,8 +206,7 @@ class MultimodalModel(nn.Module):
             return self.fc_fusion(proj_img_feat)
 
         elif self.attention_mecanism == "no-metadata-without-mlp":
-            return self.fc_visual_only(img_seq)
-
+            return self.fc_visual_only(proj_img_feat)
         elif self.attention_mecanism == "concatenation":
             fused = torch.cat([proj_img_feat, proj_txt_feat], dim=1)
             return self.fc_fusion(fused)
@@ -242,12 +243,13 @@ class MultimodalModel(nn.Module):
         # =====================================================
         # Residual-based multimodal fusion
         # =====================================================
+        elif self.attention_mecanism == "rg-att2fusefeatures":
+            features_with_residual = self.image_residual(txt_seq, img_seq, img_seq)
+            features_with_residual = features_with_residual.squeeze(0)  # (B, D)
+            return self.fc_fusion_proj_feat2output(features_with_residual)
 
-        # =====================================================
-        # Residual-based multimodal fusion (corrigidos)
-        # =====================================================
 
-        elif self.attention_mecanism == "only-with-att-intramodal+residual":
+        elif self.attention_mecanism == "rg-att":
             # Residual direto (sem self-att explícito)
             # No nosso forward atual, a forma padrão é (seq_len=1, B, D) => img_seq/txt_seq
             img_res = self.image_residual(img_seq, txt_seq, txt_seq)  # (1, B, D)
@@ -257,6 +259,14 @@ class MultimodalModel(nn.Module):
             txt_res = txt_res.squeeze(0)  # (B, D)
 
             fused = torch.cat([img_res, txt_res], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
+        
+        elif self.attention_mecanism == "att-intramodal":
+            # Self-att já calculado acima: img_att, txt_att
+            img_att = img_att.squeeze(0)  # (B, D)
+            txt_att = txt_att.squeeze(0)  # (B, D)
+
+            fused = torch.cat([img_att, txt_att], dim=1)  # (B, 2D)
             return self.fc_fusion(fused)
 
         elif self.attention_mecanism == "att-intramodal+residual":
@@ -270,6 +280,43 @@ class MultimodalModel(nn.Module):
 
             fused = torch.cat([img_res, txt_res], dim=1)  # (B, 2D)
             return self.fc_fusion(fused)
+
+        elif self.attention_mecanism=="cross-attention-only":
+            # Cross-attention entre os fetores extraidos das imagens e metadados
+            img_cross, _ = self.image_cross_attention(
+                query=img_seq, key=txt_seq, value=txt_seq
+            )  # (1, B, D)
+
+            txt_cross, _ = self.text_cross_attention(
+                query=txt_seq, key=img_seq, value=img_seq
+            )  # (1, B, D)
+
+            img_pooled2 = img_cross.squeeze(0)  # (B, D)
+            txt_pooled2 = txt_cross.squeeze(0)  # (B, D)
+
+            fused = torch.cat([img_pooled2, txt_pooled2], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
+
+        elif self.attention_mecanism=="residual+cross-attention-metadados":
+            # Residual antes do cross-attention
+            img_res = self.image_residual(img_seq, img_seq, img_seq)  # (1, B, D)
+            txt_res = self.text_residual(txt_seq, txt_seq, txt_seq)   # (1, B, D)
+
+            # Cross-attention entre os residuais
+            img_cross2, _ = self.image_cross_attention(
+                query=img_res, key=txt_res, value=txt_res
+            )  # (1, B, D)
+
+            txt_cross2, _ = self.text_cross_attention(
+                query=txt_res, key=img_res, value=img_res
+            )  # (1, B, D)
+
+            img_pooled2 = img_cross2.squeeze(0)  # (B, D)
+            txt_pooled2 = txt_cross2.squeeze(0)  # (B, D)
+
+            fused = torch.cat([img_pooled2, txt_pooled2], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
+
 
         elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados":
             # Self-att já calculado: img_att, txt_att

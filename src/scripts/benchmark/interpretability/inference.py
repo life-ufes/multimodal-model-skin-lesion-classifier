@@ -13,7 +13,7 @@ from benchmark.models import multimodalIntraInterModal # Ajuste conforme a estru
 
 
 
-def one_hot_encoding(metadata, ohe_path = "./src/results/preprocess_data/ohe.pickle", scaler_path = "./src/results/preprocess_data/scaler.pickle"):
+def one_hot_encoding(metadata, ohe_path = "./data/preprocess_data/ohe_pad_20.pickle", scaler_path = "./data/preprocess_data/scaler_pad_20.pickle"):
     # Remover colunas desnecessárias e selecionar as features
     dataset_features = metadata.drop(columns=['patient_id', 'lesion_id', 'img_id', 'biopsed', 'diagnostic'])
 
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     metadata = process_data(text, column_names)
 
     # Processar metadados
-    processed_metadata = one_hot_encoding(metadata, ohe_path="./src/results/preprocess_data/ohe.pickle", scaler_path="./src/results/preprocess_data/scaler.pickle")
+    processed_metadata = one_hot_encoding(metadata, ohe_path="./data/preprocess_data/ohe_pad_20.pickle", scaler_path="./data/preprocess_data/scaler_pad_20.pickle")
     print(f"Processed_metadata:{processed_metadata}\n")
 
     # Realizar inferência

@@ -15,7 +15,7 @@ set +a
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 echo "🚀 Iniciando treino dos modelos otimizados ..."
-LOG_FILE="logs/train_pad_20_artigo1_07022026_model_${TIMESTAMP}.log"
+LOG_FILE="logs/train_pad_20_artigo2_02042026_model_${TIMESTAMP}.log"
 
 # ============================================================
 # Execução
