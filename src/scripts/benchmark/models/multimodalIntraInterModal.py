@@ -338,6 +338,27 @@ class MultimodalModel(nn.Module):
 
             fused = torch.cat([img_pooled2, txt_pooled2], dim=1)  # (B, 2D)
             return self.fc_fusion(fused)
+        
+        elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures":
+            # Self-att já calculado: img_att, txt_att
+            # Residual antes do cross
+            img_res = self.image_residual(img_seq, img_att, img_att)  # (1, B, D)
+            txt_res = self.text_residual(txt_seq, txt_att, txt_att)   # (1, B, D)
+
+            # Cross-attention entre os residuais
+            img_cross2, _ = self.image_cross_attention(
+                query=img_res, key=txt_res, value=txt_res
+            )  # (1, B, D)
+
+            txt_cross2, _ = self.text_cross_attention(
+                query=txt_res, key=img_res, value=img_res
+            )  # (1, B, D)
+
+        # elif self.attention_mecanism == "rg-att2fusefeatures":
+            features_with_residual = self.image_residual(txt_cross2, img_cross2, img_cross2)
+            features_with_residual = features_with_residual.squeeze(0)  # (B, D)
+            return self.fc_fusion_proj_feat2output(features_with_residual)
+
 
         elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados+metablock":
             # Self-att já calculado: img_att, txt_att

@@ -510,9 +510,9 @@ if __name__ == "__main__":
     text_model_encoder = 'one-hot-encoder'  # ou 'bert-base-uncased', 'gpt2', etc.
 
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["metablock"] # "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["no-metadata"] # "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"] # ["swin-tiny", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "efficientnet-b0", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50", "mobilenet-v2"]
+    list_of_models = ["mobilenet-v2"] # ["swin-tiny", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "efficientnet-b0", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50", "mobilenet-v2"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path,
