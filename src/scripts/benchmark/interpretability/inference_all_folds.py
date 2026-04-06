@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 from PIL import Image
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, roc_auc_score
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import sys
@@ -113,7 +113,31 @@ def process_metadata_pad20(df_raw, ohe, scaler, device):
 
     return torch.tensor(processed, dtype=torch.float32).to(device)
 
+def simulate_missing_metadata(df, missing_rate, numerical_cols, categorical_cols, seed=42):
+    df = df.copy()
+    rng = np.random.default_rng(seed)
 
+    for col in numerical_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    for col in categorical_cols:
+        if col in df.columns:
+            df[col] = df[col].astype(object)
+
+    all_features = numerical_cols + categorical_cols
+    mask = rng.random((len(df), len(all_features))) < (1 - missing_rate)
+
+    for j, col in enumerate(all_features):
+        if col not in df.columns:
+            continue
+
+        if col in numerical_cols:
+            df.loc[~mask[:, j], col] = np.nan
+        else:
+            df.loc[~mask[:, j], col] = "EMPTY"
+
+    return df
 # ==========================================================
 # EXECUÇÃO DO BENCHMARK
 # ==========================================================
@@ -127,14 +151,14 @@ if __name__ == "__main__":
     transform = A.Compose([A.Resize(224, 224), A.Normalize(), ToTensorV2()])
     meta_all = pd.read_csv(METADATA_FILE)
 
-    BACKBONES = ["resnet-50"]
-    MECHANISMS = ["metablock", "crossattention", "att-intramodal+residual+cross-attention-metadados"] 
+    BACKBONES = ["caformer_b36.sail_in22k_ft_in1k"]
+    MECHANISMS = ["att-intramodal+residual+cross-attention-metadados"] # ["no-metadata", "concatenation", "metablock", "crossattention", "att-intramodal+residual+cross-attention-metadados"] 
 
     for cnn_name in BACKBONES:
         for attention in MECHANISMS:
             print(f"\n⚙️ EXPERIMENTO: {cnn_name} | {attention}")
             
-            base_results_dir = f"./src/results/testes-da-implementacao-final_2/01012026/PAD-UFES-20/unfrozen_weights/8/{attention}/model_{cnn_name}_with_one-hot-encoder_512_with_best_architecture"
+            base_results_dir = f"./src/results/testes-da-implementacao-final_2/25032026-WITH-LN/PAD-UFES-20/unfrozen_weights/8/{attention}/model_{cnn_name}_with_one-hot-encoder_512_with_best_architecture"
             
             all_folds_data = []
 
@@ -149,35 +173,39 @@ if __name__ == "__main__":
                 if not os.path.exists(model_path): 
                     print(f"⚠️ Modelo não encontrado para o Fold {fold_idx}")
                     continue
-
-                # 1. Instância com Vocab Size Fixo em 91 e num_heads=8 (baseado no GradCAM)
-                model = multimodalIntraInterModal.MultimodalModel(
-                    num_classes=6, 
-                    device=DEVICE, 
-                    cnn_model_name=cnn_name,
-                    text_model_name="one-hot-encoder", 
-                    vocab_size=91,  
-                    num_heads=8, 
-                    attention_mecanism=attention, 
-                    n=2, 
-                    unfreeze_weights="unfrozen_weights"
-                )
-
-                # 2. Carregar e Limpar o Dicionário
-                ckpt = torch.load(model_path, map_location=DEVICE)
-                state_dict = ckpt.get("model_state_dict", ckpt)
-                state_dict = _strip_module_prefix(state_dict)
-
-                # 3. Carregamento Estrito (Sem try/except com strict=False)
+                # Tenta carregar o modelo
                 try:
-                    model.load_state_dict(state_dict, strict=False)
-                    print(f"✅ Fold {fold_idx}: Pesos carregados com sucesso (Strict=True)!")
-                except RuntimeError as e:
-                    print(f"❌ Erro crítico no carregamento do Fold {fold_idx}:\n{e}")
-                    sys.exit(1)
+                    # 1. Instância com Vocab Size Fixo em 91 e num_heads=8 (baseado no GradCAM)
+                    model = multimodalIntraInterModal.MultimodalModel(
+                        num_classes=6, 
+                        device=DEVICE, 
+                        cnn_model_name=cnn_name,
+                        text_model_name="one-hot-encoder", 
+                        vocab_size=91,  
+                        num_heads=8, 
+                        attention_mecanism=attention, 
+                        n=2, 
+                        unfreeze_weights="unfrozen_weights"
+                    )
+                
+                    # 2. Carregar e Limpar o Dicionário
+                    ckpt = torch.load(model_path, map_location=DEVICE, weights_only=True)
+                    state_dict = ckpt.get("model_state_dict", ckpt)
+                    state_dict = _strip_module_prefix(state_dict)
 
-                model.to(DEVICE).eval()
+                    # 3. Carregamento Estrito (Sem try/except com strict=False)
+                    try:
+                        model.load_state_dict(state_dict, strict=False)
+                        print(f"✅ Fold {fold_idx}: Pesos carregados com sucesso (Strict=True)!")
+                    except RuntimeError as e:
+                        print(f"❌ Erro crítico no carregamento do Fold {fold_idx}:\n{e}")
+                        sys.exit(1)
 
+                    model.to(DEVICE).eval()
+                except Exception as e:
+                    print(f"Erro ao carregar o modelo:{e}\n")
+                    continue
+                
                 # Carrega predições para filtrar as imagens de teste
                 preds_csv = os.path.join(fold_path, f"predictions_eval_fold_{fold_idx}.csv")
                 preds_fold = pd.read_csv(preds_csv)
@@ -186,61 +214,62 @@ if __name__ == "__main__":
 
                 # Inferência
                 for rate in MISSING_RATES:
-                    y_true, y_pred = [], []
-                    
-                    for _, row in df_test.iterrows():
-                        # Criamos uma cópia limpa da linha para cada iteração de 'rate'
-                        sample_df = pd.DataFrame([row.to_dict()])
-                        
-                        # 1. Pré-limpeza (padronizar vazios do CSV original)
-                        sample_df = clean_metadata(sample_df)
+                    y_true, y_pred, y_prob = [], [], []
 
-                        # 2. Seleção de colunas para esconder
-                        # Usamos apenas colunas que o modelo realmente usa para o Metablock
-                        cols_to_hide = [c for c in (CATEGORICAL_COLS + NUMERICAL_COLS) if c in sample_df.columns]
-                        
-                        sample_seed = int(hash(row["img_id"]) % 1e6 + rate * 100)
-                        rng = random.Random(sample_seed)
-                        
-                        num_to_drop = int(round(len(cols_to_hide) * rate))
-                        to_drop = rng.sample(cols_to_hide, num_to_drop)
+                    # Aplica missing no fold inteiro antes da inferência
+                    df_test_missing = simulate_missing_metadata(
+                        df=df_test,
+                        missing_rate=rate,
+                        numerical_cols=NUMERICAL_COLS,
+                        categorical_cols=CATEGORICAL_COLS,
+                        seed=fold_idx + int(rate * 1000)
+                    )
 
-                        # 3. REMOÇÃO ANTES DO PREPROCESSAMENTO
-                        for c in to_drop:
-                            if c in NUMERICAL_COLS:
-                                # Se for idade/diâmetro, simulamos o "desconhecido" com o valor de imputação do treino
-                                sample_df[c] = -1.0 
-                            else:
-                                # Se for categórico, substituímos por uma string que o OHE não conhece (ex: 'EMPTY')
-                                # Isso fará com que o OHE gere um vetor de zeros (all-zeros) para essa categoria
-                                sample_df[c] = "EMPTY"
-                        
-                        # Processamento de Imagem
+                    for _, row in df_test_missing.iterrows():
+                        sample_df = pd.DataFrame([row[PAD_COLUMNS].to_dict()])
+
+                        # Processamento de imagem
                         img = Image.open(os.path.join(IMAGE_ROOT, row["img_id"])).convert("RGB")
                         img_t = transform(image=np.array(img))["image"].unsqueeze(0).to(DEVICE)
-                        
-                        # Processamento de Metadados usando a função blindada
+
+                        # Processamento de metadados usando a função blindada
                         meta_t = process_metadata_pad20(sample_df, shared_ohe, shared_scaler, DEVICE)
 
                         # Forward Pass
                         with torch.no_grad():
                             output = model(img_t, meta_t)
-                            pred_idx = torch.argmax(output, dim=1).item()
-                        
+                            probs = torch.softmax(output, dim=1).cpu().numpy()[0]
+                            pred_idx = np.argmax(probs)
+
                         y_true.append(LABELS_LIST.index(row["diagnostic"]))
                         y_pred.append(pred_idx)
+                        y_prob.append(probs)
+
+                    y_prob = np.array(y_prob)
 
                     # Métricas
                     acc = accuracy_score(y_true=y_true, y_pred=y_pred)
                     bacc = balanced_accuracy_score(y_true, y_pred)
                     f1 = f1_score(y_true=y_true, y_pred=y_pred, average="weighted", zero_division=0)
 
-                    all_folds_data.append({
-                        "fold": fold_idx, "missing_rate": rate, "balanced_acc": bacc, "f1_score": f1, "accuracy": acc
-                    })
-                    # Print da performance
-                    print(f"   ➔ Rate {rate} | BAcc: {bacc:.4f} | F1: {f1:.4f}")
+                    try:
+                        auc = roc_auc_score(y_true, y_prob, multi_class="ovr", average="weighted")
+                    except Exception:
+                        auc = np.nan
 
+                    all_folds_data.append({
+                        "fold": fold_idx,
+                        "missing_rate": rate,
+                        "balanced_acc": bacc,
+                        "f1_score": f1,
+                        "accuracy": acc,
+                        "auc": auc
+                    })
+
+                    print(
+                        f"   ➔ Rate {rate} | "
+                        f"ACC: {acc:.4f} | BAcc: {bacc:.4f} | F1: {f1:.4f} | AUC: {auc:.4f}"
+                    )
             # ==========================================================
             # FINAL DO SCRIPT: SALVAMENTO FORMATADO
             # ==========================================================
@@ -267,7 +296,7 @@ if __name__ == "__main__":
                 summary["mechanism"] = attention
 
                 # 5. Salvar o CSV final
-                out_path = f"./src/results/summary_{attention}_{cnn_name}.csv"
+                out_path = f"./src/results/testes-da-implementacao-final_2/25032026-WITH-LN/PAD-UFES-20/unfrozen_weights/8/summary/summary_{attention}_{cnn_name}.csv"
                 summary.to_csv(out_path, index=False)
                 
                 print(f"\n📊 Resumo final gerado com sucesso!")

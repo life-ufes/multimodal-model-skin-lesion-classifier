@@ -9,11 +9,14 @@ if __name__ == "__main__":
     all_results = []
 
     list_of_attention_mecanism = [
+        "no-metadata",
         "att-intramodal",
         "rg-att",
         "att-intramodal+residual",
         "cross-attention-only",
-        "residual+cross-attention-metadados"
+        "residual+cross-attention-metadados",
+        "att-intramodal+residual+cross-attention-metadados",
+        "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures"
     ]
 
     dataset_name = "PAD-UFES-20"

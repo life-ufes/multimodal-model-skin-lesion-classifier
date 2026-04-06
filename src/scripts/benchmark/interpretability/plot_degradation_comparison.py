@@ -51,17 +51,17 @@ def plot_degradation_curves(results_directory="./src/results"):
             plt.fill_between(x, y - std, y + std, alpha=0.15)
 
         plt.title(
-            f"Resiliência do Modelo à Ausência de Metadados Clínicos\nBackbone: {backbone}",
+            f"Multimodal model performance by the missing metadata rate increase\nVisual feature extractor: {backbone}",
             fontsize=14,
             fontweight="bold",
-            pad=15
+            pad=12
         )
-        plt.xlabel("Taxa de Omissão de Metadados (Missing Rate)", fontsize=12)
-        plt.ylabel("Balanced Accuracy Médio (5-Fold)", fontsize=12)
+        plt.xlabel("Missing metadata rate", fontsize=12)
+        plt.ylabel("Balanced Accuracy (mean +- std)(5-Fold)", fontsize=12)
 
         plt.xticks(missing_rates_sorted)
-        plt.ylim(0.3, 0.8)
-        plt.legend(title="Mecanismo de Fusão", loc="lower left", fontsize=10, title_fontsize=11)
+        plt.ylim(0.1, 0.8)
+        plt.legend(title="Modular combination used", loc="lower left", fontsize=8, title_fontsize=10)
         plt.tight_layout()
 
         output_img = os.path.join(
@@ -75,4 +75,4 @@ def plot_degradation_curves(results_directory="./src/results"):
 
 
 if __name__ == "__main__":
-    plot_degradation_curves("./src/results")
+    plot_degradation_curves("./src/results/testes-da-implementacao-final_2/25032026-WITH-LN/PAD-UFES-20/unfrozen_weights/8/summary")

@@ -206,7 +206,8 @@ class MultimodalModel(nn.Module):
             return self.fc_fusion(proj_img_feat)
 
         elif self.attention_mecanism == "no-metadata-without-mlp":
-            return self.fc_visual_only(proj_img_feat)
+            return self.fc_visual_only(img_feat)
+        
         elif self.attention_mecanism == "concatenation":
             fused = torch.cat([proj_img_feat, proj_txt_feat], dim=1)
             return self.fc_fusion(fused)
@@ -382,7 +383,7 @@ class MultimodalModel(nn.Module):
             fused_meta = self.meta_block(img_pooled2, txt_pooled2)  # (B, D)
 
             # Classificador no espaço comum
-            return self.fc_visual_only(fused_meta)
+            return self.fc_fusion_proj_feat2output(fused_meta)
 
         elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual":
             # Self-att inicial: img_att, txt_att
