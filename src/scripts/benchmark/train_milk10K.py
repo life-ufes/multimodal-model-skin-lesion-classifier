@@ -2,7 +2,7 @@
 # ============================================================
 # MILK10K - Multimodal training script (paper-safe CV)
 # Fixes:
-#  - Correct StratifiedKFold application (Subset)
+#  - Correct StratifiedGroupKFold application (Subset)
 #  - Train/Val datasets with different transforms (is_train True/False)
 #  - Safe class weights (always num_classes length)
 #  - Choose ONE imbalance strategy (recommended defaults below)
@@ -18,7 +18,7 @@ from collections import Counter
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 from models.multimodalMDNet import MDNet
 
 import mlflow
@@ -333,7 +333,7 @@ def pipeline(
     k_folds,
     common_dim,
     text_model_encoder,
-    unfreeze_weights,
+    status_weights,
     attention_mecanism,
     model_name,
     num_heads,
@@ -372,18 +372,14 @@ def pipeline(
         is_train=False
     )
 
-    labels = np.array(train_dataset.labels, dtype=np.int64)
-    targets = train_dataset.targets
-    num_classes = len(targets)
-    num_metadata_features = train_dataset.features.shape[1] if text_model_encoder == "one-hot-encoder" else 512
+    # Separação pelo ID da lesões
+    labels = train_dataset.labels                         # diagnóstico codificado
+    groups = train_dataset.metadata["lesion_id"].values   # agrupa por paciente
+    stratifiedKFold = StratifiedGroupKFold(n_splits=k_folds, shuffle=True, random_state=42)
 
-    print(f"Número de features do metadados: {num_metadata_features}\n")
-    print(f"Classes presentes: {targets}\n")
-    print(f"Número de classes: {num_classes}\n")
-
-    cv = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
-
-    for fold, (train_idx, val_idx) in enumerate(cv.split(np.zeros(len(labels)), labels), start=1):
+    for fold, (train_idx, val_idx) in enumerate(
+        stratifiedKFold.split(X=np.zeros(len(labels)), y=labels, groups=groups)
+    ):
         print(f"\n==============================")
         print(f"Fold {fold}/{k_folds}")
         print(f"Train samples: {len(train_idx)} | Val samples: {len(val_idx)}")
@@ -526,7 +522,7 @@ if __name__ == "__main__":
                 k_folds=k_folds,
                 common_dim=common_dim,
                 text_model_encoder=text_model_encoder,
-                unfreeze_weights=status_weights,
+                status_weights=unfreeze_weights,
                 attention_mecanism=attention_mecanism,
                 model_name=model_name,
                 num_heads=int(num_heads),

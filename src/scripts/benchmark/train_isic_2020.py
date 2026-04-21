@@ -303,7 +303,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=num_workers, persistent_workers=True
                     )

@@ -8,24 +8,30 @@ def get_dataset_content(dataset_path: str):
 if __name__ == "__main__":
     all_results = []
 
+    # list_of_attention_mecanism = [
+    #     "no-metadata",
+    #     "att-intramodal",
+    #     "rg-att",
+    #     "att-intramodal+residual",
+    #     "cross-attention-only",
+    #     "residual+cross-attention-metadados",
+    #     "att-intramodal+residual+cross-attention-metadados",
+    #     "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures"
+    # ]
     list_of_attention_mecanism = [
         "no-metadata",
-        "att-intramodal",
-        "rg-att",
-        "att-intramodal+residual",
-        "cross-attention-only",
-        "residual+cross-attention-metadados",
-        "att-intramodal+residual+cross-attention-metadados",
-        "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures"
+        "concatenation",
+        "metablock",
+        "crossattention",
+        "att-intramodal+residual+cross-attention-metadados"
     ]
-
     dataset_name = "PAD-UFES-20"
     num_heads = 8
     list_state_of_weights = ["unfrozen_weights"]
     common_sizes = [512]
 
     base_folder_path = (
-        f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/25032026-WITH-LN/{dataset_name}"
+        f"./src/results/testes-da-implementacao-final_2/11042026-WITH-LN--METHOD-CONFIG-COMPARISON/{dataset_name}"
     )
 
     list_of_models = [

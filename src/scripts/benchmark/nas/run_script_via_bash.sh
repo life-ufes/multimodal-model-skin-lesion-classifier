@@ -24,7 +24,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 SAFE_LLM_NAME=$(echo "$LLM_MODEL_NAME_SEQUENCE_GENERATOR" | sed 's/[:\/]/_/g')
 HISTORY_MODE="last_k" # "full" # "top_k"
 
-LOG_FILE="$LOG_DIR/nas_${SAFE_LLM_NAME}_${TIMESTAMP}_history-mode-${HISTORY_MODE}.log"
+LOG_FILE="$LOG_DIR/nas_20042026_${TIMESTAMP}_${HISTORY_MODE}.log"
 
 echo "🧠 LLM: $LLM_MODEL_NAME_SEQUENCE_GENERATOR"
 echo "📄 Log: $LOG_FILE"
@@ -33,7 +33,7 @@ echo "🚀 Iniciando NAS..."
 # ============================================================
 # Execução
 # ============================================================
-nohup python3 -u ./src/scripts/benchmark/nas/optimization_train_process_pad_20_llm-as-controller.py \
+nohup python3 -u ./src/scripts/benchmark/nas/train_milk10k_optimized_model.py \
   > "$LOG_FILE" 2>&1 &
 
 echo "✅ Processo iniciado em background (PID $!)"
