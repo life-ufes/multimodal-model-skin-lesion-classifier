@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
+from models import skinLesionDatasetsPAD2020
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
-from models import multimodalIntraInterModal, multimodalIntraModalWithBert
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import multimodalIntraModalWithBert
+from models import skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
-from collections import Counter
 from sklearn.model_selection import StratifiedKFold
 import time
 import os
@@ -205,7 +205,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
                 text_model_name=text_model_encoder, 
                 common_dim=common_dim, 
                 vocab_size=num_metadata_features, 
-                unfreeze_weights=status_weights, 
+                unfreeze_weights=unfreeze_weights, 
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
@@ -226,7 +226,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
             for num_heads in list_num_heads:
                 try:
                     if (text_model_encoder in ['one-hot-encoder', "tab-transformer"]):
-                        dataset = skinLesionDatasets.SkinLesionDataset(
+                        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
@@ -255,7 +255,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
                     )
@@ -276,7 +276,7 @@ if __name__ == "__main__":
     unfreeze_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = str(local_variables["results_folder_path"])
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{status_weights}"
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{unfreeze_weights}"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     for text_model_encoder in ['bert-base-uncased', 'gpt2']: # 'one-hot-encoder' # "tab-transformer"
         for llm_model_name_sequence_generator in ["gemma3:27b"]: # ["deepseek-r1:70b", "llava:34b", "qwen2.5:72b", "phi4", "qwq", "gemma3:27b"]:

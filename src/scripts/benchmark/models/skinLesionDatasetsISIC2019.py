@@ -15,7 +15,7 @@ import cv2
 class SkinLesionDataset(Dataset):
     def __init__(self, metadata_file, img_dir, size=(224,224), drop_nan=False, 
                  bert_model_name='bert-base-uncased', random_undersampling=False, 
-                 image_encoder="resnet-18", is_train=True):
+                 image_encoder="resnet-18", is_train=True, type_of_problem="multiclass"):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.is_to_drop_nan = drop_nan
@@ -24,6 +24,7 @@ class SkinLesionDataset(Dataset):
         self.random_undersampling=random_undersampling
         self.size = size
         self.is_train = is_train
+        self.type_of_problem = type_of_problem
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.image_encoder = image_encoder
         self.transform = self.load_transforms()
@@ -124,8 +125,21 @@ class SkinLesionDataset(Dataset):
         return train_loader, val_loader
 
     def one_hot_encoding(self):
-        # Seleção das features
-        dataset_features = self.metadata.drop(columns=['image', 'lesion_id', 'category'])
+        # Criar coluna benign_malignant se necessário para classificação binária
+        if self.type_of_problem == "binaryclass":
+            # Mapear categorias para benigno/maligno
+            benign_categories = {'NV', 'BKL', 'DF', 'VASC', 'AK'}
+            malignant_categories = {'MEL', 'SCC', 'BCC'}
+            self.metadata['benign_malignant'] = self.metadata['category'].apply(
+                lambda x: 'benign' if x in benign_categories else ('malignant' if x in malignant_categories else 'unknown')
+            )
+            # Seleção das features - remove 'category' e 'benign_malignant' (que será a label)
+            dataset_features = self.metadata.drop(columns=['image', 'lesion_id', 'category', 'benign_malignant'])
+            encoder_suffix = "_binaryclass"
+        else:
+            # Seleção das features - remove apenas 'category' (que será a label)
+            dataset_features = self.metadata.drop(columns=['image', 'lesion_id', 'category'])
+            encoder_suffix = ""
         # Convert specific columns to numeric if possible
         # Definir as colunas categóricas e numéricas corretamente
         for col in ['age_approx']:
@@ -143,41 +157,50 @@ class SkinLesionDataset(Dataset):
         os.makedirs('./src/results/preprocess_data', exist_ok=True)
 
         # OneHotEncoder
-        if os.path.exists("./src/results/preprocess_data/ohe_isic2019.pickle"):
-            with open('./src/results/preprocess_data/ohe_isic2019.pickle', 'rb') as f:
+        ohe_file = f"./src/results/preprocess_data/ohe_isic2019{encoder_suffix}.pickle"
+        if os.path.exists(ohe_file):
+            with open(ohe_file, 'rb') as f:
                 ohe = pickle.load(f)
             categorical_data = ohe.transform(dataset_features[categorical_cols])
         else:
             ohe = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
             categorical_data = ohe.fit_transform(dataset_features[categorical_cols])
-            with open('./src/results/preprocess_data/ohe_isic2019.pickle', 'wb') as f:
+            with open(ohe_file, 'wb') as f:
                 pickle.dump(ohe, f)
 
         # StandardScaler
-        if os.path.exists("./src/results/preprocess_data/scaler_isic2019.pickle"):
-            with open('./src/results/preprocess_data/scaler_isic2019.pickle', 'rb') as f:
+        scaler_file = f"./src/results/preprocess_data/scaler_isic2019{encoder_suffix}.pickle"
+        if os.path.exists(scaler_file):
+            with open(scaler_file, 'rb') as f:
                 scaler = pickle.load(f)
             numerical_data = scaler.transform(dataset_features[numerical_cols])
         else:
             scaler = StandardScaler()
             numerical_data = scaler.fit_transform(dataset_features[numerical_cols])
-            with open('./src/results/preprocess_data/scaler_isic2019.pickle', 'wb') as f:
+            with open(scaler_file, 'wb') as f:
                 pickle.dump(scaler, f)
 
         # Concatenar dados
         processed_data = np.hstack((categorical_data, numerical_data))
 
-        # Labels
-        labels = self.metadata['category'].values
-        if os.path.exists("./src/results/preprocess_data/label_encoder_isic2019.pickle"):
-            with open('./src/results/preprocess_data/label_encoder_isic2019.pickle', 'rb') as f:
+        # Labels - seleciona coluna baseada no tipo de problema
+        if self.type_of_problem == "binaryclass":
+            label_column = 'benign_malignant'
+            label_encoder_file = "./src/results/preprocess_data/label_encoder_isic2019_binaryclass.pickle"
+        else:
+            label_column = 'category'
+            label_encoder_file = "./src/results/preprocess_data/label_encoder_isic2019.pickle"
+            
+        labels = self.metadata[label_column].values
+        if os.path.exists(label_encoder_file):
+            with open(label_encoder_file, 'rb') as f:
                 label_encoder = pickle.load(f)
             encoded_labels = label_encoder.transform(labels)
         else:
             label_encoder = LabelEncoder()
             encoded_labels = label_encoder.fit_transform(labels)
-            with open('./src/results/preprocess_data/label_encoder_isic2019.pickle', 'wb') as f:
+            with open(label_encoder_file, 'wb') as f:
                 pickle.dump(label_encoder, f)
 
-        return processed_data, encoded_labels, self.metadata['category'].unique()
+        return processed_data, encoded_labels, self.metadata[label_column].unique()
 

@@ -4,13 +4,14 @@ import os
 import csv
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+from benchmark.models import skinLesionDatasetsPAD2020
 import utils
 from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, dynamicMultimodalmodel, controllerMultimodalmodel
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
 from utils.request_to_llm import request_to_ollama, filter_generated_response
 from collections import Counter
@@ -410,7 +411,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
             for num_heads in list_num_heads:
                 try:
                     if (text_model_encoder in ['one-hot-encoder', "tab-transformer"]):
-                        dataset = skinLesionDatasets.SkinLesionDataset(
+                        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
@@ -439,7 +440,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         SEARCH_STEPS = SEARCH_STEPS, 

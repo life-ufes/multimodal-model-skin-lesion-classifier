@@ -5,14 +5,13 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from utils import model_metrics, load_local_variables, save_predictions, load_multimodal_config
 from utils.early_stopping import EarlyStopping
-from models import multimodalIntraInterModal, dynamicMultimodalmodel
-from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDatasetsISIC2019
+from models import dynamicMultimodalmodel
+from models import skinLesionDatasetsISIC2019
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
-import json
 import time
-from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from torch.utils.data import DataLoader
 import numpy as np
 import mlflow
 from tqdm import tqdm
@@ -129,10 +128,20 @@ def train_process(num_epochs,
             current_lr = [pg['lr'] for pg in optimizer.param_groups]
             print(f"Current Learning Rate(s): {current_lr}\n")
 
-            metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
-
-                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
-            )
+            try:
+                metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+                    model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
+                )
+            except IndexError as e:
+                print(f"⚠️ Error evaluating metrics (IndexError): {e}")
+                print(f"   Validation loader reports {len(val_loader)} batches")
+                metrics = {"error": str(e)}
+                all_labels, all_predictions, all_probs = [], [], []
+            except Exception as e:
+                print(f"⚠️ Error evaluating metrics (Unexpected error): {e}")
+                metrics = {"error": str(e)}
+                all_labels, all_predictions, all_probs = [], [], []
+                
             metrics["epoch"] = epoch_index
             metrics["train_loss"] = float(train_loss)
             metrics["val_loss"] = float(val_loss)
@@ -160,10 +169,18 @@ def train_process(num_epochs,
     model.eval()
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
-        metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
-
-            model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
-        )
+        try:
+            metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
+                model=model, dataloader = val_loader, device=device, fold_num=fold_num, targets=targets, base_dir=model_save_path, model_name=model_name 
+            )
+        except IndexError as e:
+            print(f"⚠️ Error evaluating final metrics (IndexError): {e}")
+            metrics = {"error": str(e)}
+            all_labels, all_predictions, all_probs = [], [], []
+        except Exception as e:
+            print(f"⚠️ Error evaluating final metrics (Unexpected error): {e}")
+            metrics = {"error": str(e)}
+            all_labels, all_predictions, all_probs = [], [], []
 
     metrics["train process time"] = str(train_process_time)
     metrics["epochs"] = str(int(epoch_index))
@@ -188,7 +205,24 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=5, persistent_workers=True):
+def pipeline(
+        dataset, 
+        num_metadata_features, 
+        num_epochs, 
+        batch_size, 
+        device, 
+        multimodel_config, 
+        k_folds, num_classes, 
+        model_name, num_heads, 
+        common_dim, 
+        text_model_encoder, 
+        unfreeze_weights, 
+        attention_mecanism, 
+        results_folder_path, 
+        num_workers=5, 
+        persistent_workers=True,
+        type_of_problem="multiclass",
+    ):
     # Separação por paciente
     labels = dataset.labels                      # diagnóstico codificado
     groups = dataset.metadata["image"].values  # agrupa por paciente
@@ -198,6 +232,29 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
         stratifiedKFold.split(X=np.zeros(len(labels)), y=labels, groups=groups)
     ):
         print(f"Fold {fold+1}/{k_folds}")
+        
+        # Validação: skip fold se não tiver pelo menos 2 classes na validação ou treino
+        train_labels_fold = [labels[i] for i in train_idx]
+        val_labels_fold = [labels[i] for i in val_idx]
+        train_counts = Counter(train_labels_fold)
+        val_counts = Counter(val_labels_fold)
+        print(f"Fold {fold+1}: train={train_counts}, val={val_counts}")
+        
+        if len(val_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: validation set has only {len(val_counts)} class(es). Classes: {set(val_labels_fold)}")
+            continue
+        if len(train_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: training set has only {len(train_counts)} class(es). Classes: {set(train_labels_fold)}")
+            continue
+        
+        # Verificar número mínimo de exemplares de cada classe
+        MIN_SAMPLES_PER_CLASS = 5
+        if min(val_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: validation has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {val_counts}")
+            continue
+        if min(train_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: training has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {train_counts}")
+            continue
 
         train_dataset = type(dataset)(
             metadata_file=dataset.metadata_file,
@@ -206,6 +263,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
             drop_nan=dataset.is_to_drop_nan,
             bert_model_name=dataset.bert_model_name,
             image_encoder=dataset.image_encoder,
+            type_of_problem=type_of_problem,
             is_train=True  # Apply training augmentations
         )
         train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
@@ -218,6 +276,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
             drop_nan=dataset.is_to_drop_nan,
             bert_model_name=dataset.bert_model_name,
             image_encoder=dataset.image_encoder,
+            type_of_problem=type_of_problem,
             is_train=False  # Apply validation transforms
         )
         val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
@@ -228,6 +287,13 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=persistent_workers)
 
         train_labels = [labels[i] for i in train_idx]
+        
+        # Validar número de classes
+        actual_num_classes = len(set(train_labels))
+        if actual_num_classes != num_classes:
+            print(f"⚠️ Aviso: num_classes={num_classes} mas conjunto de treino tem {actual_num_classes} classes. Ajustando...")
+            num_classes = actual_num_classes
+        
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
         
@@ -255,7 +321,24 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
             targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel_config:dict, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(
+        dataset_folder_path:str, 
+        results_folder_path:str, 
+        multimodel_config:dict, 
+        llm_model_name_sequence_generator:str, 
+        num_epochs:int, 
+        batch_size:int, 
+        k_folds:int, 
+        common_dim:int, 
+        text_model_encoder:str, 
+        unfreeze_weights: str, 
+        device:str,
+        type_of_problem:str, 
+        list_num_heads: list, 
+        list_of_attention_mecanism:list, 
+        list_of_models: list
+    ):
+    
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -266,6 +349,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel
                         img_dir=f"{dataset_folder_path}/ISIC_2019_Training_Input/ISIC_2019_Training_Input",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
+                        type_of_problem=type_of_problem,
                         drop_nan=False,
                         size=(224,224))
 
@@ -292,7 +376,8 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", 
                         num_workers=4, 
-                        persistent_workers=True
+                        persistent_workers=True,
+                        type_of_problem=type_of_problem
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -311,7 +396,7 @@ if __name__ == "__main__":
     unfreeze_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator=local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = local_variables["results_folder_path"]
-    type_of_problem = "multiclass" #"binaryclass" #"multiclass"
+    type_of_problem="binaryclass" #"binaryclass" #"multiclass"
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{type_of_problem}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -339,6 +424,7 @@ if __name__ == "__main__":
             common_dim=common_dim, 
             text_model_encoder=text_model_encoder, 
             unfreeze_weights=unfreeze_weights, 
+            type_of_problem=type_of_problem,
             device=device, 
             list_num_heads=list_num_heads, 
             list_of_attention_mecanism=list_of_attention_mecanism, 

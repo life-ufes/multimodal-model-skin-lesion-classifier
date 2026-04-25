@@ -33,7 +33,7 @@ echo "🚀 Iniciando NAS..."
 # ============================================================
 # Execução
 # ============================================================
-nohup python3 -u ./src/scripts/benchmark/nas/train_milk10k_optimized_model.py \
+nohup python3 -u ./src/scripts/benchmark/nas/train_pad_20_optimized_model.py \
   > "$LOG_FILE" 2>&1 &
 
 echo "✅ Processo iniciado em background (PID $!)"

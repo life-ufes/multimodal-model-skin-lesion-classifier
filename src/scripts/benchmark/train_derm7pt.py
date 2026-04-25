@@ -4,8 +4,8 @@ from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 import models.focalLoss as focalLoss
-from models import multimodalIntraInterModal, multimodalIntraModalWithBert, multimodalIntraModalWithPubMedBert
-from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings, skinLesionDatasetsDERM7PT
+from models import multimodalIntraInterModal
+from models import skinLesionDatasetsDERM7PT
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
@@ -321,7 +321,7 @@ def pipeline(dataset: any,
             model = MDNet(
                 meta_dim=num_metadata_features, 
                 num_classes=num_classes, 
-                unfreeze_weights=status_weights, 
+                unfreeze_weights=unfreeze_weights, 
                 cnn_model_name=model_name,
                 device=device
             )
@@ -350,7 +350,7 @@ def pipeline(dataset: any,
                 text_model_name=text_model_encoder,
                 common_dim=common_dim,
                 vocab_size=num_metadata_features,
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
                 attention_mecanism=attention_mecanism,
                 n=1 if attention_mecanism == "no-metadata" else 2
             )
@@ -421,7 +421,7 @@ def run_expirements(dataset_folder_path: str,
                         common_dim=common_dim,
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,
@@ -467,7 +467,7 @@ if __name__ == "__main__":
         k_folds=k_folds,
         common_dim=common_dim,
         text_model_encoder=text_model_encoder,
-        unfreeze_weights=status_weights,
+        unfreeze_weights=unfreeze_weights,
         device=device,
         list_num_heads=list_num_heads,
         list_of_attention_mecanism=list_of_attention_mecanism,

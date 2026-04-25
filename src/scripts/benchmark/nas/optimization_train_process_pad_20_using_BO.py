@@ -4,11 +4,12 @@ import os
 import sys
 # Adicione sys.path se necessário, mas geralmente é melhor configurar o PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+from benchmark.models import skinLesionDatasetsPAD2020
 from utils import model_metrics, save_predictions # Assumindo que essas utilidades são flexíveis
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 from models import dynamicMultimodalmodel # Importe o seu modelo dinâmico
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
 import numpy as np
 import random
@@ -303,7 +304,7 @@ if __name__ == "__main__":
     # --- Preparação do Dataset (Feito uma única vez, fora da função objetivo) ---
     # Adapte a criação do dataset conforme o seu código original
     if (TEXT_MODEL_ENCODER in ['one-hot-encoder', "tab-transformer"]):
-        dataset = skinLesionDatasets.SkinLesionDataset(
+        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
             metadata_file=f"{dataset_folder_path}/metadata.csv",
             img_dir=f"{dataset_folder_path}/images",
             bert_model_name=TEXT_MODEL_ENCODER,

@@ -13,7 +13,7 @@ import pickle
 import cv2
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', size=(224, 224), is_train=False, random_undersampling=False, image_encoder="resnet-18"):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', size=(224, 224), is_train=False, random_undersampling=False, image_encoder="resnet-18", type_of_problem="multiclass"):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.img_dir = img_dir
@@ -23,20 +23,22 @@ class SkinLesionDataset(Dataset):
         self.random_undersampling = random_undersampling
         self.image_encoder = image_encoder
         self.is_train = is_train
+        self.type_of_problem = type_of_problem
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.image_type = "CLINICAL" #"DERMATOSCOPE" # "CLINICAL" # Tipo de imagens
         self.transform = self.load_transforms()
 
+        # Mapear labels para nomes padronizados
         self.CLUSTER_TARGETS = {
-            "C43": "MEL",
-            "D03": "MEL",
-            "D22": "NEVO",
-            "C80": "CBC",
-            "C44": "CEC",
-            "D04": "CEC",
-            "L57": "ACT",
-            "L78": "NEVO",
-            "L82": "SEBO",
+            "C43": "MEL",      # Maligno
+            "D03": "MEL",      # Maligno
+            "D22": "NEV",      # Benigno
+            "C80": "BCC",      # Benigno
+            "C44": "SCC",      # Maligno
+            "D04": "SCC",      # Maligno
+            "L57": "ACK",      # Benigno
+            "L78": "NEV",      # Benigno
+            "L82": "SEK",      # Benigno
         }
 
         # Carregar e processar metadados
@@ -176,9 +178,24 @@ class SkinLesionDataset(Dataset):
         # **Atualizar o self.metadata** para manter apenas as linhas filtradas
         self.metadata = clinical_metadata
         
+        # Criar coluna benign_malignant se necessário para classificação binária
+        if self.type_of_problem == "binaryclass":
+            benign_categories = {'NEV', 'BCC', 'ACK', 'SEK'}
+            malignant_categories = {'SCC', 'MEL'}
+            self.metadata['benign_malignant'] = self.metadata['macroCIDDiagnostic'].apply(
+                lambda x: 'benign' if x in benign_categories else ('malignant' if x in malignant_categories else 'unknown')
+            )
+            encoder_suffix = "_binaryclass"
+        else:
+            encoder_suffix = ""
+        
         # Extraindo features e labels de forma consistente
         labels = clinical_metadata['macroCIDDiagnostic'].values
         dataset_features = clinical_metadata.drop(columns=["macroCIDDiagnostic"])
+        
+        # Se for binaryclass, remover a coluna benign_malignant das features
+        if self.type_of_problem == "binaryclass":
+            dataset_features = dataset_features.drop(columns=["benign_malignant"], errors='ignore')
         # Selecionar as variáveis a serem pré-processadas
         categorical_cols = [
             "usePesticide", "gender", "familySkinCancerHistory", "familyCancerHistory", 
@@ -196,7 +213,7 @@ class SkinLesionDataset(Dataset):
         os.makedirs('./src/results/preprocess_data', exist_ok=True)
         
         # Carregar ou criar o OneHotEncoder
-        ohe_file = './src/results/preprocess_data/ohe_pad_25.pickle'
+        ohe_file = f'./src/results/preprocess_data/ohe_pad_25{encoder_suffix}.pickle'
         if os.path.exists(ohe_file):
             with open(ohe_file, 'rb') as f:
                 ohe = pickle.load(f)
@@ -208,7 +225,7 @@ class SkinLesionDataset(Dataset):
                 pickle.dump(ohe, f)
         
         # Carregar ou criar o StandardScaler
-        scaler_file = './src/results/preprocess_data/scaler_pad_25.pickle'
+        scaler_file = f'./src/results/preprocess_data/scaler_pad_25{encoder_suffix}.pickle'
         if os.path.exists(scaler_file):
             with open(scaler_file, 'rb') as f:  
                 scaler = pickle.load(f)
@@ -223,7 +240,7 @@ class SkinLesionDataset(Dataset):
         processed_data = np.hstack((categorical_data, numerical_data))
 
         # Codificação de Labels (target)
-        label_encoder_file = './src/results/preprocess_data/label_encoder_pad_25.pickle'
+        label_encoder_file = f'./src/results/preprocess_data/label_encoder_pad_25{encoder_suffix}.pickle'
         if os.path.exists(label_encoder_file):
             with open(label_encoder_file, 'rb') as f:
                 label_encoder = pickle.load(f)
@@ -237,4 +254,8 @@ class SkinLesionDataset(Dataset):
         print(f"Shape dos processed_data {processed_data.shape}")
         print(f"Shape dos labels {len(labels)}")
         
-        return processed_data, encoded_labels, clinical_metadata['macroCIDDiagnostic'].unique()
+        # Retorna com as labels corretas baseadas no tipo de problema
+        if self.type_of_problem == "binaryclass":
+            return processed_data, encoded_labels, self.metadata['benign_malignant'].unique()
+        else:
+            return processed_data, encoded_labels, clinical_metadata['macroCIDDiagnostic'].unique()

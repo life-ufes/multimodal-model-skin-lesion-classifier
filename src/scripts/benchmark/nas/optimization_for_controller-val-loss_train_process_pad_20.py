@@ -9,7 +9,7 @@ from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 import models.focalLoss as focalLoss
 from models import multimodalIntraInterModal, dynamicMultimodalmodel, controllerMultimodalmodel
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import skinLesionDatasetsWithBert, skinLesionDatasetsPAD2020
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import train_test_split
@@ -389,7 +389,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
             for num_heads in list_num_heads:
                 try:
                     if (text_model_encoder in ['one-hot-encoder', "tab-transformer"]):
-                        dataset = skinLesionDatasets.SkinLesionDataset(
+                        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
@@ -418,7 +418,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         SEARCH_STEPS = SEARCH_STEPS, 
@@ -476,7 +476,7 @@ if __name__ == "__main__":
         k_folds=k_folds, 
         common_dim=common_dim, 
         text_model_encoder=text_model_encoder, 
-        unfreeze_weights=status_weights, 
+        unfreeze_weights=unfreeze_weights, 
         device=device, 
         list_num_heads=list_num_heads, 
         list_of_attention_mecanism=list_of_attention_mecanism, 

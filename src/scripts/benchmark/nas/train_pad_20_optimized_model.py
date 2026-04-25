@@ -3,10 +3,11 @@ import torch.nn as nn
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+from models import skinLesionDatasetsPAD2020
 from utils import model_metrics, load_local_variables, save_predictions, load_multimodal_config
 from utils.early_stopping import EarlyStopping
 from models import multimodalIntraInterModal, dynamicMultimodalmodel
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
@@ -188,7 +189,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, type_of_problem, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
     # Separação por paciente
     labels = dataset.labels                      # diagnóstico codificado
     groups = dataset.metadata["patient_id"].values  # agrupa por paciente
@@ -198,6 +199,29 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
         stratifiedKFold.split(X=np.zeros(len(labels)), y=labels, groups=groups)
     ):
         print(f"Fold {fold+1}/{k_folds}")
+        
+        # Validação: skip fold se não tiver pelo menos 2 classes na validação ou treino
+        train_labels_fold = [labels[i] for i in train_idx]
+        val_labels_fold = [labels[i] for i in val_idx]
+        train_counts = Counter(train_labels_fold)
+        val_counts = Counter(val_labels_fold)
+        print(f"Fold {fold+1}: train={train_counts}, val={val_counts}")
+        
+        if len(val_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: validation set has only {len(val_counts)} class(es). Classes: {set(val_labels_fold)}")
+            continue
+        if len(train_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: training set has only {len(train_counts)} class(es). Classes: {set(train_labels_fold)}")
+            continue
+        
+        # Verificar número mínimo de exemplares de cada classe
+        MIN_SAMPLES_PER_CLASS = 5
+        if min(val_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: validation has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {val_counts}")
+            continue
+        if min(train_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: training has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {train_counts}")
+            continue
 
         train_dataset = type(dataset)(
             metadata_file=dataset.metadata_file,
@@ -206,6 +230,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
             drop_nan=dataset.is_to_drop_nan,
             bert_model_name=dataset.bert_model_name,
             image_encoder=dataset.image_encoder,
+            type_of_problem=type_of_problem,
             is_train=True  # Apply training augmentations
         )
         train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
@@ -218,6 +243,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
             drop_nan=dataset.is_to_drop_nan,
             bert_model_name=dataset.bert_model_name,
             image_encoder=dataset.image_encoder,
+            type_of_problem=type_of_problem,
             is_train=False  # Apply validation transforms
         )
         val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
@@ -255,25 +281,18 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, mul
             targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel_config:dict, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel_config:dict, type_of_problem:str, llm_model_name_sequence_generator:str, num_epochs:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
                 try:
                     if (text_model_encoder in ['one-hot-encoder', "tab-transformer"]):
-                        dataset = skinLesionDatasets.SkinLesionDataset(
+                        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
-                        drop_nan=False,
-                        size=(224,224))
-                    elif (text_model_encoder in ['gpt2', 'bert-base-uncased']):
-                        dataset = skinLesionDatasetsWithBert.SkinLesionDataset(
-                        metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
-                        img_dir=f"{dataset_folder_path}/images",
-                        bert_model_name=text_model_encoder,
-                        image_encoder=model_name,
+                        type_of_problem=type_of_problem,
                         drop_nan=False,
                         size=(224,224))
                     else:
@@ -281,7 +300,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel
                     
                     num_metadata_features = dataset.features.shape[1] if text_model_encoder == 'one-hot-encoder' else 512
                     print(f"Número de features do metadados: {num_metadata_features}\n")
-                    num_classes = len(dataset.metadata['diagnostic'].unique())
+                    num_classes = len(dataset.targets)
 
                     pipeline(dataset=dataset, 
                         num_metadata_features=num_metadata_features,
@@ -294,7 +313,9 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}",
-                        num_workers=5, persistent_workers=True
+                        num_workers=5, 
+                        persistent_workers=True,
+                        type_of_problem=type_of_problem
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -311,9 +332,10 @@ if __name__ == "__main__":
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
     unfreeze_weights = str(local_variables["unfreeze_weights"])
-    llm_model_name_sequence_generator=local_variables["LLM_MODEL_NAME"]
+    llm_model_name_sequence_generator=local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = local_variables["results_folder_path"]
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
+    type_of_problem="binaryclass"  # "binaryclass" or "multiclass"
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{type_of_problem}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
@@ -322,7 +344,7 @@ if __name__ == "__main__":
     # best_model_parameters_file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/NAS-USING-RL-USING-REWARD-500-steps/PAD-UFES-20/unfrozen_weights/8/custom-attention-mechanism/best_config.json"
     # config = load_multimodal_config.load_multimodal_config(best_model_parameters_file_folder_path)
     ## configs = load_multimodal_config.load_multimodal_config("./data/PAD-UFES-20/NAS_OPTIMIZED_MODEL_ARCHITECTURES/BEST_ARCHITECTURES_FOUND_NAS.json")
-    configs = {"num_blocks": 10, "initial_filters": 64, "kernel_size": 3, "layers_per_block": 2, "use_pooling": true, "common_dim": 512, "attention_mechanism": "metablock", "num_layers_text_fc": 3, "neurons_per_layer_size_of_text_fc": 512, "num_layers_fc_module": 2, "neurons_per_layer_size_of_fc_module": 512}
+    configs = [{"num_blocks": 10, "initial_filters": 64, "kernel_size": 3, "layers_per_block": 2, "use_pooling": True, "common_dim": 512, "attention_mechanism": "metablock", "num_layers_text_fc": 3, "neurons_per_layer_size_of_text_fc": 512, "num_layers_fc_module": 2, "neurons_per_layer_size_of_fc_module": 512}]
     
     for i, config in enumerate(configs):    
         # Testar com todos os modelos
@@ -340,6 +362,7 @@ if __name__ == "__main__":
             common_dim=common_dim, 
             text_model_encoder=text_model_encoder, 
             unfreeze_weights=unfreeze_weights, 
+            type_of_problem=type_of_problem,
             device=device, 
             list_num_heads=list_num_heads, 
             list_of_attention_mecanism=list_of_attention_mecanism, 

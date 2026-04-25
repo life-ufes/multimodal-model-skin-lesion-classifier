@@ -3,7 +3,7 @@ import torch.nn as nn
 from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
-from models import multimodalIntraModalWithBert, multimodalModels, skinLesionDatasets, skinLesionDatasetsPAD2025, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal, multimodalIntraInterModalToOptimzeAfterFIneTunning
+from models import skinLesionDatasetsPAD2025, multimodalIntraInterModal
 from utils.save_model_and_metrics import save_model_and_metrics
 from utils import load_local_variables
 from collections import Counter
@@ -186,7 +186,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, type_of_problem="multiclass", num_workers=10, persistent_workers=True):
     # # Obter os rótulos para validação estratificada (se necessário)
     # labels = [dataset.labels[i] for i in range(len(dataset))]
 
@@ -203,7 +203,30 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         stratifiedKFold.split(X=np.zeros(len(labels)), y=labels, groups=groups)
     ):
         print(f"Fold {fold+1}/{k_folds}")
-        # Criar datasets para treino e validação do fold atualAdd comment
+        
+        # Validação: skip fold se não tiver pelo menos 2 classes na validação ou treino
+        train_labels_fold = [labels[i] for i in train_idx]
+        val_labels_fold = [labels[i] for i in val_idx]
+        train_counts = Counter(train_labels_fold)
+        val_counts = Counter(val_labels_fold)
+        print(f"Fold {fold+1}: train={train_counts}, val={val_counts}")
+        
+        if len(val_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: validation set has only {len(val_counts)} class(es). Classes: {set(val_labels_fold)}")
+            continue
+        if len(train_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: training set has only {len(train_counts)} class(es). Classes: {set(train_labels_fold)}")
+            continue
+        
+        # Verificar número mínimo de exemplares de cada classe
+        MIN_SAMPLES_PER_CLASS = 5
+        if min(val_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: validation has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {val_counts}")
+            continue
+        if min(train_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: training has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {train_counts}")
+            continue
+        # Criar datasets para treino e validação do fold atual
 
         train_subset = Subset(dataset, train_idx)
         val_subset = Subset(dataset, val_idx)
@@ -227,7 +250,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
         save_predictions.model_val_predictions(model=model, dataloader=val_loader, device=device, fold_num=fold+1,
             targets= dataset.targets, base_dir=model_save_path, model_name=model_name)    
 
-def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, num_workers:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list):
+def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs:int, num_workers:int, batch_size:int, k_folds:int, common_dim:int, text_model_encoder:str, unfreeze_weights: str, device, list_num_heads: list, list_of_attention_mecanism:list, list_of_models: list, type_of_problem:str):
     for attention_mecanism in list_of_attention_mecanism:
         for model_name in list_of_models:
             for num_heads in list_num_heads:
@@ -239,11 +262,15 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                         bert_model_name=text_model_encoder,
                         image_encoder=model_name,
                         drop_nan=False,
+                        type_of_problem=type_of_problem,
                         size=(224, 224))
 
                     num_metadata_features = dataset.features.shape[1]
                     print(f"Número de features do metadados: {num_metadata_features}\n")
-                    num_classes = len(dataset.metadata['macroCIDDiagnostic'].unique())
+                    if type_of_problem=="binaryclass":
+                        num_classes = len(dataset.metadata['benign_malignant'].unique())
+                    else:
+                        num_classes = len(dataset.metadata['macroCIDDiagnostic'].unique())
 
                     pipeline(dataset, 
                         num_metadata_features=num_metadata_features, 
@@ -253,7 +280,8 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
                         unfreeze_weights=status_weights,
-                        attention_mecanism=attention_mecanism, 
+                        attention_mecanism=attention_mecanism,
+                        type_of_problem=type_of_problem,
                         num_workers=num_workers,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
                     )
@@ -274,7 +302,9 @@ if __name__ == "__main__":
     dataset_folder_path=f"/data/{dataset_folder_name}" # local_variables["dataset_folder_path"]
     text_model_encoder = 'one-hot-encoder' #  'bert-base-uncased' # 'one-hot-encoder' # 'tab-transformer'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    type_of_problem = "multiclass"  # "binaryclass" or "multiclass"
     unfreeze_weights = str(local_variables["unfreeze_weights"])
+    status_weights = unfreeze_weights
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = str(local_variables["results_folder_path"])
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{status_weights}"
@@ -284,4 +314,4 @@ if __name__ == "__main__":
     list_of_models = ["densenet169"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, num_epochs=num_epochs,
-        batch_size=batch_size, k_folds=k_folds, common_dim=common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    
+        batch_size=batch_size, k_folds=k_folds, common_dim=common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models, type_of_problem=type_of_problem)    

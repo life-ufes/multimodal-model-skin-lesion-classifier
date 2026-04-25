@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import os
 import sys
+from benchmark.models import skinLesionDatasetsPAD2020
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../benchmark')))
 from benchmark.models import multimodalIntraInterModal
 from  benchmark.utils.early_stopping import EarlyStopping
@@ -11,7 +12,7 @@ import optuna
 from  benchmark.utils import model_metrics
 from sklearn.model_selection import train_test_split
 import benchmark.models.focalLoss as focalLoss
-from benchmark.models import multimodalIntraInterModal, multimodalToOptimize, skinLesionDatasets
+from benchmark.models import multimodalIntraInterModal, multimodalToOptimize
 from benchmark.utils.save_model_and_metrics import save_model_and_metrics
 from benchmark.utils.save_experiments_log_for_opt import save_experiment_log
 from collections import Counter
@@ -168,7 +169,7 @@ def objective(trial):
         }
     }
 
-    dataset = skinLesionDatasets.SkinLesionDataset(
+    dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
         metadata_file="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/metadata.csv",
         img_dir="/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/images",
         bert_model_name="one-hot-encoder",

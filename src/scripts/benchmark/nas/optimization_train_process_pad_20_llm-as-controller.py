@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
+from scripts.benchmark.models import skinLesionDatasetsPAD2020
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
@@ -23,7 +24,7 @@ from utils.save_model_and_metrics import save_model_and_metrics
 
 from models.pydantic_llm_response_formats import NASConfig
 from models import dynamicMultimodalmodel
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import skinLesionDatasetsWithBert
 
 
 # ============================================================
@@ -536,7 +537,7 @@ if __name__ == "__main__":
     list_of_attention_mecanism = ["custom-attention-mechanism"]
     # Testar com todos os modelos
     list_of_models = ["custom-cnn-with-NAS"]
-    dataset = skinLesionDatasets.SkinLesionDataset(
+    dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
         metadata_file=f"{dataset_folder_path}/metadata.csv",
         img_dir=f"{dataset_folder_path}/images",
         image_encoder="custom-cnn-with-NAS",

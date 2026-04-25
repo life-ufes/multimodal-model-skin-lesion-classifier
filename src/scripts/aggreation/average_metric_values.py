@@ -19,34 +19,20 @@ if __name__ == "__main__":
     #     "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures"
     # ]
     list_of_attention_mecanism = [
-        "no-metadata",
-        "concatenation",
-        "metablock",
-        "crossattention",
-        "att-intramodal+residual+cross-attention-metadados"
+        "metablock"
     ]
     dataset_name = "PAD-UFES-20"
     num_heads = 8
     list_state_of_weights = ["unfrozen_weights"]
     common_sizes = [512]
 
-    base_folder_path = (
-        f"./src/results/testes-da-implementacao-final_2/11042026-WITH-LN--METHOD-CONFIG-COMPARISON/{dataset_name}"
-    )
+    #base_folder_path = (
+    # f"./src/results/testes-da-implementacao-final_2/11042026-WITH-LN--METHOD-CONFIG-COMPARISON/{dataset_name}")
+    
+    base_folder_path=f"./src/results/PAD-UFES-20/NAS/benchmark_nas_llm-as-controller_trainning-optimized-model-architectures/{dataset_name}/binaryclass"
 
     list_of_models = [
-        "caformer_b36.sail_in22k_ft_in1k",
-        "coat_lite_small.in1k",
-        "davit_tiny.msft_in1k",
-        "mvitv2_small.fb_in1k",
-        "beitv2_large_patch16_224.in1k_ft_in22k_in1k",
-        "efficientnet-b0",
-        "efficientnet-b4",
-        "densenet169",
-        "mobilenet-v2",
-        "mobilenet-v3",
-        "swin-tiny",
-        "resnet-50"
+        "nas_multimodal_model_id-0"
     ]
 
     # Ordem final desejada
@@ -85,7 +71,6 @@ if __name__ == "__main__":
                         f"{attention_mecanism}/"
                         f"model_{model_name}_with_one-hot-encoder_{common_size}_with_best_architecture"
                     )
-
                     dataset_path = os.path.join(dataset_folder_path, "model_metrics.csv")
 
                     try:

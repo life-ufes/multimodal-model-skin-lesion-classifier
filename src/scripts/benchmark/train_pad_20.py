@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
+from models import skinLesionDatasetsPAD2020
 from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 from models import multimodalIntraInterModal
-from models import skinLesionDatasets, skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
+from models import skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
@@ -220,6 +221,7 @@ def pipeline(
         unfreeze_weights:list,
         attention_mecanism:str,
         results_folder_path:str,
+        type_of_problem:str="multiclass",
         num_workers:int=10,
         persistent_workers:bool=True,
         save_to_disk:bool=True
@@ -244,8 +246,26 @@ def pipeline(
         # Labels para este fold
         train_labels = [labels[i] for i in train_idx]
         train_counts = Counter(train_labels)
-        val_counts = Counter([labels[i] for i in val_idx])
+        val_labels = [labels[i] for i in val_idx]
+        val_counts = Counter(val_labels)
         print(f"Fold {fold+1}: train={train_counts}, val={val_counts}")
+        
+        # Validação: skip fold se não tiver pelo menos 2 classes na validação ou treino
+        if len(val_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: validation set has only {len(val_counts)} class(es). Classes: {set(val_labels)}")
+            continue
+        if len(train_counts) < 2:
+            print(f"⚠️ Fold {fold+1} skipped: training set has only {len(train_counts)} class(es). Classes: {set(train_labels)}")
+            continue
+        
+        # Verificar número mínimo de exemplares de cada classe
+        MIN_SAMPLES_PER_CLASS = 5
+        if min(val_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: validation has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {val_counts}")
+            continue
+        if min(train_counts.values()) < MIN_SAMPLES_PER_CLASS:
+            print(f"⚠️ Fold {fold+1} skipped: training has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {train_counts}")
+            continue
 
         # --- Monta datasets específicos por encoder ---
         if text_model_encoder in ["one-hot-encoder", "tab-transformer"]:
@@ -257,6 +277,7 @@ def pipeline(
                 drop_nan=dataset.is_to_drop_nan,
                 bert_model_name=dataset.bert_model_name,
                 image_encoder=dataset.image_encoder,
+                type_of_problem=type_of_problem,
                 is_train=True  # Apply training augmentations
             )
             train_dataset.metadata = dataset.metadata.iloc[train_idx].reset_index(drop=True)
@@ -270,6 +291,7 @@ def pipeline(
                 drop_nan=dataset.is_to_drop_nan,
                 bert_model_name=dataset.bert_model_name,
                 image_encoder=dataset.image_encoder,
+                type_of_problem=type_of_problem,
                 is_train=False  # Apply validation transforms
             )
             val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
@@ -418,6 +440,7 @@ def run_expirements(
         list_num_heads: list,
         list_of_attention_mecanism: list,
         list_of_models: list,
+        type_of_problem:str,
         save_to_disk:bool=True
     ):
 
@@ -426,12 +449,13 @@ def run_expirements(
             for num_heads in list_num_heads:
                 try:
                     if text_model_encoder in ['one-hot-encoder', "tab-transformer"]:
-                        dataset = skinLesionDatasets.SkinLesionDataset(
+                        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
                             metadata_file=f"{dataset_folder_path}/metadata.csv",
                             img_dir=f"{dataset_folder_path}/images",
                             bert_model_name=text_model_encoder,
                             image_encoder=model_name,
                             drop_nan=False,
+                            type_of_problem=type_of_problem,
                             size=(224, 224)
                         )
                     elif text_model_encoder in ['gpt2', 'bert-base-uncased']:
@@ -462,7 +486,10 @@ def run_expirements(
                     
                     num_metadata_features = dataset.features.shape[1] if text_model_encoder == 'one-hot-encoder' else 512
                     print(f"Número de features do metadados: {num_metadata_features}\n")
-                    num_classes = len(dataset.metadata['diagnostic'].unique())
+                    if type_of_problem=="binaryclass":
+                        num_classes = len(dataset.metadata['benign_malignant'].unique())
+                    else:
+                        num_classes = len(dataset.metadata['diagnostic'].unique())
 
                     pipeline(
                         dataset,
@@ -478,6 +505,7 @@ def run_expirements(
                         num_heads=num_heads,
                         unfreeze_weights=status_weights,
                         attention_mecanism=attention_mecanism,
+                        type_of_problem=type_of_problem,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,
                         persistent_workers=True,
@@ -508,6 +536,7 @@ if __name__ == "__main__":
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder'  # ou 'bert-base-uncased', 'gpt2', etc.
+    type_of_problem = "multiclass"  # "binaryclass" or "multiclass"
 
     # Para todas os tipos de estratégias a serem usadas
     list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["no-metadata", "concatenation", "metablock", "crossattention", "att-intramodal+residual+cross-attention-metadados"] 
@@ -530,5 +559,6 @@ if __name__ == "__main__":
         list_num_heads=list_num_heads,
         list_of_attention_mecanism=list_of_attention_mecanism,
         list_of_models=list_of_models,
+        type_of_problem=type_of_problem,
         save_to_disk=save_to_disk
     )

@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
+from models import skinLesionDatasetsPAD2020
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
-import models.focalLoss as focalLoss
-from models import multimodalIntraModalWithBert, multimodalModels, multimodalToOptimizeMultArchitectureCombination, skinLesionDatasets, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
+from models import multimodalToOptimizeMultArchitectureCombination, skinLesionDatasetsWithBert, multimodalEmbbeding, multimodalIntraInterModal
 from utils.save_model_and_metrics import save_model_and_metrics
 from utils.save_experiments_log_for_opt import save_experiment_log
 from collections import Counter
@@ -276,7 +276,7 @@ def run_expirements(num_epochs, batch_size, k_folds, common_dims, text_model_enc
                                 for model_name in list_of_models:
                                     try:
                                         # Inicialização do dataset conforme seu código...
-                                        dataset = skinLesionDatasets.SkinLesionDataset(
+                                        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
                                             metadata_file="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/metadata.csv",
                                             img_dir="/home/wytcor/PROJECTs/mestrado-ufes/lab-life/multimodal-skin-lesion-classifier/data/images",
                                             bert_model_name=text_model_encoder,

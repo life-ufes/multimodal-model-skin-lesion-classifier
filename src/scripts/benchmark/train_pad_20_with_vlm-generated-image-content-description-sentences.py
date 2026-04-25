@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
+from models import skinLesionDatasetsPAD2020
 from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 from models import multimodalIntraInterModal, multimodalIntraModalWithBert
-from models import skinLesionDatasets, skinLesionDatasetsWithBert
+from models import skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold
@@ -204,7 +205,7 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_f
                 text_model_name=text_model_encoder, 
                 common_dim=common_dim, 
                 vocab_size=num_metadata_features, 
-                unfreeze_weights=status_weights, 
+                unfreeze_weights=unfreeze_weights, 
                 attention_mecanism=attention_mecanism, 
                 n=1 if attention_mecanism=="no-metadata" else 2
             )
@@ -225,7 +226,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
             for num_heads in list_num_heads:
                 try:
                     if (text_model_encoder in ['one-hot-encoder', "tab-transformer"]):
-                        dataset = skinLesionDatasets.SkinLesionDataset(
+                        dataset = skinLesionDatasetsPAD2020.SkinLesionDataset(
                         metadata_file=f"{dataset_folder_path}/metadata.csv",
                         img_dir=f"{dataset_folder_path}/images",
                         bert_model_name=text_model_encoder,
@@ -253,7 +254,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         model_name=model_name, common_dim=common_dim, 
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}"
                     )
