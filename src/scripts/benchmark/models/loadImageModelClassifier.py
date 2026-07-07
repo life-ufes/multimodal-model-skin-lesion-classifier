@@ -104,6 +104,12 @@ class loadModels:
             model.classifier = nn.Identity()
             cnn_dim_output = 1280
             loadModels.set_backbone_train_mode(model, backbone_train_mode, last_n_layers=1)
+        
+        elif cnn_model_name == "efficientnet-b4":
+            model = models.efficientnet_b4(pretrained=True)
+            model.classifier = nn.Identity()
+            cnn_dim_output = 1792
+            loadModels.set_backbone_train_mode(model, backbone_train_mode, last_n_layers=1)
 
         elif cnn_model_name == "efficientnet-b7":
             model = models.efficientnet_b7(pretrained=True)

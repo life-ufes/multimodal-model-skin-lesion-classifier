@@ -339,7 +339,7 @@ def pipeline(
     num_heads,
     results_folder_path,
     num_workers=10,
-    persistent_workers=True,
+    persistent_workers=False,
     type_of_problem:str = "multiclass"
 ):
     # Create two datasets: train has aug, val doesn't.
@@ -528,6 +528,6 @@ if __name__ == "__main__":
                 num_heads=int(num_heads),
                 results_folder_path=results_folder_path,
                 num_workers=num_workers,
-                persistent_workers=True,
+                persistent_workers=False,
                 type_of_problem=type_of_problem
             )

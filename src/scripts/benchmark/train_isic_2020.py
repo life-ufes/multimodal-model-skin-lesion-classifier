@@ -215,7 +215,7 @@ def train_process(num_epochs,
     return model, model_save_path
 
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=False):
     # Obter os rótulos para validação estratificada (se necessário)
     labels = [dataset.labels[i] for i in range(len(dataset))]
     targets = dataset.targets
@@ -305,7 +305,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_epochs
                         num_heads=num_heads,
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism, 
-                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=num_workers, persistent_workers=True
+                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=num_workers, persistent_workers=False
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -340,5 +340,5 @@ if __name__ == "__main__":
     # Testar com todos os modelos
     list_of_models = ["vgg16", "densenet169", "resnet-50"]# ["davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "mobilenet-v2", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
-    run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, persistent_workers=True, num_epochs=num_epochs, type_of_problem=type_of_problem, batch_size=batch_size, k_folds=k_folds,
+    run_expirements(dataset_folder_path=dataset_folder_path, results_folder_path=results_folder_path, num_workers=num_workers, persistent_workers=False, num_epochs=num_epochs, type_of_problem=type_of_problem, batch_size=batch_size, k_folds=k_folds,
                     common_dim = common_dim, text_model_encoder=text_model_encoder, unfreeze_weights=unfreeze_weights, device=device, list_num_heads=list_num_heads, list_of_attention_mecanism=list_of_attention_mecanism, list_of_models=list_of_models)    

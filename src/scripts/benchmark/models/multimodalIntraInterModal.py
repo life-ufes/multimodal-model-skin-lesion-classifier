@@ -339,6 +339,53 @@ class MultimodalModel(nn.Module):
 
             fused = torch.cat([img_pooled2, txt_pooled2], dim=1)  # (B, 2D)
             return self.fc_fusion(fused)
+
+        elif self.attention_mecanism == "rg-att-literal-text-description":
+            # Literal text description of RG-ATT (Section III-B2, original wording):
+            # "Metadata features are used as queries (Q), while visual features
+            #  provide keys (K) and values (V)."
+            # No separate intra-modality attention, no separate cross-attention stage —
+            # RG-ATT IS the fusion mechanism, applied directly on raw projected features.
+
+            txt_rgatt = self.text_residual(
+                txt_seq,   # Query: metadata
+                img_seq,   # Key: visual
+                img_seq    # Value: visual
+            )  # (1, B, D)
+
+            txt_rgatt = txt_rgatt.squeeze(0)   # (B, D)
+
+            # Since the article's RG-ATT only defines one direction (metadata queries
+            # visual), the visual branch is kept as its own projected representation
+            # for the final fusion, with no visual-side gating.
+            fused = torch.cat([proj_img_feat, txt_rgatt], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
+
+        elif self.attention_mecanism == "rg-att-cross-modal":
+            # Matches Fig. 1 exactly:
+            # 1) Intra-modality self-attention per branch
+            img_att, _ = self.image_self_attention(img_seq, img_seq, img_seq)
+            txt_att, _ = self.text_self_attention(txt_seq, txt_seq, txt_seq)
+
+            # 2) RG-ATT (intra-modal): Q = original projection, K = V = intra-modal attention output
+            img_res = self.image_residual(img_seq, img_att, img_att)  # (1, B, D)
+            txt_res = self.text_residual(txt_seq, txt_att, txt_att)   # (1, B, D)
+
+            # 3) Cross-Attention Module: Q from one modality's RG-ATT output,
+            #    K, V from the other modality's RG-ATT output
+            img_cross, _ = self.image_cross_attention(
+                query=img_res, key=txt_res, value=txt_res
+            )  # (1, B, D)
+            txt_cross, _ = self.text_cross_attention(
+                query=txt_res, key=img_res, value=img_res
+            )  # (1, B, D)
+
+            img_pooled = img_cross.squeeze(0)  # (B, D)
+            txt_pooled = txt_cross.squeeze(0)  # (B, D)
+
+            # 4) Concatenation + MLP
+            fused = torch.cat([img_pooled, txt_pooled], dim=1)  # (B, 2D)
+            return self.fc_fusion(fused)
         
         elif self.attention_mecanism == "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures":
             # Self-att já calculado: img_att, txt_att

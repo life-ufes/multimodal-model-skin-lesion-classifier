@@ -220,7 +220,7 @@ def pipeline(
         attention_mecanism, 
         results_folder_path, 
         num_workers=5, 
-        persistent_workers=True,
+        persistent_workers=False,
         type_of_problem="multiclass",
     ):
     # Separação por paciente
@@ -376,7 +376,7 @@ def run_expirements(
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", 
                         num_workers=4, 
-                        persistent_workers=True,
+                        persistent_workers=False,
                         type_of_problem=type_of_problem
                     )
                 except Exception as e:

@@ -220,7 +220,7 @@ def train_process(config:dict, num_epochs:int,
 
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num_classes, model_name, 
              num_heads, common_dim, k_folds, text_model_encoder, unfreeze_weights, attention_mecanism, 
-             results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=True, 
+             results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=False, 
              test_size=0.2, # Proporção da validação
              controller_lr=1e-3, # Nova: Taxa de aprendizado do Controller
              entropy_beta=0.01, # Nova: Ponderação da entropia para exploração
@@ -431,7 +431,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         SEARCH_STEPS = SEARCH_STEPS, 
                         search_space = search_space,
-                        num_workers=6, persistent_workers=True
+                        num_workers=6, persistent_workers=False
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")

@@ -4,20 +4,17 @@ import os
 import csv
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from benchmark.models import skinLesionDatasetsPAD2020
-import utils
-from utils import model_metrics, save_predictions
+from models import skinLesionDatasetsPAD2020
+from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
-import models.focalLoss as focalLoss
-from models import multimodalIntraInterModal, dynamicMultimodalmodel, controllerMultimodalmodel
+from models import dynamicMultimodalmodel
 from models import skinLesionDatasetsWithBert
 from utils.save_model_and_metrics import save_model_and_metrics
 from utils.request_to_llm import request_to_ollama, filter_generated_response
-from collections import Counter
 from sklearn.model_selection import train_test_split
 import time
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 import numpy as np
 import mlflow
 from tqdm import tqdm
@@ -95,7 +92,7 @@ def train_process(config:dict, num_epochs:int,
     epoch_index = 0
     train_losses, val_losses = [], []
 
-    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER"
+    experiment_name = f"EXPERIMENTOS-NAS-{dataset_folder_name} -- LLM AS CONTROLLER - CoT ablation impact"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -233,7 +230,7 @@ def train_process(config:dict, num_epochs:int,
 
 def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num_classes, model_name, 
              num_heads, common_dim, k_folds, text_model_encoder, unfreeze_weights, attention_mecanism, 
-             results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=True, 
+             results_folder_path, SEARCH_STEPS, search_space, num_workers=5, persistent_workers=False, 
              test_size=0.2, # Proporção da validação
              controller_lr=1e-3, # Nova: Taxa de aprendizado do Controller
              entropy_beta=0.01, # Nova: Ponderação da entropia para exploração
@@ -335,10 +332,10 @@ def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, num
            
             try:
                 # Chama LLM
-                response = request_to_ollama(prompt, model_name=llm_model_name)
+                response = request_to_ollama(prompt, model_name=llm_model_name, thinking=False)
                 config_llm = filter_generated_response(generated_sentence=response)
             
-                config_llm= json.loads(config_llm)
+                config_llm=json.loads(config_llm)
                 print(f"Config filtrada: {config_llm}")
             except Exception as e:
                 print(f"[Step {step}] Erro no parsing do LLM: {e}")
@@ -445,7 +442,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         SEARCH_STEPS = SEARCH_STEPS, 
                         search_space = search_space,
-                        num_workers=6, persistent_workers=True
+                        num_workers=6, persistent_workers=False
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
@@ -469,13 +466,12 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder' # "tab-transformer" # 'bert-base-uncased' # 'gpt2' # 'one-hot-encoder'
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["custom-attention-mechanism"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"] # ["att-intramodal+residual+cross-attention-metadados"] # ["att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["custom-attention-mechanism"] 
     # Testar com todos os modelos
-    list_of_models = ["custom-cnn-with-NAS"] # ["nextvit_small.bd_ssld_6m_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k","davit_tiny.msft_in1k", "caformer_b36.sail_in22k_ft_in1k", "beitv2_large_patch16_224.in1k_ft_in22k_in1k", "vgg16", "mobilenet-v2", "densenet169", "resnet-50"]
-    
+    list_of_models = ["custom-cnn-with-NAS"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     search_space = {
-        "num_blocks": [2, 5, 10],              # Número de blocos convolucionais
+        "num_blocks": [2, 5, 10],                       # Número de blocos convolucionais
         "initial_filters": [16, 32, 64],                # Filtros no primeiro bloco
         "kernel_size": [3, 5],                          # Tamanho do Kernel para todas as convs
         "layers_per_block": [1, 2],                     # Camadas conv por bloco
@@ -499,7 +495,7 @@ if __name__ == "__main__":
         k_folds=k_folds, 
         common_dim=common_dim, 
         text_model_encoder=text_model_encoder, 
-        unfreeze_weights=status_weights, 
+        unfreeze_weights=unfreeze_weights, 
         device=device, 
         list_num_heads=list_num_heads, 
         list_of_attention_mecanism=list_of_attention_mecanism, 

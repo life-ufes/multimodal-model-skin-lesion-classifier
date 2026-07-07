@@ -504,7 +504,7 @@ def run_experiments():
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,
-                        persistent_workers=True,
+                        persistent_workers=False,
                         preprocess_root="./data/preprocess_data/midas",
                     )
                 except Exception as e:

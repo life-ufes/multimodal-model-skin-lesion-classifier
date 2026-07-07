@@ -213,7 +213,7 @@ def train_process(num_epochs,
     return model, model_save_path
 
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, type_of_problem="multiclass", num_workers=4, persistent_workers=True):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, type_of_problem="multiclass", num_workers=4, persistent_workers=False):
     all_metrics = []
 
     # Obter os rótulos para validação estratificada (se necessário)
@@ -336,7 +336,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, num_worker
                         unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism,
                         type_of_problem=type_of_problem,
-                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=num_workers, persistent_workers=True
+                        results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", num_workers=num_workers, persistent_workers=False
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")

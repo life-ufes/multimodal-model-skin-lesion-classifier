@@ -5,7 +5,7 @@ from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 from models import multimodalIntraModalWithBert
-from models import skinLesionDatasetsWithBert
+from models import skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
 from utils.save_model_and_metrics import save_model_and_metrics
 from sklearn.model_selection import StratifiedKFold
 import time
@@ -66,7 +66,7 @@ def train_process(num_epochs,
         delta=0.01, 
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
-        save_to_disk=True,
+        save_to_disk=False,
         early_stopping_metric_name="val_bacc"
     )
 
@@ -241,6 +241,19 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, llm_model_
                         image_encoder=model_name,
                         is_train=True,
                         drop_nan=False)
+                    elif text_model_encoder in [
+                        'pubmedbert-base-embeddings-100K',
+                        'pubmedbert-base-embeddings-500K',
+                        'pubmedbert-base-embeddings-1M',
+                        'pubmedbert-base-embeddings-2M'
+                    ]:
+                        dataset = skinLesionDatasetsWithPubMedEmbeddings.SkinLesionDataset(
+                            metadata_file=f"{dataset_folder_path}/metadata_with_sentences_new-prompt-{llm_model_name_sequence_generator}.csv",
+                            img_dir=f"{dataset_folder_path}/images",
+                            bert_model_name=text_model_encoder,
+                            image_encoder=model_name,
+                            drop_nan=False
+                        )
                     else:
                         raise ValueError("Encoder de texto não implementado!\n")
                     

@@ -425,7 +425,7 @@ def run_expirements(dataset_folder_path: str,
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,
-                        persistent_workers=True
+                        persistent_workers=False
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")

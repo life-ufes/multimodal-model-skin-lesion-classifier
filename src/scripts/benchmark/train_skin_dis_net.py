@@ -306,7 +306,7 @@ def pipeline(
     attention_mecanism,
     results_folder_path,
     num_workers=10,
-    persistent_workers=True,
+    persistent_workers=False,
     preprocess_root="./data/preprocess_data/skindisnet",
 ):
     """
@@ -549,7 +549,7 @@ def run_experiments():
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/SkinDisNet/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,
-                        persistent_workers=True,
+                        persistent_workers=False,
                         preprocess_root="./data/preprocess_data/skindisnet"
                     )
                 except Exception as e:

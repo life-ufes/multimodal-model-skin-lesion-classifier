@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 import numpy as np
 import mlflow
 from tqdm import tqdm
+import gc
 
 # Função para calcular os pesos das classes garantindo que haja um peso para cada classe
 def compute_class_weights(labels, num_classes):
@@ -82,7 +83,7 @@ def train_process(num_epochs,
     train_losses=[]
     val_losses=[]
 
-    experiment_name = "EXPERIMENTOS-PAD-UFES-20 - RESIDUAL BLOCK USAGE - 2026-03-25"
+    experiment_name = "EXPERIMENTOS-PAD-UFES-20 - RESIDUAL BLOCK USAGE - 2026-07-04"
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -223,19 +224,11 @@ def pipeline(
         results_folder_path:str,
         type_of_problem:str="multiclass",
         num_workers:int=10,
-        persistent_workers:bool=True,
-        save_to_disk:bool=True
+        persistent_workers:bool=False,
+        save_to_disk:bool=False
     ):
 
     # # Separação por paciente
-    # labels = dataset.labels                      # diagnóstico codificado
-    # groups = dataset.metadata["patient_id"].values  # agrupa por paciente
-    # stratifiedKFold = StratifiedGroupKFold(n_splits=k_folds, shuffle=True, random_state=42)
-
-    # for fold, (train_idx, val_idx) in enumerate(
-    #     stratifiedKFold.split(X=np.zeros(len(labels)), y=labels, groups=groups)
-    # ):
-
     labels = [dataset.labels[i] for i in range(len(dataset))]
     groups = dataset.metadata["patient_id"].values  # agrupa por paciente
     stratifiedKFold = StratifiedGroupKFold(n_splits=k_folds, shuffle=True, random_state=42)
@@ -361,7 +354,7 @@ def pipeline(
             model = MDNet(
                 meta_dim=num_metadata_features, 
                 num_classes=num_classes, 
-                unfreeze_weights=True, 
+                unfreeze_weights=unfreeze_weights, 
                 cnn_model_name=model_name,
                 device=device
             )
@@ -371,14 +364,14 @@ def pipeline(
                 meta_dim=num_metadata_features,
                 image_encoder="vit_large_patch16_224",
                 pretrained=True,
-                unfreeze_backbone=True
+                unfreeze_backbone=unfreeze_weights
             )
         elif attention_mecanism=="metanet":
             model = MetaNetModel(
                 meta_dim=num_metadata_features,
                 num_classes=num_classes,
                 image_encoder=str(model_name).replace("-",""),
-                unfreeze_weights=True
+                unfreeze_weights=unfreeze_weights
             )
 
         else:    
@@ -390,7 +383,7 @@ def pipeline(
                 text_model_name=text_model_encoder,
                 common_dim=common_dim,
                 vocab_size=num_metadata_features,
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
                 attention_mecanism=attention_mecanism,
                 n=1 if attention_mecanism == "no-metadata" else 2
             )
@@ -424,6 +417,9 @@ def pipeline(
             base_dir=model_save_path,
             model_name=model_name
         )
+    
+        del train_loader, val_loader
+        gc.collect()
 
 def run_expirements(
         dataset_folder_path: str,
@@ -441,7 +437,7 @@ def run_expirements(
         list_of_attention_mecanism: list,
         list_of_models: list,
         type_of_problem:str,
-        save_to_disk:bool=True
+        save_to_disk:bool=False
     ):
 
     for attention_mecanism in list_of_attention_mecanism:
@@ -503,12 +499,12 @@ def run_expirements(
                         common_dim=common_dim,
                         text_model_encoder=text_model_encoder,
                         num_heads=num_heads,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism,
                         type_of_problem=type_of_problem,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,
-                        persistent_workers=True,
+                        persistent_workers=False,
                         save_to_disk=save_to_disk
                     )
                 except Exception as e:
@@ -531,15 +527,14 @@ if __name__ == "__main__":
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     results_folder_path = str(local_variables["results_folder_path"])
     save_to_disk=bool(local_variables["save_to_disk"])
-    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{status_weights}"
-
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder'  # ou 'bert-base-uncased', 'gpt2', etc.
     type_of_problem = "multiclass"  # "binaryclass" or "multiclass"
+    results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{type_of_problem}/{status_weights}"
 
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["no-metadata", "concatenation", "metablock", "crossattention", "att-intramodal+residual+cross-attention-metadados"] 
+    list_of_attention_mecanism = ["rg-att-literal-text-description"] # ["no-metadata", "concatenation", "metablock", "crossattention", "att-intramodal+residual+cross-attention-metadados"] 
     ## list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["rg-att2fusefeatures", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
     list_of_models = ["caformer_b36.sail_in22k_ft_in1k"] # ["swin-tiny", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "efficientnet-b0", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50", "mobilenet-v2"]

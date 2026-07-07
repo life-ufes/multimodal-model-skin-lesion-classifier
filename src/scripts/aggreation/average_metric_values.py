@@ -29,10 +29,10 @@ if __name__ == "__main__":
     #base_folder_path = (
     # f"./src/results/testes-da-implementacao-final_2/11042026-WITH-LN--METHOD-CONFIG-COMPARISON/{dataset_name}")
     
-    base_folder_path=f"./src/results/PAD-UFES-20/NAS/benchmark_nas_llm-as-controller_trainning-optimized-model-architectures/{dataset_name}/binaryclass"
+    base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture"
 
     list_of_models = [
-        "nas_multimodal_model_id-0"
+        "nas_multimodal_model_random-search"
     ]
 
     # Ordem final desejada
@@ -71,7 +71,8 @@ if __name__ == "__main__":
                         f"{attention_mecanism}/"
                         f"model_{model_name}_with_one-hot-encoder_{common_size}_with_best_architecture"
                     )
-                    dataset_path = os.path.join(dataset_folder_path, "model_metrics.csv")
+                    # dataset_path = os.path.join(dataset_folder_path, "model_metrics.csv")
+                    dataset_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture/model_metrics.csv"
 
                     try:
                         dataset = get_dataset_content(dataset_path=dataset_path)

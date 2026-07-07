@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from metablock import MetaBlock
+from models.metablock import MetaBlock
 
 
 class DynamicCNN(nn.Module):

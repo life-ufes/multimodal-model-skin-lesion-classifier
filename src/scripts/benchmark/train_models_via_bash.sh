@@ -32,7 +32,7 @@ PYTHON_SCRIPT="./src/scripts/benchmark/train_pad_20.py"
 PYTHON_SCRIPT_ABSOLUTE="$SCRIPT_DIR/src/scripts/benchmark/train_pad_20.py"
 LOG_DIR="logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="${LOG_DIR}/train_pad_20_artigo2_${TIMESTAMP}.log"
+LOG_FILE="${LOG_DIR}/train_pad_20_${TIMESTAMP}.log"
 
 # Flags
 RUN_IN_BACKGROUND=true

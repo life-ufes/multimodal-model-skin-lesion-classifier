@@ -188,7 +188,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=5, persistent_workers=True):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=5, persistent_workers=False):
     try:    
         # Separação pelo ID da lesões
         labels = dataset.labels                         # diagnóstico codificado
@@ -330,7 +330,7 @@ def run_expirements(
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}", 
                         num_workers=4, 
-                        persistent_workers=True
+                        persistent_workers=False
                     )
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")

@@ -295,7 +295,7 @@ if __name__ == "__main__":
     unfreeze_weights = str(local_variables["unfreeze_weights"])
     LLM_MODEL_NAME_SEQUENCE_GENERATOR = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     RESULTS_FOLDER_PATH = local_variables["results_folder_path"]
-    RESULTS_FOLDER_PATH = f"{RESULTS_FOLDER_PATH}/{local_variables['dataset_folder_name']}/{'unfrozen_weights' if UNFREEZE_WEIGHTS else 'frozen_weights'}"
+    RESULTS_FOLDER_PATH = f"{RESULTS_FOLDER_PATH}/{local_variables['dataset_folder_name']}/{'unfrozen_weights' if unfreeze_weights else 'frozen_weights'}"
     NUM_WORKERS = 4
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
@@ -351,8 +351,8 @@ if __name__ == "__main__":
     val_dataset.metadata = dataset.metadata.iloc[val_idx].reset_index(drop=True)
     val_dataset.features, val_dataset.labels, val_dataset.targets = val_dataset.one_hot_encoding()
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, persistent_workers=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, persistent_workers=True)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, persistent_workers=False)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, persistent_workers=False)
 
     train_labels_for_weights = [labels_full_dataset[i] for i in train_idx]
     class_weights = compute_class_weights(train_labels_for_weights, num_classes).to(device)

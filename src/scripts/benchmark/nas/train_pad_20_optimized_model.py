@@ -189,7 +189,7 @@ def train_process(num_epochs,
 
     return model, model_save_path
 
-def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, type_of_problem, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=True):
+def pipeline(dataset, num_metadata_features, num_epochs, batch_size, device, multimodel_config, type_of_problem, k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder, unfreeze_weights, attention_mecanism, results_folder_path, num_workers=10, persistent_workers=False):
     # Separação por paciente
     labels = dataset.labels                      # diagnóstico codificado
     groups = dataset.metadata["patient_id"].values  # agrupa por paciente
@@ -314,7 +314,7 @@ def run_expirements(dataset_folder_path:str, results_folder_path:str, multimodel
                         attention_mecanism=attention_mecanism, 
                         results_folder_path=f"{results_folder_path}/{num_heads}",
                         num_workers=5, 
-                        persistent_workers=True,
+                        persistent_workers=False,
                         type_of_problem=type_of_problem
                     )
                 except Exception as e:
@@ -344,12 +344,14 @@ if __name__ == "__main__":
     # best_model_parameters_file_folder_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/NAS-USING-RL-USING-REWARD-500-steps/PAD-UFES-20/unfrozen_weights/8/custom-attention-mechanism/best_config.json"
     # config = load_multimodal_config.load_multimodal_config(best_model_parameters_file_folder_path)
     ## configs = load_multimodal_config.load_multimodal_config("./data/PAD-UFES-20/NAS_OPTIMIZED_MODEL_ARCHITECTURES/BEST_ARCHITECTURES_FOUND_NAS.json")
-    configs = [{"num_blocks": 10, "initial_filters": 64, "kernel_size": 3, "layers_per_block": 2, "use_pooling": True, "common_dim": 512, "attention_mechanism": "metablock", "num_layers_text_fc": 3, "neurons_per_layer_size_of_text_fc": 512, "num_layers_fc_module": 2, "neurons_per_layer_size_of_fc_module": 512}]
+    # configs = [{"num_blocks": 10, "initial_filters": 64, "kernel_size": 3, "layers_per_block": 2, "use_pooling": True, "common_dim": 512, "attention_mechanism": "metablock", "num_layers_text_fc": 3, "neurons_per_layer_size_of_text_fc": 512, "num_layers_fc_module": 2, "neurons_per_layer_size_of_fc_module": 512}]
+    configs = [load_multimodal_config.load_multimodal_config(json_file_folder_path="./results/NAS/25042026/PAD-UFES-20/NAS/random_search/frozen_weights/8/random-search/best_config.json")]
     
+    print(configs)
     for i, config in enumerate(configs):    
         # Testar com todos os modelos
-        list_of_models = [f"nas_multimodal_model_id-{int(i)}"] # Lista dos modelos a serem treinados (via ID)
-        list_of_attention_mecanism = [config.get("attention_mechanism")] 
+        list_of_models = [f"nas_multimodal_model_random-search"] # Lista dos modelos a serem treinados (via ID)
+        list_of_attention_mecanism = [config.get("attention_mecanism")] 
         # Treina todos modelos que podem ser usados no modelo multi-modal
         run_expirements(
             dataset_folder_path=dataset_folder_path, 
