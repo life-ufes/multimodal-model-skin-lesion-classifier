@@ -17,7 +17,7 @@ from collections import Counter
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 from models.multimodalMDNet import MDNet
 
@@ -38,12 +38,10 @@ from models import skinLesionDatasetsMILK10K
 # CONFIG: choose ONE imbalance strategy (recommended)
 # ============================================================
 
-# Strategy A (recommended first): sampler + CrossEntropy (no class weights)
 USE_WEIGHTED_SAMPLER = True
-USE_CLASS_WEIGHTS_IN_LOSS = False
+USE_CLASS_WEIGHTS_IN_LOSS = True
 USE_FOCAL_LOSS = False
 
-# Strategy B: FocalLoss (alpha capped) + no sampler
 # USE_WEIGHTED_SAMPLER = False
 # USE_CLASS_WEIGHTS_IN_LOSS = False
 # USE_FOCAL_LOSS = True
@@ -179,7 +177,7 @@ def train_process(
     # ----------------------------
     # MLflow
     # ----------------------------
-    experiment_name = "EXPERIMENTOS-MILK10K - MULTIMODAL (Sampler/Focal) - 2025-12-19"
+    experiment_name = "EXPERIMENTOS-MILK10K - MULTIMODAL - 2025-12-19"
     mlflow.set_experiment(experiment_name)
 
     train_losses, val_losses = [], []
@@ -388,25 +386,10 @@ def pipeline(
         train_subset = Subset(train_dataset, train_idx)
         val_subset = Subset(val_dataset, val_idx)
 
-        # WeightedRandomSampler (Strategy A)
-        sampler = None
-        if USE_WEIGHTED_SAMPLER:
-            fold_train_labels = labels[train_idx]
-            counts = np.bincount(fold_train_labels, minlength=num_classes)
-            weights_per_class = 1.0 / np.maximum(counts, 1)
-            sample_weights = weights_per_class[fold_train_labels]
-
-            sampler = WeightedRandomSampler(
-                weights=torch.DoubleTensor(sample_weights),
-                num_samples=len(fold_train_labels),
-                replacement=True
-            )
-
         train_loader = DataLoader(
             train_subset,
             batch_size=batch_size,
-            shuffle=(sampler is None),
-            sampler=sampler,
+            shuffle=True,
             num_workers=num_workers,
             persistent_workers=persistent_workers,
             pin_memory=True
@@ -419,7 +402,12 @@ def pipeline(
             num_workers=num_workers,
             persistent_workers=persistent_workers,
             pin_memory=True
-        )
+            )
+        
+        labels = np.array(train_dataset.labels, dtype=np.int64)
+        targets = train_dataset.targets
+        num_classes = len(targets)
+        num_metadata_features = train_dataset.features.shape[1] if text_model_encoder == "one-hot-encoder" else 512
 
         # class weights (always safe length)
         fold_train_labels = labels[train_idx]

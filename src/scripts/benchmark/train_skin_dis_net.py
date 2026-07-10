@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import mlflow
 
@@ -378,14 +378,8 @@ def pipeline(
 
         print(f"[Fold {fold_num}] num_metadata_features={num_metadata_features} | num_classes={num_classes}")
 
-        # -----------------------
-        # Sampler balanceado
-        # -----------------------
         class_weights = compute_class_weights(train_dataset.labels, num_classes).to(device)
         print(f"[Fold {fold_num}] Pesos das classes: {class_weights}")
-
-        sample_weights = torch.tensor([class_weights[y].item() for y in train_dataset.labels], dtype=torch.float)
-        sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
 
         # -----------------------
         # Loaders
@@ -393,8 +387,7 @@ def pipeline(
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
-            sampler=sampler,
-            shuffle=False,
+            shuffle=True,
             num_workers=num_workers,
             persistent_workers=persistent_workers,
             collate_fn=skindisnet_collate,
@@ -416,7 +409,7 @@ def pipeline(
             model = MDNet(
                 meta_dim=num_metadata_features,
                 num_classes=num_classes,
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
                 cnn_model_name=model_name,
                 device=device,
             )
@@ -433,7 +426,7 @@ def pipeline(
                 meta_dim=num_metadata_features,
                 num_classes=num_classes,
                 image_encoder=str(model_name).replace("-", ""),
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
             )
         else:
             model = multimodalIntraInterModal.MultimodalModel(
@@ -444,7 +437,7 @@ def pipeline(
                 text_model_name=text_model_encoder,
                 common_dim=common_dim,
                 vocab_size=num_metadata_features,
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
                 attention_mecanism=attention_mecanism,
                 n=1 if attention_mecanism == "no-metadata" else 2
             )
@@ -545,7 +538,7 @@ def run_experiments():
                         num_heads=int(num_heads),
                         common_dim=common_dim,
                         text_model_encoder=text_model_encoder,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/SkinDisNet/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,

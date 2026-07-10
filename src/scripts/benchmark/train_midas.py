@@ -19,7 +19,7 @@ from collections import Counter
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import mlflow
 
@@ -341,18 +341,13 @@ def pipeline(
         num_metadata_features = train_dataset.features.shape[1]
         print(f"[Fold {fold+1}] num_metadata_features={num_metadata_features} | num_classes={num_classes}")
 
-        # -------- Sampler balanceado --------
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
         print(f"[Fold {fold+1}] Class weights: {class_weights}")
-
-        sample_weights = torch.tensor([class_weights[y].item() for y in train_labels], dtype=torch.float)
-        sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
 
         # -------- Loaders --------
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
-            sampler=sampler,
             shuffle=False,
             num_workers=num_workers,
             persistent_workers=persistent_workers,
@@ -373,7 +368,7 @@ def pipeline(
             model = MDNet(
                 meta_dim=num_metadata_features,
                 num_classes=num_classes,
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
                 cnn_model_name=model_name,
                 device=device,
             )
@@ -390,7 +385,7 @@ def pipeline(
                 meta_dim=num_metadata_features,
                 num_classes=num_classes,
                 image_encoder=str(model_name).replace("-", ""),
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
             )
         else:
             model = multimodalIntraInterModal.MultimodalModel(
@@ -401,7 +396,7 @@ def pipeline(
                 text_model_name=text_model_encoder,
                 common_dim=common_dim,
                 vocab_size=num_metadata_features,
-                unfreeze_weights=status_weights,
+                unfreeze_weights=unfreeze_weights,
                 attention_mecanism=attention_mecanism,
                 n=1 if attention_mecanism == "no-metadata" else 2,
             )
@@ -500,7 +495,7 @@ def run_experiments():
                         num_heads=int(num_heads),
                         common_dim=common_dim,
                         text_model_encoder=text_model_encoder,
-                        unfreeze_weights=status_weights,
+                        unfreeze_weights=unfreeze_weights,
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         num_workers=num_workers,

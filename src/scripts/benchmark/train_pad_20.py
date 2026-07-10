@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-from models import skinLesionDatasetsPAD2020
 from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
-from models import multimodalIntraInterModal
-from models import skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
+import models.focalLoss as focalLoss
+from models import multimodalIntraInterModal, multimodalIntraModalWithBert, multimodalIntraModalWithPubMedBert
+from models import skinLesionDatasetsPAD2020, skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
 from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
@@ -14,7 +14,7 @@ from models.liwtermModel import LiwTERM
 from models.metanet import MetaNetModel
 import time
 import os
-from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Subset
 import numpy as np
 import mlflow
 from tqdm import tqdm
@@ -75,7 +75,7 @@ def train_process(num_epochs,
         verbose=True,
         path=str(model_save_path + f'/{model_name}_fold_{fold_num}/best-model/'),
         save_to_disk=save_to_disk,
-        early_stopping_metric_name="val_loss"
+        early_stopping_metric_name="val_bacc"
     )
 
     initial_time = time.time()
@@ -169,7 +169,9 @@ def train_process(num_epochs,
     # Carrega o melhor modelo encontrado
     model = early_stopping.load_best_weights(model)
     model.eval()
-
+    del early_stopping
+    torch.cuda.empty_cache()
+    
     # Inferência para validação com o melhor modelo
     with torch.no_grad():
         metrics, all_labels, all_predictions, all_probs = model_metrics.evaluate_model(
@@ -227,8 +229,6 @@ def pipeline(
         persistent_workers:bool=False,
         save_to_disk:bool=False
     ):
-
-    # # Separação por paciente
     labels = [dataset.labels[i] for i in range(len(dataset))]
     groups = dataset.metadata["patient_id"].values  # agrupa por paciente
     stratifiedKFold = StratifiedGroupKFold(n_splits=k_folds, shuffle=True, random_state=42)
@@ -239,26 +239,8 @@ def pipeline(
         # Labels para este fold
         train_labels = [labels[i] for i in train_idx]
         train_counts = Counter(train_labels)
-        val_labels = [labels[i] for i in val_idx]
-        val_counts = Counter(val_labels)
+        val_counts = Counter([labels[i] for i in val_idx])
         print(f"Fold {fold+1}: train={train_counts}, val={val_counts}")
-        
-        # Validação: skip fold se não tiver pelo menos 2 classes na validação ou treino
-        if len(val_counts) < 2:
-            print(f"⚠️ Fold {fold+1} skipped: validation set has only {len(val_counts)} class(es). Classes: {set(val_labels)}")
-            continue
-        if len(train_counts) < 2:
-            print(f"⚠️ Fold {fold+1} skipped: training set has only {len(train_counts)} class(es). Classes: {set(train_labels)}")
-            continue
-        
-        # Verificar número mínimo de exemplares de cada classe
-        MIN_SAMPLES_PER_CLASS = 5
-        if min(val_counts.values()) < MIN_SAMPLES_PER_CLASS:
-            print(f"⚠️ Fold {fold+1} skipped: validation has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {val_counts}")
-            continue
-        if min(train_counts.values()) < MIN_SAMPLES_PER_CLASS:
-            print(f"⚠️ Fold {fold+1} skipped: training has less than {MIN_SAMPLES_PER_CLASS} samples in some class. Counts: {train_counts}")
-            continue
 
         # --- Monta datasets específicos por encoder ---
         if text_model_encoder in ["one-hot-encoder", "tab-transformer"]:
@@ -305,24 +287,12 @@ def pipeline(
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
-        sample_weights = torch.tensor(
-            [class_weights[y].item() for y in train_labels],
-            dtype=torch.float
-        )
-
-        sampler = WeightedRandomSampler(
-            weights=sample_weights,
-            num_samples=len(sample_weights),
-            replacement=True
-        )
-
-        # --- DataLoaders com sampler balanceado ---
+        # --- DataLoaders ---
         if text_model_encoder in ["one-hot-encoder", "tab-transformer"]:
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=batch_size,
-                sampler=sampler,
-                shuffle=False,
+                shuffle=True,
                 num_workers=num_workers,
                 persistent_workers=persistent_workers
             )
@@ -338,8 +308,7 @@ def pipeline(
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=batch_size,
-                sampler=sampler,
-                shuffle=False,
+                shuffle=True,
                 num_workers=num_workers
             )
             val_loader = DataLoader(
@@ -407,7 +376,6 @@ def pipeline(
             save_to_disk=save_to_disk
         )
 
-        # Salvar as predições em um arquivo csv
         save_predictions.model_val_predictions(
             model=model,
             dataloader=val_loader,
@@ -417,8 +385,10 @@ def pipeline(
             base_dir=model_save_path,
             model_name=model_name
         )
-    
-        del train_loader, val_loader
+
+        # Libera memória de GPU e RAM antes do próximo fold
+        del model, train_loader, val_loader
+        torch.cuda.empty_cache()
         gc.collect()
 
 def run_expirements(
@@ -488,7 +458,7 @@ def run_expirements(
                         num_classes = len(dataset.metadata['diagnostic'].unique())
 
                     pipeline(
-                        dataset,
+                        dataset=dataset,
                         num_metadata_features=num_metadata_features,
                         num_epochs=num_epochs,
                         batch_size=batch_size,
@@ -507,9 +477,15 @@ def run_expirements(
                         persistent_workers=False,
                         save_to_disk=save_to_disk
                     )
+                    
+                    del dataset
+                    torch.cuda.empty_cache()
+                    gc.collect()
+
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
                     continue
+                
 
 
 if __name__ == "__main__":
@@ -534,10 +510,9 @@ if __name__ == "__main__":
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{type_of_problem}/{status_weights}"
 
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["rg-att-literal-text-description"] # ["no-metadata", "concatenation", "metablock", "crossattention", "att-intramodal+residual+cross-attention-metadados"] 
-    ## list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] # ["rg-att2fusefeatures", "att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"] # ["swin-tiny", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "efficientnet-b0", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50", "mobilenet-v2"]
+    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path,

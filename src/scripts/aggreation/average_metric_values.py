@@ -19,7 +19,9 @@ if __name__ == "__main__":
     #     "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures"
     # ]
     list_of_attention_mecanism = [
-        "metablock"
+        "att-intramodal+residual+cross-attention-metadados",
+        "rg-att-cross-modal",
+        "rg-att-literal-text-description"
     ]
     dataset_name = "PAD-UFES-20"
     num_heads = 8
@@ -29,10 +31,11 @@ if __name__ == "__main__":
     #base_folder_path = (
     # f"./src/results/testes-da-implementacao-final_2/11042026-WITH-LN--METHOD-CONFIG-COMPARISON/{dataset_name}")
     
-    base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture"
-
+    # base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture"
+    base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/04072026/val_bacc/PAD-UFES-20/multiclass"
+    
     list_of_models = [
-        "nas_multimodal_model_random-search"
+        "caformer_b36.sail_in22k_ft_in1k"
     ]
 
     # Ordem final desejada
@@ -71,8 +74,8 @@ if __name__ == "__main__":
                         f"{attention_mecanism}/"
                         f"model_{model_name}_with_one-hot-encoder_{common_size}_with_best_architecture"
                     )
-                    # dataset_path = os.path.join(dataset_folder_path, "model_metrics.csv")
-                    dataset_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture/model_metrics.csv"
+                    dataset_path = os.path.join(dataset_folder_path, "model_metrics.csv")
+                    # dataset_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture/model_metrics.csv"
 
                     try:
                         dataset = get_dataset_content(dataset_path=dataset_path)
@@ -113,7 +116,7 @@ if __name__ == "__main__":
                     except Exception as e:
                         print(f"Erro ao processar {dataset_path}. Erro: {e}\n")
                         continue
-
+                
     if not all_results:
         raise ValueError("Nenhum resultado foi carregado. Verifique os caminhos e os arquivos CSV.")
 

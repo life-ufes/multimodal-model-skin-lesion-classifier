@@ -14,7 +14,7 @@ from models.liwtermModel import LiwTERM
 from models.metanet import MetaNetModel
 import time
 import os
-from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Subset
 import numpy as np
 import mlflow
 from tqdm import tqdm
@@ -272,23 +272,12 @@ def pipeline(dataset: any,
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
         print(f"Pesos das classes no fold {fold+1}: {class_weights}")
 
-        sample_weights = torch.tensor(
-            [class_weights[y].item() for y in train_labels],
-            dtype=torch.float
-        )
-
-        sampler = WeightedRandomSampler(
-            weights=sample_weights,
-            num_samples=len(sample_weights),
-            replacement=True
-        )
-
-        # --- DataLoaders com sampler balanceado ---
+        # --- DataLoaders ---
         if text_model_encoder in ["one-hot-encoder", "tab-transformer"]:
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=batch_size,
-                sampler=sampler,
+                
                 shuffle=False,
                 num_workers=num_workers,
                 persistent_workers=persistent_workers
@@ -305,7 +294,7 @@ def pipeline(dataset: any,
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=batch_size,
-                sampler=sampler,
+                
                 shuffle=False,
                 num_workers=num_workers
             )
