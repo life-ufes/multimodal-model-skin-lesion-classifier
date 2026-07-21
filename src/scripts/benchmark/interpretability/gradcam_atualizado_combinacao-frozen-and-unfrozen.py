@@ -6,7 +6,6 @@ import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import pickle
-import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -41,30 +40,6 @@ def process_image(path, device):
     transform = load_image_transform()
     tensor = transform(img).unsqueeze(0).to(device)
     return img, tensor
-
-
-# ==========================================================
-# LESION CONTOUR (Otsu thresholding)
-# ==========================================================
-def lesion_contour(pil_img, invert=True, min_area_frac=0.01):
-    """
-    Estimates the lesion boundary via Otsu thresholding.
-    invert=True assumes the lesion is darker than surrounding skin.
-    Returns the largest contour (Nx2 array) or None.
-    """
-    img_gray = np.array(pil_img.convert("L"))
-    thresh_type = cv2.THRESH_BINARY_INV if invert else cv2.THRESH_BINARY
-    _, mask = cv2.threshold(img_gray, 0, 255, thresh_type + cv2.THRESH_OTSU)
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None
-    largest = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(largest) < min_area_frac * img_gray.size:
-        return None
-    return largest.squeeze()
 
 
 # ==========================================================
@@ -279,43 +254,56 @@ class GradCAMPlusPlus(BaseCAM):
 
 
 # ==========================================================
-# MOSAIC UTILS
+# UTILS
 # ==========================================================
 def sanitize_filename(s: str) -> str:
     s = s.strip().lower()
     s = re.sub(r"[^a-zA-Z0-9_\-]+", "_", s)
     return s
 
-def save_mosaic(img_pil, results_list, out_path, cam_type, weight_status,
-                class_list, lesion_cnt=None):
+def resize_heatmap_to_image(heatmap, img_pil):
+    return np.array(
+        Image.fromarray((heatmap * 255).astype(np.uint8)).resize(img_pil.size, Image.BILINEAR)
+    ) / 255.0
+
+
+def save_frozen_unfrozen_row(img_pil, res_frozen, res_unfrozen, out_path, class_list):
     """
-    results_list: list of dicts:
-      { "name": ..., "heatmap": np.ndarray, "pred_class": int, "confidence": float }
-    Mosaic format: rows = configurations, cols = [original, overlay]
+    Single-row, 5-panel figure:
+      [Original | Heatmap frozen | Overlay frozen | Heatmap unfrozen | Overlay unfrozen]
     """
-    n = len(results_list)
-    fig, axes = plt.subplots(n, 2, figsize=(12, max(3, 3 * n)))
-    if n == 1:
-        axes = np.array([axes])
+    fig, ax = plt.subplots(1, 5, figsize=(26, 6))
+    TITLE_SIZE = 24
 
-    for i, r in enumerate(results_list):
-        # original
-        axes[i, 0].imshow(img_pil)
-        axes[i, 0].axis("off")
-        axes[i, 0].set_title(f"{r['name']} | Original")
+    # Panel 0
+    ax[0].imshow(img_pil)
+    ax[0].set_title("A", fontsize=TITLE_SIZE, fontweight="bold")
+    ax[0].axis("off")
 
-        # overlay + lesion contour
-        axes[i, 1].imshow(img_pil)
-        axes[i, 1].imshow(r["heatmap"], cmap="jet", alpha=0.4)
-        # if lesion_cnt is not None:
-        #     axes[i, 1].plot(lesion_cnt[:, 0], lesion_cnt[:, 1], color="white", lw=2)
-        axes[i, 1].axis("off")
-        axes[i, 1].set_title(
-            f"Pred={class_list[r['pred_class']]} | conf={r['confidence']:.3f}"
-        )
+    # Panel 1
+    ax[1].imshow(res_frozen["heatmap"], cmap="jet")
+    ax[1].set_title("B", fontsize=TITLE_SIZE, fontweight="bold")
+    ax[1].axis("off")
 
-    plt.suptitle(f"Mosaic {cam_type.upper()} | {weight_status}", y=0.995)
+    # Panel 2
+    ax[2].imshow(img_pil)
+    ax[2].imshow(res_frozen["heatmap"], cmap="jet", alpha=0.4)
+    ax[2].set_title("C", fontsize=TITLE_SIZE, fontweight="bold")
+    ax[2].axis("off")
+
+    # Panel 3
+    ax[3].imshow(res_unfrozen["heatmap"], cmap="jet")
+    ax[3].set_title("D", fontsize=TITLE_SIZE, fontweight="bold")
+    ax[3].axis("off")
+
+    # Panel 4
+    ax[4].imshow(img_pil)
+    ax[4].imshow(res_unfrozen["heatmap"], cmap="jet", alpha=0.4)
+    ax[4].set_title("E", fontsize=TITLE_SIZE, fontweight="bold")
+    ax[4].axis("off")
+
     plt.tight_layout()
+    plt.subplots_adjust(top=0.88)
     plt.savefig(out_path, dpi=400, bbox_inches="tight")
     plt.close()
 
@@ -327,15 +315,10 @@ if __name__ == "__main__":
     image_path = "./data/PAD-UFES-20/images/PAT_46_881_14.png"
     encoder_dir = "./data/preprocess_data"
     class_list = ["NEV", "BCC", "ACK", "SEK", "SCC", "MEL"]
-    out_dir = "./results/XAI/17072026/"
+    out_dir = "./results/XAI/24022026/"
     os.makedirs(out_dir, exist_ok=True)
 
     img_pil, image_tensor = process_image(image_path, device)
-
-    # Lesion boundary (computed once — same image for all configs)
-    lesion_cnt = lesion_contour(img_pil, invert=True)
-    if lesion_cnt is None:
-        print("WARNING: lesion contour not found. Try invert=False or adjust min_area_frac.")
 
     text_configurations = {
         "original_metadata": "PAT_46,881,False,False,POMERANIA,POMERANIA,55,False,FEMALE,True,True,True,True,3.0,NECK,6.0,5.0,BCC,True,True,False,True,True,True,PAT_46_881_14.png,True",
@@ -350,6 +333,10 @@ if __name__ == "__main__":
     }
 
     for cam_type in ["gradcam", "gradcam++"]:
+
+        # Collect results for both weight regimes
+        results_by_status = {}
+
         for weight_status in ["frozen_weights", "unfrozen_weights"]:
 
             model_path = f"./src/results/artigo_1_GFCAM/12022026/PAD-UFES-20/{weight_status}/8/gfcam/model_densenet169_with_one-hot-encoder_512_with_best_architecture/densenet169_fold_2/model.pth"
@@ -367,17 +354,11 @@ if __name__ == "__main__":
             )
 
             target_layer = find_last_conv(model.image_encoder)
+            cam_generator = GradCAM(model, target_layer) if cam_type == "gradcam" \
+                            else GradCAMPlusPlus(model, target_layer)
 
-            if cam_type == "gradcam":
-                cam_generator = GradCAM(model, target_layer)
-            else:
-                cam_generator = GradCAMPlusPlus(model, target_layer)
-
-            mosaic_results = []
-
+            results = {}
             for name, metadata_text in text_configurations.items():
-                print(f"\n--- Testing configuration: {name} | {weight_status} ---")
-
                 metadata_tensor = process_metadata_pad20(metadata_text, encoder_dir, device)
 
                 with torch.no_grad():
@@ -387,54 +368,29 @@ if __name__ == "__main__":
                     confidence = probs[0, pred_class].item()
 
                 heatmap = cam_generator.generate(image_tensor, metadata_tensor, pred_class)
-                # depois de gerar o heatmap, antes de plotar:
-                heatmap = np.array(Image.fromarray((heatmap * 255).astype(np.uint8)).resize(img_pil.size, Image.BILINEAR)) / 255.0
+                heatmap = resize_heatmap_to_image(heatmap, img_pil)
 
-                # Individual figure — 3 panels: original | activation | overlay
-                fig, ax = plt.subplots(1, 3, figsize=(18, 6))
-
-                # Panel 1: original
-                ax[0].imshow(img_pil)
-                ax[0].set_title("Original image")
-                ax[0].axis("off")
-
-                # Panel 2: activation map alone
-                im = ax[1].imshow(heatmap, cmap="jet")
-                ax[1].set_title("Activation map (Grad-CAM++)")
-                ax[1].axis("off")
-                fig.colorbar(im, ax=ax[1], fraction=0.046, pad=0.04)
-
-                # Panel 3: overlay (original + activation)
-                ax[2].imshow(img_pil)
-                ax[2].imshow(heatmap, cmap="jet", alpha=0.4)
-                ax[2].set_title(f"Overlay — Pred={class_list[pred_class]} | conf={confidence:.3f}")
-                ax[2].axis("off")
-
-                plt.tight_layout()
-                fname = f"{cam_type}_pad20_{weight_status}_{sanitize_filename(name)}.png"
-                out_path = os.path.join(out_dir, fname)
-                plt.savefig(out_path, dpi=400, bbox_inches="tight")
-                plt.close()
-                print(f"Saved: {out_path}")
-
-                mosaic_results.append({
-                    "name": name,
+                results[name] = {
                     "heatmap": heatmap,
                     "pred_class": pred_class,
                     "confidence": confidence
-                })
+                }
 
-            mosaic_name = f"mosaic_{cam_type}_pad20_{weight_status}_17072026.png"
-            mosaic_path = os.path.join(out_dir, mosaic_name)
+            results_by_status[weight_status] = results
 
-            save_mosaic(
-                img_pil=img_pil,
-                results_list=mosaic_results,
-                out_path=mosaic_path,
-                cam_type=cam_type,
-                weight_status=weight_status,
-                class_list=class_list,
-                lesion_cnt=lesion_cnt
+        # Build one frozen-vs-unfrozen figure per metadata configuration
+        for name in text_configurations.keys():
+            res_frozen = results_by_status["frozen_weights"][name]
+            res_unfrozen = results_by_status["unfrozen_weights"][name]
+
+            out_path = os.path.join(
+                out_dir, f"{cam_type}_pad20_frozen_vs_unfrozen_{sanitize_filename(name)}.png"
             )
-
-            print(f"Mosaic saved: {mosaic_path}")
+            save_frozen_unfrozen_row(
+                img_pil=img_pil,
+                res_frozen=res_frozen,
+                res_unfrozen=res_unfrozen,
+                out_path=out_path,
+                class_list=class_list
+            )
+            print(f"Saved: {out_path}")

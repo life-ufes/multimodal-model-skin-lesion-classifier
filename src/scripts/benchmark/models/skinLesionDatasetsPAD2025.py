@@ -13,7 +13,7 @@ import pickle
 import cv2
 
 class SkinLesionDataset(Dataset):
-    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', size=(224, 224), is_train=False, random_undersampling=False, image_encoder="resnet-18", type_of_problem="multiclass"):
+    def __init__(self, metadata_file, img_dir, drop_nan=False, bert_model_name='bert-base-uncased', size=(224, 224), is_train=False, random_undersampling=False, image_encoder="resnet-18", type_of_problem="multiclass", image_type:str = "CLINICAL"):
         # Inicializar argumentos
         self.metadata_file = metadata_file
         self.img_dir = img_dir
@@ -25,7 +25,7 @@ class SkinLesionDataset(Dataset):
         self.is_train = is_train
         self.type_of_problem = type_of_problem
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        self.image_type = "CLINICAL" #"DERMATOSCOPE" # "CLINICAL" # Tipo de imagens
+        self.image_type = image_type # "CLINICAL" #"DERMATOSCOPE" # "CLINICAL" # Tipo de imagens
         self.transform = self.load_transforms()
 
         # Mapear labels para nomes padronizados
