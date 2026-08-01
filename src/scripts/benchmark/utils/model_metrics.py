@@ -96,9 +96,9 @@ def evaluate_model(
         recall    = recall_score(all_labels, all_preds, zero_division=0)
         f1score   = f1_score(all_labels, all_preds, zero_division=0)
     else:
-        precision = precision_score(all_labels, all_preds, average="weighted", zero_division=0)
-        recall    = recall_score(all_labels, all_preds, average="weighted", zero_division=0)
-        f1score   = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+        precision = precision_score(all_labels, all_preds, average="macro", zero_division=0)
+        recall    = recall_score(all_labels, all_preds, average="macro", zero_division=0)
+        f1score   = f1_score(all_labels, all_preds, average="macro", zero_division=0)
 
     # ------------------------------------------------------------
     # AUC (SAFE)
@@ -111,7 +111,7 @@ def evaluate_model(
             auc = roc_auc_score(
                 y_true_bin,
                 all_probs,
-                average="weighted",
+                average="macro",
                 multi_class="ovr"
             )
     except Exception as e:

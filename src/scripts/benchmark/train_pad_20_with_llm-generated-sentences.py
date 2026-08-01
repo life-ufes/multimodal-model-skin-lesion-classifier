@@ -379,7 +379,7 @@ if __name__ == "__main__":
         # "rg-dermnet" é o alias do modelo proposto (RG-ATT completo:
         # self-att -> RG-residual -> cross-att) — ver MECHANISM_ALIASES em
         # multimodalIntraModalWithPubMedBert.
-        list_of_attention_mecanism = ["rg-dermnet"]
+        list_of_attention_mecanism = ["rg-att-cross-modal"]
         # Testar com todos os modelos
         list_of_models = ["davit_tiny.msft_in1k"]
 
