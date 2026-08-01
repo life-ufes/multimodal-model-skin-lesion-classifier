@@ -48,3 +48,4 @@ src/scripts/api/docker/env/.env.example
 results/XAI/FDS/global_fds.txt
 *pkl
 BASH_SCRIPT_IMPROVEMENTS.md
+graphify-out

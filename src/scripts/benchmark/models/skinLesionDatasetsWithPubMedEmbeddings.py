@@ -157,7 +157,7 @@ class SkinLesionDataset(Dataset):
             metadata=metadata.fillna("EMPTY").replace(" ", "EMPTY").replace("  ", "EMPTY").replace("NÃO  ENCONTRADO", "EMPTY").replace("BRASIL", "BRAZIL")
         
         # Obter as classes
-        self.targets = metadata['diagnostic'].unique()
+        self.targets = list(metadata['diagnostic'].astype('category').cat.categories)
         # Verificar se deve descartar linhas com NaN
         if self.is_to_drop_nan is True:
             metadata = metadata.dropna().reset_index(drop=True)

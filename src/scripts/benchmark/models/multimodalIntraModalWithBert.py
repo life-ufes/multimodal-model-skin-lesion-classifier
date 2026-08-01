@@ -29,7 +29,7 @@ class MultimodalModel(nn.Module):
         self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
             self.cnn_model_name,
             self.common_dim,
-            unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor
+            backbone_train_mode=self.unfreeze_weights_of_visual_feat_extractor
         )
         # Projeção para o espaço comum da imagem (ex.: 512 -> self.common_dim)
         # self.image_projector = nn.Linear(self.cnn_dim_output, self.common_dim)
@@ -37,7 +37,7 @@ class MultimodalModel(nn.Module):
         # Definir encoder de texto (BERT)
         # Carrega BERT, Bart, etc., congelado
         self.text_encoder, self.text_encoder_dim_output, vocab_size = loadModels.loadTextModelEncoder(
-            text_model_encoder=self.text_model_name, unfreeze_weights=self.unfreeze_weights_of_visual_feat_extractor)
+            text_model_encoder=self.text_model_name, train_mode=self.unfreeze_weights_of_visual_feat_extractor)
         # Projeta 768 (ou 1024) -> 512
         self.text_fc = nn.Sequential(
             nn.Linear(vocab_size, self.text_encoder_dim_output),
