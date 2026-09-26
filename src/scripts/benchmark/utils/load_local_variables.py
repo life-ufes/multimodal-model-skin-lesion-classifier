@@ -23,5 +23,5 @@ def get_env_variables():
         "LLM_MODEL_NAME_SEQUENCE_GENERATOR": os.getenv("LLM_MODEL_NAME_SEQUENCE_GENERATOR", None),
         "HISTORY_MODE": os.getenv("HISTORY_MODE", "full"),
         "SEARCH_STEPS": os.getenv("SEARCH_STEPS", 500),
-        "save_to_disk":os.getenv("save_to_disk", True)
+        "save_to_disk":os.getenv("save_to_disk", False)
     }

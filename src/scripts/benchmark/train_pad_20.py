@@ -501,12 +501,12 @@ if __name__ == "__main__":
     dataset_folder_path = local_variables["dataset_folder_path"]
     status_weights = str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
-    results_folder_path = str(local_variables["results_folder_path"])
     save_to_disk=bool(local_variables["save_to_disk"])
     # Métricas para o experimento
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     text_model_encoder = 'one-hot-encoder'  # ou 'bert-base-uncased', 'gpt2', etc.
     type_of_problem = "multiclass"  # "binaryclass" or "multiclass"
+    results_folder_path = str(local_variables["results_folder_path"])
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{type_of_problem}/{status_weights}"
 
     # Para todas os tipos de estratégias a serem usadas

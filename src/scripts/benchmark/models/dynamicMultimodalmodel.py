@@ -45,7 +45,13 @@ class DynamicCNN(nn.Module):
         self.layers = []
         self.in_channels = in_channels
 
-        filters = config.get("filters", [64, 128, 256])
+        # Constrói a lista de filtros a partir de initial_filters e num_blocks
+        num_blocks = int(config.get("num_blocks", 3))
+        initial_filters = int(config.get("initial_filters", 64))
+        filters = config.get(
+            "filters",
+            [initial_filters * (2 ** i) for i in range(num_blocks)]
+        )
 
         for out_channels in filters:
             for _ in range(int(config.get("layers_per_block", 2))):

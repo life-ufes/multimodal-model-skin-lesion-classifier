@@ -19,9 +19,9 @@ if __name__ == "__main__":
     #     "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures"
     # ]
     list_of_attention_mecanism = [
-        "att-intramodal+residual+cross-attention-metadados",
-        "rg-att-cross-modal",
-        "rg-att-literal-text-description"
+        "concatenation",
+        "metablock",
+        "rg-dermnet"
     ]
     dataset_name = "PAD-UFES-20"
     num_heads = 8
@@ -32,10 +32,17 @@ if __name__ == "__main__":
     # f"./src/results/testes-da-implementacao-final_2/11042026-WITH-LN--METHOD-CONFIG-COMPARISON/{dataset_name}")
     
     # base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture"
-    base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/04072026/val_bacc/PAD-UFES-20/multiclass"
-    
+    # base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/04072026/val_bacc/PAD-UFES-20/multiclass"
+    # base_folder_path=f"data/results/generated-sentences/08082026/val_loss/PAD-UFES-20/textual-encoder-pubmedbert-base-embeddings-100K"
+    metadata_encoder="all-MiniLM-L6-v2"
+    base_folder_path=f"data/results/generated-sentences/06092026/max_length_tokens_512/val_loss/PAD-UFES-20/textual-encoder-{metadata_encoder}"
     list_of_models = [
-        "caformer_b36.sail_in22k_ft_in1k"
+        "mobilenet-v2", 
+        "davit_tiny.msft_in1k",
+        "caformer_b36.sail_in22k_ft_in1k", 
+        "resnet-50",
+        "efficientnet-b0"
+
     ]
 
     # Ordem final desejada
@@ -72,7 +79,7 @@ if __name__ == "__main__":
                     dataset_folder_path = (
                         f"{base_folder_path}/{status_of_weigths}/{num_heads}/"
                         f"{attention_mecanism}/"
-                        f"model_{model_name}_with_one-hot-encoder_{common_size}_with_best_architecture"
+                        f"model_{model_name}_with_{metadata_encoder}_512_with_best_architecture"
                     )
                     dataset_path = os.path.join(dataset_folder_path, "model_metrics.csv")
                     # dataset_path = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture/model_metrics.csv"

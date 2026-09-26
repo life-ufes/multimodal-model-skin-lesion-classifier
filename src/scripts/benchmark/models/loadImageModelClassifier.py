@@ -3,16 +3,8 @@ import torch.nn as nn
 import timm
 from torchvision import models
 from transformers import AutoModel
+from tab_transformer import TabTransformer
 
-# CORREÇÃO (Parte 12): o import de TabTransformer no topo do módulo derrubava
-# TODA a cadeia de imports (train -> multimodalIntraModalWithBert ->
-# loadImageModelClassifier) quando `tab_transformer` não estava disponível,
-# mesmo em execuções que nunca usam esse encoder. Passou a ser lazy, dentro do
-# ramo que realmente o instancia.
-
-# Dimensão dos sentence embeddings do neuml/pubmedbert-base-embeddings.
-# Usada apenas como fallback: o valor autoritativo vem do dataset
-# (SkinLesionDataset.embedding_dim), lido do próprio SentenceTransformer.
 PUBMEDBERT_EMBEDDING_DIM = 768
 
 PUBMEDBERT_ENCODERS = [
@@ -21,8 +13,10 @@ PUBMEDBERT_ENCODERS = [
     "pubmedbert-base-embeddings-500K",
     "pubmedbert-base-embeddings-1M",
     "pubmedbert-base-embeddings-2M",
+    "all-MiniLM-L6-v2",
+    "all-mpnet-base-v2",
+    "paraphrase-multilingual-MiniLM-L12-v2"
 ]
-
 
 class loadModels:
 
@@ -253,12 +247,6 @@ class loadModels:
 
         # --- PubMedBERT (sentence embeddings pré-computados) ---
         elif text_model_encoder in PUBMEDBERT_ENCODERS:
-            # Não há encoder residente: o dataset entrega o vetor já calculado.
-            # CORREÇÃO (Parte 13): o 64 hardcoded não correspondia a nenhum
-            # modelo em uso — neuml/pubmedbert-base-embeddings produz 768.
-            # MultimodalModel ignora este valor (usa embedding_dim do dataset)
-            # quando o encoder é None; o retorno abaixo serve aos demais
-            # chamadores, que não têm essa informação.
             output_dim = PUBMEDBERT_EMBEDDING_DIM
             return None, output_dim, output_dim
 
@@ -266,12 +254,6 @@ class loadModels:
         # TabTransformer
         # ------------------------------
         elif text_model_encoder == "tab-transformer":
-            from tab_transformer import TabTransformer
-
-            # ATENÇÃO: range(82) criaria cardinalidades erradas ([0, 1, 2...]).
-            # Crie uma lista com o número real de classes para cada categoria.
-            # Exemplo de fallback seguro (assumindo que as 82 colunas tenham max 10 opções cada):
-            # O ideal é injetar a lista real de cardinalidades baseada no dataset.
             categorical_cardinalities = [10] * 82
             output_dim = 85
 

@@ -12,6 +12,14 @@ import torch
 import os
 
 
+def _metadata_to_device(metadata, device):
+    """Metadata é dict (token embeddings: 'embeddings' + 'mask') ou tensor
+    (sentence embedding / HF). O dict não tem .to()."""
+    if isinstance(metadata, dict):
+        return {k: v.to(device, non_blocking=True) for k, v in metadata.items()}
+    return metadata.to(device, non_blocking=True)
+
+
 def evaluate_model(
     model,
     dataloader,
@@ -50,11 +58,11 @@ def evaluate_model(
     with torch.no_grad():
         for (_, images, metadata, labels) in dataloader:
             images   = images.to(device, non_blocking=True)
-            metadata = metadata.to(device, non_blocking=True)
+            metadata = _metadata_to_device(metadata, device)
             labels   = labels.to(device, non_blocking=True)
 
             logits = model(images, metadata)           # [B, C]
-            probs  = torch.softmax(logits, dim=1)      # [B, C]
+            probs  = torch.softmax(logits, dim=1)       # [B, C]
             preds  = torch.argmax(probs, dim=1)         # [B]
 
             all_labels.append(labels.cpu())

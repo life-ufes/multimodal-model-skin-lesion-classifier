@@ -28,11 +28,11 @@ fi
 cd "$SCRIPT_DIR" || exit 1
 
 SCRIPT_FILE="${BASH_SOURCE[0]}"
-PYTHON_SCRIPT="./src/scripts/benchmark/train_pad_20.py"
-PYTHON_SCRIPT_ABSOLUTE="$SCRIPT_DIR/src/scripts/benchmark/train_pad_20.py"
+PYTHON_SCRIPT="./src/scripts/benchmark/train_pad_20_with_llm-generated-sentences.py"
+PYTHON_SCRIPT_ABSOLUTE="$SCRIPT_DIR/src/scripts/benchmark/train_pad_20_with_llm-generated-sentences.py"
 LOG_DIR="logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="${LOG_DIR}/train_pad_20_${TIMESTAMP}.log"
+LOG_FILE="${LOG_DIR}/train_pad_20_with_llm-generated-sentences_${TIMESTAMP}.log"
 
 # Flags
 RUN_IN_BACKGROUND=true

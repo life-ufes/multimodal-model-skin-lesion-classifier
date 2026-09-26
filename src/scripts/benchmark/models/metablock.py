@@ -11,12 +11,12 @@ class MetaBlock(nn.Module):
 
         self.fb = nn.Sequential(
             nn.Linear(U_dim, V_dim),
-            nn.LayerNorm(V_dim)
+            nn.BatchNorm1d(V_dim)
         )
 
         self.gb = nn.Sequential(
             nn.Linear(U_dim, V_dim),
-            nn.LayerNorm(V_dim)
+            nn.BatchNorm1d(V_dim)
         )
 
     def forward(self, V, U):
