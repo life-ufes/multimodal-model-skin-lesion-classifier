@@ -17,6 +17,7 @@ inclui `max_tokens`, então mudar esse parâmetro invalida o cache sozinho.
 
 import hashlib
 import os
+import re
 
 import albumentations as A
 import cv2
@@ -29,6 +30,10 @@ from sentence_transformers import SentenceTransformer
 from torch.utils.data import Dataset
 
 TOKEN_EMBEDDING_PREFIX = "token-embedding:"
+
+# Linhas do template com identificadores (Patient ID / Lesion ID): não têm valor
+# clínico e só entregam ruído (ou atalho) ao encoder de texto.
+_IDENTIFIER_LINES = re.compile(r"^[ \t]*-\s*(?:Patient ID|Lesion ID):.*\n?", re.MULTILINE)
 
 TOKEN_EMBEDDERS = {
     "pubmedbert-base-embeddings": "neuml/pubmedbert-base-embeddings",
@@ -68,6 +73,7 @@ class SkinLesionDataset(Dataset):
         encode_batch_size=32,
         encode_device=None,
         max_tokens=48,
+        strip_identifiers=True,
     ):
         self.metadata_file = metadata_file
         self.img_dir = img_dir
@@ -77,6 +83,7 @@ class SkinLesionDataset(Dataset):
         self.is_train = is_train
         self.sentence_column = sentence_column
         self.max_tokens = int(max_tokens)
+        self.strip_identifiers = bool(strip_identifiers)
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.targets = None
 
@@ -109,6 +116,7 @@ class SkinLesionDataset(Dataset):
             self.sentence_column,
             str(len(self.metadata)),
             f"T{self.max_tokens}",
+            f"strip{int(self.strip_identifiers)}",
         ])
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
         return f"{self.embedder_alias}_tok_{digest}.npz"
@@ -132,6 +140,8 @@ class SkinLesionDataset(Dataset):
         sentences = (
             self.metadata[self.sentence_column].fillna("").astype(str).tolist()
         )
+        if self.strip_identifiers:
+            sentences = [_IDENTIFIER_LINES.sub("", t) for t in sentences]
         print(f"Calculando token embeddings de {len(sentences)} sentenças com "
               f"'{self.embedder_id}' em {device} (max_tokens={self.max_tokens})...")
 

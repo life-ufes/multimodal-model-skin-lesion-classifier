@@ -4,7 +4,8 @@ from utils import model_metrics
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
 from models import multimodalIntraModalWithPubMedBert
-from models import skinLesionDatasetsWithTokenEmbeddings
+from models.rgDermNetSE import RGDermNetSE
+from models import skinLesionDatasetsWithSentenceEmbeddings
 from models.loadImageModelClassifier import PUBMEDBERT_ENCODERS
 from utils.save_model_and_metrics import save_model_and_metrics
 from sklearn.model_selection import StratifiedGroupKFold
@@ -16,17 +17,11 @@ import numpy as np
 import mlflow
 from tqdm import tqdm
 
-def move_metadata_to_device(metadata, device):
-    """Metadata é dict (token embeddings: 'embeddings' + 'mask') ou tensor
-    (sentence embedding / HF). O dict não tem .to()."""
-    if isinstance(metadata, dict):
-        return {k: v.to(device) for k, v in metadata.items()}
-    return metadata.to(device)
-
 # Encoders de texto suportados por este script (embeddings pré-computados).
 SENTENCE_EMBEDDING_ENCODERS = list(PUBMEDBERT_ENCODERS)
 
-SUPPORTED_ATTENTION_MECANISMS = set(multimodalIntraModalWithPubMedBert.ATTENTION_MECANISMS)
+RG_DERMNET_SE = "rg-dermnet-se"
+SUPPORTED_ATTENTION_MECANISMS = set(multimodalIntraModalWithPubMedBert.ATTENTION_MECANISMS) | {RG_DERMNET_SE}
 
 # Modos válidos de fine-tuning do backbone (ver loadModels.set_backbone_train_mode)
 VALID_BACKBONE_TRAIN_MODES = {
@@ -124,7 +119,7 @@ def train_process(num_epochs,
 
             for batch_index, (_, image, metadata, label) in enumerate(
                     tqdm(train_loader, desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=False)):
-                image, metadata, label = image.to(device), move_metadata_to_device(metadata, device), label.to(device)
+                image, metadata, label = image.to(device), metadata.to(device), label.to(device)
                 optimizer.zero_grad()
                 outputs = model(image, metadata)
                 loss = criterion(outputs, label)
@@ -140,7 +135,7 @@ def train_process(num_epochs,
             val_loss = 0.0
             with torch.no_grad():
                 for _, image, metadata, label in val_loader:
-                    image, metadata, label = image.to(device), move_metadata_to_device(metadata, device), label.to(device)
+                    image, metadata, label = image.to(device), metadata.to(device), label.to(device)
                     outputs = model(image, metadata)
                     loss = criterion(outputs, label)
                     val_loss += loss.item()
@@ -231,7 +226,7 @@ def pipeline(dataset_train, dataset_eval, num_metadata_features, num_epochs, bat
             persistent_workers=use_persistent, pin_memory=True)
         val_loader = DataLoader(
             val_subset, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers, drop_last=True,
+            num_workers=num_workers, drop_last=False,
             persistent_workers=use_persistent, pin_memory=True)
 
         train_labels = [labels[i] for i in train_idx]
@@ -244,16 +239,25 @@ def pipeline(dataset_train, dataset_eval, num_metadata_features, num_epochs, bat
                 f"Esperado um de {sorted(SENTENCE_EMBEDDING_ENCODERS)}"
             )
 
-        model = multimodalIntraModalWithPubMedBert.MultimodalModel(
-            num_classes, num_heads, device,
-            cnn_model_name=model_name,
-            text_model_name=text_model_encoder,
-            common_dim=common_dim,
-            vocab_size=num_metadata_features,
-            unfreeze_weights=unfreeze_weights,
-            attention_mecanism=attention_mecanism,
-            n=2
-        )
+        if attention_mecanism == RG_DERMNET_SE:
+            model = RGDermNetSE(
+                num_classes=num_classes,
+                cnn_model_name=model_name,
+                text_dim=num_metadata_features,
+                common_dim=common_dim,
+                backbone_train_mode=unfreeze_weights,
+            )
+        else:
+            model = multimodalIntraModalWithPubMedBert.MultimodalModel(
+                num_classes, num_heads, device,
+                cnn_model_name=model_name,
+                text_model_name=text_model_encoder,
+                common_dim=common_dim,
+                vocab_size=num_metadata_features,
+                unfreeze_weights=unfreeze_weights,
+                attention_mecanism=attention_mecanism,
+                n=2
+            )
 
         # Treino do modelo carregado
         model, _ = train_process(
@@ -297,10 +301,11 @@ def run_expirements(dataset_folder_path: str, results_folder_path: str,
                         image_encoder=model_name,
                         drop_nan=False,
                     )
-                    dataset_train = skinLesionDatasetsWithTokenEmbeddings.SkinLesionDataset(
-                        **common_kwargs, is_train=True, max_tokens=512)
-                    dataset_eval = skinLesionDatasetsWithTokenEmbeddings.SkinLesionDataset(
-                        **common_kwargs, is_train=False, max_tokens=512)
+                    # Texto pré-processado -> um embedding por sentença (B, D).
+                    dataset_train = skinLesionDatasetsWithSentenceEmbeddings.SkinLesionDataset(
+                        **common_kwargs, is_train=True)
+                    dataset_eval = skinLesionDatasetsWithSentenceEmbeddings.SkinLesionDataset(
+                        **common_kwargs, is_train=False)
 
                     num_metadata_features = int(dataset_eval.embedding_dim)
                     print(f"Número de features do metadados: {num_metadata_features}\n")
@@ -355,11 +360,14 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    base_results_folder_path = results_folder_path
     for text_model_encoder in ['all-MiniLM-L6-v2']:
-        results_folder_path = f"{results_folder_path}/{dataset_folder_name}/textual-encoder-{text_model_encoder}/{unfreeze_weights}"
+        # Sempre a partir da base: reatribuir results_folder_path aninhava os
+        # caminhos a cada encoder da lista.
+        results_folder_path = f"{base_results_folder_path}/{dataset_folder_name}/textual-encoder-{text_model_encoder}/{unfreeze_weights}"
 
 
-        list_of_attention_mecanism = ["rg-dermnet"]
+        list_of_attention_mecanism = [RG_DERMNET_SE]
         # Testar com todos os modelos
         # list_of_models = ["resnet-50", "efficientnet-b0"]
         list_of_models = ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]

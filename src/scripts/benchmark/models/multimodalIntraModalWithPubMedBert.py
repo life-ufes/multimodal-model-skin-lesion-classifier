@@ -186,9 +186,13 @@ class MultimodalModel(nn.Module):
             self.image_self_attention = self._make_attention()
             self.text_self_attention = self._make_attention()
 
+        # Só o cross-attention imagem -> texto existe. O sentido inverso
+        # (texto como query, imagem como key) seria degenerado: a imagem entra
+        # como uma única key, o softmax vale 1.0 e a saída é a mesma para todo
+        # token, sem qualquer informação do texto. O texto chega ao final
+        # pelo residual/self-attention textual e pelo cross imagem -> texto.
         if "cross_att" in self.needs:
             self.image_cross_attention = self._make_attention()
-            self.text_cross_attention = self._make_attention()
 
         if "gates" in self.needs:
             self.img_gate = nn.Linear(self.common_dim, self.common_dim)
@@ -432,7 +436,7 @@ class MultimodalModel(nn.Module):
             # Cross-attention sobre as saídas de self-attention.
             img_cross, _ = self.image_cross_attention(
                 img_att, txt_att, txt_att, key_padding_mask=txt_pad)
-            txt_cross, _ = self.text_cross_attention(txt_att, img_att, img_att)
+            txt_cross = txt_att
             img_pooled = img_cross.squeeze(0)
             txt_pooled = self._pool_seq(txt_cross, txt_valid)
 
@@ -451,9 +455,8 @@ class MultimodalModel(nn.Module):
         if self.attention_mecanism == "cross-attention-only":
             img_cross, _ = self.image_cross_attention(
                 img_seq, txt_seq, txt_seq, key_padding_mask=txt_pad)
-            txt_cross, _ = self.text_cross_attention(txt_seq, img_seq, img_seq)
             return self.fc_fusion(torch.cat(
-                [img_cross.squeeze(0), self._pool_seq(txt_cross, txt_valid)], dim=1))
+                [img_cross.squeeze(0), self._pool_seq(txt_seq, txt_valid)], dim=1))
 
         # --------------------------------------------------------------
         # Fusões baseadas em RG-ATT (GatedAlteredResidualBlock)
@@ -493,9 +496,8 @@ class MultimodalModel(nn.Module):
                 txt_seq, txt_seq, txt_seq, key_padding_mask=txt_pad)
             img_cross, _ = self.image_cross_attention(
                 img_res, txt_res, txt_res, key_padding_mask=txt_pad)
-            txt_cross, _ = self.text_cross_attention(txt_res, img_res, img_res)
             return self.fc_fusion(torch.cat(
-                [img_cross.squeeze(0), self._pool_seq(txt_cross, txt_valid)], dim=1))
+                [img_cross.squeeze(0), self._pool_seq(txt_res, txt_valid)], dim=1))
 
         # Os mecanismos restantes compartilham o mesmo tronco:
         # self-att -> residual -> cross-att. Só a cabeça (ou o pós-processamento)
@@ -505,7 +507,9 @@ class MultimodalModel(nn.Module):
             txt_seq, txt_att, txt_att, key_padding_mask=txt_pad)
         img_cross, _ = self.image_cross_attention(
             img_res, txt_res, txt_res, key_padding_mask=txt_pad)
-        txt_cross, _ = self.text_cross_attention(txt_res, img_res, img_res)
+        # Sem cross-attention texto -> imagem (ver __init__): o ramo textual
+        # segue com a saída do residual.
+        txt_cross = txt_res
 
         if self.attention_mecanism in ("att-intramodal+residual+cross-attention-metadados",
                                        "rg-att-cross-modal"):

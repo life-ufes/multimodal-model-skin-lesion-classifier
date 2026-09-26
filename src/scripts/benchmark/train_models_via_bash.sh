@@ -16,12 +16,12 @@ set -o pipefail
 # CONFIGURAÇÕES
 # ============================================================
 # Encontra o diretório raiz do projeto (onde está o arquivo .env)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 
 # Tenta git rev-parse como fallback
-if [[ ! -f "$SCRIPT_DIR/conf/.env" ]] || [[ ! -f "$SCRIPT_DIR/logs" ]]; then
+if [[ ! -f "$SCRIPT_DIR/conf/.env" ]]; then
     if command -v git &> /dev/null; then
-        SCRIPT_DIR="$(cd "$(git rev-parse --show-toplevel 2>/dev/null)" && pwd)"
+        SCRIPT_DIR="$(cd "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null)" && pwd)"
     fi
 fi
 
@@ -259,14 +259,15 @@ else
     print_info "Aguardando conclusão do processo..."
     echo ""
     
-    if python3 -u "$PYTHON_SCRIPT" 2>&1 | tee "$LOG_FILE"; then
+    python3 -u "$PYTHON_SCRIPT" 2>&1 | tee "$LOG_FILE"
+    EXIT_CODE=${PIPESTATUS[0]}
+
+    if [[ $EXIT_CODE -eq 0 ]]; then
         print_success "Treinamento concluído com sucesso!"
-        EXIT_CODE=0
     else
-        print_error "Treinamento falhou!"
-        EXIT_CODE=$?
+        print_error "Treinamento falhou (código $EXIT_CODE)!"
     fi
-    
+
     exit $EXIT_CODE
 fi
 

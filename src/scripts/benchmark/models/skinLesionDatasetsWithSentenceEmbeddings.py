@@ -18,6 +18,7 @@ automaticamente.
 
 import hashlib
 import os
+import re
 
 import albumentations as A
 import cv2
@@ -28,6 +29,10 @@ from sentence_transformers import SentenceTransformer
 from albumentations.pytorch import ToTensorV2
 from PIL import Image
 from torch.utils.data import Dataset
+
+# Linhas do template com identificadores (Patient ID / Lesion ID): sem valor
+# clínico, só entregam ruído (ou atalho) ao encoder de texto.
+_IDENTIFIER_LINES = re.compile(r"^[ \t]*-\s*(?:Patient ID|Lesion ID):.*\n?", re.MULTILINE)
 
 # Prefixo que o multimodalintraintermodalemb reconhece como "embedding pronto"
 # (ver MultimodalModel.SENTENCE_EMBEDDING_ENCODERS).
@@ -85,6 +90,7 @@ class SkinLesionDataset(Dataset):
         cache_dir=None,
         encode_batch_size=64,
         encode_device=None,
+        strip_identifiers=True,
     ):
         self.metadata_file = metadata_file
         self.img_dir = img_dir
@@ -93,6 +99,7 @@ class SkinLesionDataset(Dataset):
         self.size = size
         self.is_train = is_train
         self.sentence_column = sentence_column
+        self.strip_identifiers = bool(strip_identifiers)
         self.normalization = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         self.targets = None
 
@@ -123,6 +130,7 @@ class SkinLesionDataset(Dataset):
             self.embedder_id,
             self.sentence_column,
             str(len(self.metadata)),
+            f"strip{int(self.strip_identifiers)}",
         ])
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
         return f"{self.embedder_alias}_{digest}.npy"
@@ -148,6 +156,8 @@ class SkinLesionDataset(Dataset):
             .astype(str)
             .tolist()
         )
+        if self.strip_identifiers:
+            sentences = [_IDENTIFIER_LINES.sub("", t) for t in sentences]
         print(f"Calculando {len(sentences)} sentence embeddings com "
               f"'{self.embedder_id}' em {device}...")
 
