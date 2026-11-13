@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-import timm
+from torchvision import models
+from loadImageModelClassifier import loadModels
 
 
 class LiwTERM(nn.Module):
@@ -13,26 +14,39 @@ class LiwTERM(nn.Module):
         num_classes: int,
         meta_dim: int,
         image_encoder: str = "vit_large_patch16_224",
-        pretrained: bool = True,
-        unfreeze_backbone: bool = False,
+        unfreeze_weights: str = "partial",
+        pretrained: bool = True,          # mantido por compatibilidade; o loadModels sempre carrega pesos pré-treinados
+        unfreeze_backbone: bool = False,  # legado: True equivale a unfreeze_weights="unfrozen_weights"
         dropout: float = 0.3,
+        last_n_layers: int = 1,
+        device: str = "cpu",
     ):
         super().__init__()
 
+        # CORREÇÃO: cnn_model_name, common_dim e unfreeze_weights eram lidos
+        # de self.* sem nunca terem sido definidos.
+        self.cnn_model_name = image_encoder
+        self.common_dim = 4096  # só é usado pela custom-cnn
+        self.unfreeze_weights = "unfrozen_weights" if unfreeze_backbone else unfreeze_weights
+
         # =====================================================
-        # 1) Backbone visual (ViT) — FEATURE EXTRACTOR
+        # 1) Image Encoder — FEATURE EXTRACTOR
         # =====================================================
-        self.visual = timm.create_model(
-            image_encoder,
-            pretrained=pretrained,
-            num_classes=0 
+        # O loadModels já devolve o vetor pooled [B, D]:
+        #   - TIMM ViT: reset_classifier(0) mantém global_pool="token" -> CLS token
+        #   - TorchVision: fc/classifier = Identity após o pooling
+        # O modo de treino é aplicado depois, em set_backbone_train_mode.
+        self.image_encoder, self.cnn_dim_output = loadModels.loadModelImageEncoder(
+            cnn_model_name=self.cnn_model_name,
+            common_dim=self.common_dim,
+            backbone_train_mode="frozen_weights",
+            device=device,
         )
+        # CORREÇÃO: `.features` não existe nos modelos TIMM (ViT) e `self.visual`
+        # nunca foi definido. O encoder inteiro é o extrator de features.
+        self.visual_dim = self.cnn_dim_output
 
-        self.visual_dim = self.visual.num_features
-
-        if not unfreeze_backbone:
-            for p in self.visual.parameters():
-                p.requires_grad = False
+        self.set_backbone_train_mode(self.unfreeze_weights, last_n_layers=last_n_layers)
 
         # Projeção ViT → 4096 (como no paper)
         self.visual_proj = nn.Sequential(
@@ -80,14 +94,54 @@ class LiwTERM(nn.Module):
         )
 
     # =====================================================
+    # Integração com loadModels.set_backbone_train_mode
+    # =====================================================
+    def set_backbone_train_mode(self, mode: str, last_n_layers: int = 1):
+        if mode == "partial":
+            # O fallback genérico de "partial" libera o último filho do módulo,
+            # que em resnet/mobilenet/efficientnet é o Identity (sem pesos).
+            # Por isso o bloco é escolhido por arquitetura.
+            loadModels.set_backbone_train_mode(self.image_encoder, "frozen_weights")
+            for p in self._partial_block().parameters():
+                p.requires_grad = True
+        else:
+            loadModels.set_backbone_train_mode(
+                self.image_encoder, mode, last_n_layers=last_n_layers
+            )
+        self.unfreeze_weights = mode
+
+    def _partial_block(self):
+        m = self.image_encoder
+        if self.cnn_model_name == "densenet169":
+            return m.features.denseblock4
+        if hasattr(m, "stages"):   # TIMM ConvNeXt, etc.
+            return m.stages[-1]
+        if hasattr(m, "blocks"):   # TIMM ViT / EfficientNet
+            return m.blocks[-1]
+        if hasattr(m, "layer4"):   # ResNets
+            return m.layer4
+
+        def last_with_params(module):
+            for name, child in reversed(list(module.named_children())):
+                if any(True for _ in child.parameters()):
+                    return name, child
+            return None, module
+
+        # vgg -> classifier (Linear 4096); mobilenet/efficientnet -> features[-1]
+        name, block = last_with_params(m)
+        if name == "features":
+            _, block = last_with_params(block)
+        return block
+
+    # =====================================================
     # Forward
     # =====================================================
     def forward(self, image: torch.Tensor, metadata: torch.Tensor) -> torch.Tensor:
 
-        # --- ViT features ---
-        v = self.visual.forward_features(image)
-        if v.dim() == 3:
-            v = v[:, 0]  # CLS token
+        # --- Visual features (CLS token no ViT / vetor pooled nas CNNs) ---
+        v = self.image_encoder(image)  # [B, visual_dim]
+        if v.dim() > 2:
+            v = torch.flatten(v, start_dim=1)
 
         v = self.visual_proj(v)
 

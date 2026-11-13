@@ -1,143 +1,92 @@
+"""
+Friedman + Wilcoxon (GFCAM vs. métodos da Tabela de comparação, PAD-UFES-20).
+
+As amostras de cada método são os 5 folds de cada métrica, concatenados na mesma ordem
+(ACC dos 5 folds, depois BACC, depois AUC). Assim, a comparação é pareada por fold e métrica.
+"""
 import os
+from datetime import datetime
 import numpy as np
 import pandas as pd
-import stats  # módulo local com statistical_test
+
+import stats  # módulo local
+
+# ROOT = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/artigo_1_GFCAM/07022026/PAD-UFES-20/unfrozen_weights/8"
+ROOT = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/artigo_1_GFCAM/07022026/PAD-UFES-20/multiclass/unfrozen_weights/8"
+# OUT_DIR = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/tests/results_08112026"
+OUT_DIR = "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/artigo_1_GFCAM/07022026/PAD-UFES-20/multiclass/"
+METRICS = ("accuracy", "balanced_accuracy", "f1_score", "auc")   # as mesmas do artigo e do A-TOPSIS
+N_FOLDS = 5
 
 
-# =====================================================
-# Utils
-# =====================================================
-def load_dataset(file_path):
-    """Loads dataset from the given file path"""
-    try:
-        return pd.read_csv(file_path)
-    except Exception as e:
-        print(f"Error loading file {file_path}: {e}")
-        return None
+METHODS = {
+   "GFCAM (ours)":    ("gfcam",          "densenet169"),
+   "No metadata":     ("no-metadata",    "resnet-50"),
+   "No image":        ("only-metadata",  "resnet-50"),
+   "Concatenation":   ("concatenation",  "resnet-50"),
+   "MetaBlock":       ("metablock",      "efficientnet-b4"),
+   "MD-Net":          ("md-net",         "densenet169"),
+   "Cross-Attention": ("crossattention", "resnet-50"),
+   "LiwTERM":         ("liwterm",        "resnet-50"),
+}
+
+# METHODS = {
+#     "GFCAM (ours)":    ("gfcam",          "resnet-50"),
+#     "No metadata":     ("no-metadata",    "resnet-50"),
+#     "No image":        ("only-metadata",  "resnet-50"),
+#     "Concatenation":   ("concatenation",  "resnet-50"),
+#     "MetaBlock":       ("metablock",      "resnet-50"),
+#     "MD-Net":          ("md-net",         "resnet-50"),
+#     "Cross-Attention": ("crossattention", "resnet-50"),
+#     "LiwTERM":         ("liwterm",        "resnet-50"),
+# }
+
+REFERENCE = "GFCAM (ours)"
 
 
-def get_metric_values(
-    file_folder_path,
-    file_name="model_metrics.csv",
-    metric_names=("accuracy", "balanced_accuracy", "f1_score", "auc")
-):
-    """
-    Retrieves metric values from CSV.
-    Returns a 1D numpy array with all requested metrics concatenated.
-    """
-    csv_file = os.path.join(file_folder_path, file_name)
-    collected = []
+def model_dir(folder, backbone):
+    return os.path.join(ROOT, folder, f"model_{backbone}_with_one-hot-encoder_512_with_best_architecture")
 
+
+def load_folds(path, metrics=METRICS, file_name="model_metrics.csv"):
+    """Retorna (vetor concatenado por métrica, DataFrame dos folds)."""
+    csv_file = os.path.join(path, file_name)
     if not os.path.exists(csv_file):
-        print(f"CSV file not found: {csv_file}")
-        return None
-
-    data = load_dataset(csv_file)
-    if data is None:
-        return None
-
-    for metric in metric_names:
-        if metric in data.columns:
-            collected.append(data[metric].values)
-        else:
-            print(f"Metric '{metric}' not found in {csv_file}")
-
-    if len(collected) == 0:
-        return None
-
-    return np.concatenate(collected)
+        raise FileNotFoundError(csv_file)
+    df = pd.read_csv(csv_file)
+    missing = [m for m in metrics if m not in df.columns]
+    if missing:
+        raise KeyError(f"Métricas ausentes em {csv_file}: {missing}")
+    if len(df) != N_FOLDS:
+        raise ValueError(f"{csv_file}: esperados {N_FOLDS} folds, encontrados {len(df)}")
+    # Se houver coluna de fold, ordena por ela para garantir o pareamento
+    for col in ("fold", "fold_id", "k"):
+        if col in df.columns:
+            df = df.sort_values(col)
+            break
+    return np.concatenate([df[m].to_numpy(float) for m in metrics]), df
 
 
-def save_statistics_tests(test_results, file_path_prefix):
-    """
-    Save statistical test results to CSV.
-    """
-    try:
-        df = pd.DataFrame(test_results)
-        out_path = f"{file_path_prefix}_statistics_tests_results.csv"
-        df.to_csv(out_path, index=False)
-        print(f"Statistics saved to {out_path}")
-    except Exception as e:
-        print(f"Error saving statistics: {e}")
+def main():
+    names, data, summary = [], [], []
+    for name, (folder, backbone) in METHODS.items():
+        vec, df = load_folds(model_dir(folder, backbone))
+        names.append(name)
+        data.append(vec)
+        summary.append({"method": name, "backbone": backbone,
+                        **{m: f"{df[m].mean():.4f} ± {df[m].std(ddof=0):.4f}" for m in METRICS}})
+
+    # Confira estes valores com a tabela do artigo antes de usar os p-valores
+    print(pd.DataFrame(summary).to_string(index=False), "\n")
+
+    p_friedman, res = stats.statistical_test(data, names, reference=REFERENCE, correction="holm")
+
+    os.makedirs(OUT_DIR, exist_ok=True)
+    res.insert(0, "friedman_p", p_friedman)
+    out_path = os.path.join(OUT_DIR, f"gfcam_vs_literature_wilcoxon_11112026.csv")
+    res.to_csv(out_path, index=False)
+    print(f"\nResultados salvos em {out_path}")
 
 
-# =====================================================
-# Main
-# =====================================================
 if __name__ == "__main__":
-
-    base_file_folder_path = (
-        "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/"
-        "src/tests/results"
-    )
-
-    wanted_metric_list = [
-        "accuracy",
-        "balanced_accuracy",
-        "f1_score",
-        "auc"
-    ]
-
-    # Nosso método (baseline principal)
-    base_model_path = (
-        # "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/"
-        # "src/results/testes-da-implementacao-final_2/01012026/"
-        # "PAD-UFES-20/unfrozen_weights/8/"
-        # "att-intramodal+residual+cross-attention-metadados/"
-        # "model_caformer_b36.sail_in22k_ft_in1k_with_one-hot-encoder_512_with_best_architecture"
-        "/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/NAS/benchmark_nas_llm-as-controller_trainning-optimized-model-architectures/PAD-UFES-20/unfrozen_weights/8/model_nas_multimodal_model_id-21_with_one-hot-encoder_512_with_best_architecture"
-    )
-
-    list_of_used_algs = []
-    list_all_models_metrics = []
-
-    our_metrics = get_metric_values(
-        file_folder_path=base_model_path,
-        metric_names=wanted_metric_list
-    )
-    if our_metrics is not None:
-        list_of_used_algs.append("our-method")
-        list_all_models_metrics.append(our_metrics)
-
-    # =====================================================
-    # Baselines
-    # =====================================================
-    lista_modelos_e_backbones = {
-        "no-metadata": "resnet-50",
-        "concatenation": "resnet-50",
-        # "metanet": "resnet-50",
-        # "md-net": "resnet-50",
-        "metablock": "efficientnet-b0",
-        "crossattention": "densenet169"
-#        "liwterm": "vit_large_patch16_224"
-    }
-
-    for alg, backbone in lista_modelos_e_backbones.items():
-        # model_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/testes-da-implementacao-final_2/01012026/PAD-UFES-20/unfrozen_weights/8/{alg}/model_{backbone}_with_one-hot-encoder_512_with_best_architecture"
-        model_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/PAD-UFES-20/NAS/benchmark_nas_llm-as-controller_trainning-optimized-model-architectures/PAD-UFES-20/unfrozen_weights/8/{alg}/model_{backbone}_with_one-hot-encoder_512_with_best_architecture"
-        metrics = get_metric_values(
-            file_folder_path=model_path,
-            metric_names=wanted_metric_list
-        )
-
-        if metrics is not None:
-            list_of_used_algs.append(alg)
-            list_all_models_metrics.append(metrics)
-        else:
-            print(f"Metrics not found for {alg}")
-
-    # =====================================================
-    # Statistical test
-    # =====================================================
-    out = stats.statistical_test(
-        data=list_all_models_metrics,
-        alg_names=list_of_used_algs
-    )
-    print(out)
-    # =====================================================
-    # Save results
-    # =====================================================
-    save_statistics_tests(
-        test_results=out,
-        file_path_prefix=base_file_folder_path
-    )
+    main()

@@ -45,9 +45,8 @@ SENTENCE_EMBEDDERS = {
     "pubmedbert-base-embeddings": "neuml/pubmedbert-base-embeddings",
     "all-MiniLM-L6-v2": "sentence-transformers/all-MiniLM-L6-v2",
     "all-mpnet-base-v2": "sentence-transformers/all-mpnet-base-v2",
-    "paraphrase-multilingual-MiniLM-L12-v2": (
-        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    ),
+    "paraphrase-multilingual-MiniLM-L12-v2": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "paraphrase-albert-small-v2":"sentence-transformers/paraphrase-albert-small-v2"
 }
 
 

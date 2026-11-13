@@ -15,7 +15,8 @@ PUBMEDBERT_ENCODERS = [
     "pubmedbert-base-embeddings-2M",
     "all-MiniLM-L6-v2",
     "all-mpnet-base-v2",
-    "paraphrase-multilingual-MiniLM-L12-v2"
+    "paraphrase-multilingual-MiniLM-L12-v2",
+    "paraphrase-albert-small-v2"
 ]
 
 class loadModels:

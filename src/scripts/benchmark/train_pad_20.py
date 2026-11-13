@@ -3,12 +3,11 @@ import torch.nn as nn
 from utils import model_metrics, save_predictions
 from utils.early_stopping import EarlyStopping
 from utils import load_local_variables
-import models.focalLoss as focalLoss
-from models import multimodalIntraInterModal, multimodalIntraModalWithBert, multimodalIntraModalWithPubMedBert
+from models import multimodalIntraInterModal
 from models import skinLesionDatasetsPAD2020, skinLesionDatasetsWithBert, skinLesionDatasetsWithPubMedEmbeddings
 from utils.save_model_and_metrics import save_model_and_metrics
 from collections import Counter
-from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
+from sklearn.model_selection import StratifiedGroupKFold
 from models.multimodalMDNet import MDNet
 from models.liwtermModel import LiwTERM
 from models.metanet import MetaNetModel
@@ -19,6 +18,7 @@ import numpy as np
 import mlflow
 from tqdm import tqdm
 import gc
+import traceback
 
 # Função para calcular os pesos das classes garantindo que haja um peso para cada classe
 def compute_class_weights(labels, num_classes):
@@ -84,6 +84,9 @@ def train_process(num_epochs,
     val_losses=[]
 
     experiment_name = "EXPERIMENTOS-PAD-UFES-20 - RESIDUAL BLOCK USAGE - 2026-07-04"
+    # Fecha qualquer run deixado aberto por uma falha anterior
+    while mlflow.active_run() is not None:
+        mlflow.end_run(status="FAILED")
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(
@@ -293,6 +296,7 @@ def pipeline(
                 train_dataset,
                 batch_size=batch_size,
                 shuffle=True,
+                drop_last=True,
                 num_workers=num_workers,
                 persistent_workers=persistent_workers
             )
@@ -300,6 +304,7 @@ def pipeline(
                 val_dataset,
                 batch_size=batch_size,
                 shuffle=False,
+                drop_last=False,
                 num_workers=num_workers,
                 persistent_workers=persistent_workers
             )
@@ -309,12 +314,14 @@ def pipeline(
                 train_dataset,
                 batch_size=batch_size,
                 shuffle=True,
+                drop_last=True,
                 num_workers=num_workers
             )
             val_loader = DataLoader(
                 val_dataset,
                 batch_size=batch_size,
                 shuffle=False,
+                drop_last=False,
                 num_workers=num_workers
             )
 
@@ -331,9 +338,9 @@ def pipeline(
             model = LiwTERM(
                 num_classes=num_classes,
                 meta_dim=num_metadata_features,
-                image_encoder="vit_large_patch16_224",
+                image_encoder=model_name,
                 pretrained=True,
-                unfreeze_backbone=unfreeze_weights
+                unfreeze_weights=unfreeze_weights
             )
         elif attention_mecanism=="metanet":
             model = MetaNetModel(
@@ -401,12 +408,12 @@ def run_expirements(
         k_folds: int,
         common_dim: int,
         text_model_encoder: str,
-        unfreeze_weights: str,
-        device,
-        list_num_heads: list,
-        list_of_attention_mecanism: list,
-        list_of_models: list,
-        type_of_problem:str,
+        unfreeze_weights: str = "unfreeze_weights",
+        device: str = "cpu",
+        list_num_heads: list = [8],
+        list_of_attention_mecanism: list = ["concatenation"],
+        list_of_models: list = ["resnet-50"],
+        type_of_problem: str = "multiclass",
         save_to_disk:bool=False
     ):
 
@@ -484,6 +491,9 @@ def run_expirements(
 
                 except Exception as e:
                     print(f"Erro ao processar o treino do modelo {model_name} e com o mecanismo: {attention_mecanism}. Erro:{e}\n")
+                    traceback.print_exc()
+                    if mlflow.active_run() is not None:
+                        mlflow.end_run(status="FAILED")
                     continue
                 
 
@@ -499,7 +509,7 @@ if __name__ == "__main__":
     num_workers = int(local_variables["num_workers"])
     dataset_folder_name = local_variables["dataset_folder_name"]
     dataset_folder_path = local_variables["dataset_folder_path"]
-    status_weights = str(local_variables["unfreeze_weights"])
+    status_weights = "frozen_weights" # str(local_variables["unfreeze_weights"])
     llm_model_name_sequence_generator = local_variables["LLM_MODEL_NAME_SEQUENCE_GENERATOR"]
     save_to_disk=bool(local_variables["save_to_disk"])
     # Métricas para o experimento
@@ -510,9 +520,9 @@ if __name__ == "__main__":
     results_folder_path = f"{results_folder_path}/{dataset_folder_name}/{type_of_problem}/{status_weights}"
 
     # Para todas os tipos de estratégias a serem usadas
-    list_of_attention_mecanism = ["att-intramodal+residual+cross-attention-metadados"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
+    list_of_attention_mecanism = ["gfcam", "weighted"] #"att-intramodal+residual", "att-intramodal+residual+cross-attention-metadados", "att-intramodal+residual+cross-attention-metadados+att-intramodal+residual", "gfcam", "cross-weights-after-crossattention", "crossattention", "concatenation", "no-metadata", "weighted", "metablock"]
     # Testar com todos os modelos
-    list_of_models = ["caformer_b36.sail_in22k_ft_in1k"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
+    list_of_models = ["mobilenet-v2", "efficientnet-b4",  "densenet169", "resnet-50"] #  "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
     # Treina todos modelos que podem ser usados no modelo multi-modal
     run_expirements(
         dataset_folder_path=dataset_folder_path,

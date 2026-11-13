@@ -18,14 +18,24 @@ if __name__ == "__main__":
     #     "att-intramodal+residual+cross-attention-metadados",
     #     "att-intramodal+residual+cross-attention-metadados+rg-att2fusefeatures"
     # ]
+    # list_of_attention_mecanism = [
+    #     "concatenation",
+    #     "metablock",
+    #     "rg-dermnet"
+    # ]
+
     list_of_attention_mecanism = [
+        "no-metadata",
+        "only-metadata",
         "concatenation",
+        "weighted",
+        "crossattention",
         "metablock",
-        "rg-dermnet"
+        "gfcam"
     ]
     dataset_name = "PAD-UFES-20"
     num_heads = 8
-    list_state_of_weights = ["unfrozen_weights"]
+    list_state_of_weights = ["frozen_weights"]
     common_sizes = [512]
 
     #base_folder_path = (
@@ -34,15 +44,15 @@ if __name__ == "__main__":
     # base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/results/NAS/25042026/PAD-UFES-20/multiclass/unfrozen_weights/8/model_nas_multimodal_model_random-search_with_one-hot-encoder_512_with_best_architecture"
     # base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/data/04072026/val_bacc/PAD-UFES-20/multiclass"
     # base_folder_path=f"data/results/generated-sentences/08082026/val_loss/PAD-UFES-20/textual-encoder-pubmedbert-base-embeddings-100K"
-    metadata_encoder="all-MiniLM-L6-v2"
-    base_folder_path=f"data/results/generated-sentences/06092026/max_length_tokens_512/val_loss/PAD-UFES-20/textual-encoder-{metadata_encoder}"
+    # metadata_encoder="all-MiniLM-L6-v2"
+    # base_folder_path=f"data/results/generated-sentences/06092026/max_length_tokens_512/val_loss/PAD-UFES-20/textual-encoder-{metadata_encoder}"
+    base_folder_path=f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/artigo_1_GFCAM/07022026/{dataset_name}/multiclass"
+    base_folder_path = f"/home/wyctor/PROJETOS/multimodal-model-skin-lesion-classifier/src/results/artigo_1_GFCAM/12112026/{dataset_name}/multiclass"
     list_of_models = [
         "mobilenet-v2", 
-        "davit_tiny.msft_in1k",
-        "caformer_b36.sail_in22k_ft_in1k", 
+        "densenet169",
         "resnet-50",
-        "efficientnet-b0"
-
+        "efficientnet-b4"
     ]
 
     # Ordem final desejada
@@ -51,7 +61,7 @@ if __name__ == "__main__":
         "balanced_accuracy",
         "f1_score",
         "precision",
-        "recall",
+        # "recall",
         "auc",
         "train process time",
         "epochs",
@@ -71,6 +81,8 @@ if __name__ == "__main__":
         "train process time",
         "epochs"
     ]
+
+    metadata_encoder="one-hot-encoder"
 
     for status_of_weigths in list_state_of_weights:
         for common_size in common_sizes:
@@ -136,7 +148,7 @@ if __name__ == "__main__":
 
     final_results_df = final_results_df[ordered_columns]
 
-    output_path = os.path.join(base_folder_path, "all_metric_values.csv")
+    output_path = os.path.join(base_folder_path, f"all_metric_values_{status_of_weigths}_12112026.csv")
     final_results_df.to_csv(output_path, index=False)
 
     print(f"Todos os resultados foram salvos em {output_path}.")

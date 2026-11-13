@@ -11,6 +11,7 @@ from utils.save_model_and_metrics import save_model_and_metrics
 from sklearn.model_selection import StratifiedGroupKFold
 import time
 import os
+import gc
 import traceback
 from torch.utils.data import DataLoader, Subset
 import numpy as np
@@ -65,8 +66,6 @@ def train_process(num_epochs,
 
     criterion = nn.CrossEntropyLoss(weight=weightes_per_category)
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-4)
-    # CORREÇÃO (Parte 8a): `verbose` foi depreciado no PyTorch 2.2 e removido
-    # em versões posteriores; o print do LR abaixo já cumpre a mesma função.
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',
@@ -207,7 +206,7 @@ def train_process(num_epochs,
 def pipeline(dataset_train, dataset_eval, num_metadata_features, num_epochs, batch_size, device,
              k_folds, num_classes, model_name, num_heads, common_dim, text_model_encoder,
              unfreeze_weights, attention_mecanism, results_folder_path, dataset_folder_name,
-             num_workers=10, persistent_workers=False, save_to_disk:bool=False):
+             num_workers=4, persistent_workers=False, save_to_disk:bool=False):
     # Rótulos, grupos e alvos vêm sempre da instância de avaliação: as duas
     # instâncias compartilham o mesmo CSV e diferem apenas nas transforms.
     labels = [dataset_eval.labels[i] for i in range(len(dataset_eval))]
@@ -223,11 +222,11 @@ def pipeline(dataset_train, dataset_eval, num_metadata_features, num_epochs, bat
         train_loader = DataLoader(
             train_subset, batch_size=batch_size, shuffle=True,
             num_workers=num_workers, drop_last=True,
-            persistent_workers=use_persistent, pin_memory=True)
+            persistent_workers=use_persistent, pin_memory=False)
         val_loader = DataLoader(
             val_subset, batch_size=batch_size, shuffle=False,
             num_workers=num_workers, drop_last=False,
-            persistent_workers=use_persistent, pin_memory=True)
+            persistent_workers=use_persistent, pin_memory=False)
 
         train_labels = [labels[i] for i in train_idx]
         class_weights = compute_class_weights(train_labels, num_classes).to(device)
@@ -271,6 +270,11 @@ def pipeline(dataset_train, dataset_eval, num_metadata_features, num_epochs, bat
             results_folder_path=results_folder_path,
             dataset_folder_name=dataset_folder_name
         )
+
+        del train_loader, val_loader
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 def run_expirements(dataset_folder_path: str, results_folder_path: str,
@@ -324,11 +328,9 @@ def run_expirements(dataset_folder_path: str, results_folder_path: str,
                         attention_mecanism=attention_mecanism,
                         results_folder_path=f"{results_folder_path}/{num_heads}/{attention_mecanism}",
                         dataset_folder_name=dataset_folder_name,
-                        persistent_workers=True,
+                        persistent_workers=False,
                         save_to_disk=save_to_disk
                     )
-                # CORREÇÃO (Parte 7): sem o traceback, uma falha de dimensão no
-                # ramo textual era indistinguível de uma imagem corrompida.
                 except Exception:
                     print(f"Erro no modelo {model_name} / mecanismo {attention_mecanism} "
                           f"/ heads {num_heads}:")
@@ -361,7 +363,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     base_results_folder_path = results_folder_path
-    for text_model_encoder in ['all-MiniLM-L6-v2']:
+    for text_model_encoder in ['paraphrase-albert-small-v2']:
         # Sempre a partir da base: reatribuir results_folder_path aninhava os
         # caminhos a cada encoder da lista.
         results_folder_path = f"{base_results_folder_path}/{dataset_folder_name}/textual-encoder-{text_model_encoder}/{unfreeze_weights}"
@@ -370,7 +372,7 @@ if __name__ == "__main__":
         list_of_attention_mecanism = [RG_DERMNET_SE]
         # Testar com todos os modelos
         # list_of_models = ["resnet-50", "efficientnet-b0"]
-        list_of_models = ["efficientnet-b0"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
+        list_of_models = ["mobilenet-v2","davit_tiny.msft_in1k", "resnet-50", "efficientnet-b4"] # ["mobilenet-v2", "davit_tiny.msft_in1k", "mvitv2_small.fb_in1k", "coat_lite_small.in1k", "caformer_b36.sail_in22k_ft_in1k", "vgg16", "densenet169", "resnet-50"]
 
         run_expirements(
             dataset_folder_path=dataset_folder_path,

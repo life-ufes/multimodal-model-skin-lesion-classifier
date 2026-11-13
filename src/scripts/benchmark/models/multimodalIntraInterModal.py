@@ -122,7 +122,7 @@ class MultimodalModel(nn.Module):
         # Fusion MLP
         # =====================================================
         self.fc_fusion = self.fc_mlp_module(
-            n=1 if attention_mecanism == "no-metadata" else self.n
+            n=1 if attention_mecanism in ["no-metadata", "only-metadata"] else self.n
         )
 
         # Usado no Metablock
@@ -131,31 +131,45 @@ class MultimodalModel(nn.Module):
 
         self.fc_mlp_module_after_metablock_fusion_module = self.fc_mlp_module_after_metablock()
 
+    # def fc_mlp_module(self, n=1):
+    #     fc_fusion = nn.Sequential(
+    #         nn.Linear(self.common_dim * n, self.common_dim),
+    #         nn.LayerNorm(self.common_dim),
+    #         nn.ReLU(),
+    #         nn.Dropout(0.5),
+    #         nn.Linear(self.common_dim, self.common_dim // 2),
+    #         nn.LayerNorm(self.common_dim // 2),
+    #         nn.ReLU(),
+    #         nn.Dropout(0.5),
+    #         nn.Linear(self.common_dim // 2, self.num_classes)
+    #     )
+    #     return fc_fusion
+    # MLP DO ARTIGO DO GFCAM
     def fc_mlp_module(self, n=1):
-        fc_fusion = nn.Sequential(
-            nn.Linear(self.common_dim * n, self.common_dim),
-            nn.LayerNorm(self.common_dim),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(self.common_dim, self.common_dim // 2),
-            nn.LayerNorm(self.common_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(self.common_dim // 2, self.num_classes)
-        )
-        return fc_fusion
-    
+            fc_fusion = nn.Sequential(
+                nn.Linear(self.common_dim * n, 1024),
+                nn.BatchNorm1d(1024),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(1024, 512),
+                nn.BatchNorm1d(512),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(512, self.num_classes)
+            )
+            return fc_fusion
+        
     def fc_mlp_module_after_metablock(self):
         fc_fusion = nn.Sequential(
-            nn.Linear(self.cnn_dim_output, self.common_dim),
-            nn.LayerNorm(self.common_dim),
+            nn.Linear(self.cnn_dim_output, 1024),
+            nn.BatchNorm1d(1024),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim, self.common_dim // 2),
-            nn.LayerNorm(self.common_dim // 2),
+            nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(self.common_dim // 2, self.num_classes)
+            nn.Linear(512, self.num_classes)
         )
         return fc_fusion
 
@@ -204,7 +218,10 @@ class MultimodalModel(nn.Module):
         # =====================================================
         if self.attention_mecanism == "no-metadata":
             return self.fc_fusion(proj_img_feat)
-
+        
+        elif self.attention_mecanism == "only-metadata":    
+            return self.fc_fusion(proj_txt_feat)
+        
         elif self.attention_mecanism == "no-metadata-without-mlp":
             return self.fc_visual_only(img_feat)
         
